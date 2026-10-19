@@ -144,6 +144,33 @@ class GlobalSearchIndex:
                  "faction", living_base + ".daily_quests[id=" + identifier +
                  "].faction")
 
+        # R38.2 native variant catalog is project-owned provenance, not a
+        # second model of the map. Expose its stable identities and usage links.
+        prefab_spec = (project.get("extensions") or {}).get(
+            "org.drawtemp.prefabvariants") or {}
+        prefab_data = prefab_spec.get("data") or {}
+        for variant in prefab_data.get("variants", ()):
+            identifier = variant["id"]
+            add(SearchEntry("prefab_variants", "", identifier,
+                            "Variante " + identifier,
+                            "Source SHA256 " + variant["base_sha256"][:16],
+                            "GameProject.extensions.org.drawtemp.prefabvariants"
+                            ".data.variants[id=" + identifier + "]"))
+        for instance in prefab_data.get("instances", ()):
+            identifier, mid = instance["id"], instance["mission_id"]
+            source = ("prefab_instances", mid, identifier)
+            add(SearchEntry("prefab_instances", mid, identifier,
+                            "Instance " + identifier,
+                            "Variante " + instance["variant_id"],
+                            "GameProject.extensions.org.drawtemp.prefabvariants"
+                            ".data.instances[id=" + identifier + "]"))
+            link(source, ("prefab_variants", "", instance["variant_id"]),
+                 "variant_id", "GameProject.extensions.org.drawtemp.prefabvariants"
+                 ".data.instances[id=" + identifier + "].variant_id")
+            link(source, ("maps", "", mid), "mission_id",
+                 "GameProject.extensions.org.drawtemp.prefabvariants"
+                 ".data.instances[id=" + identifier + "].mission_id")
+
         self.entries = tuple(sorted(items.values(), key=lambda e: e.key))
         self.by_key = items
         self.usages = tuple(sorted(edges, key=lambda e: (
