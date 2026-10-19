@@ -112,8 +112,10 @@ class BuildingVisualsTests(unittest.TestCase):
         with_floor = add_interior_floor(self.data, self.MID, self.sid, 1)
         furnished = edit_interior_tile(
             with_floor, self.MID, self.sid, 1, (5, 5), feature='crate')
+        # Crates are intentionally non-walkable on upper decks; the stair
+        # must use the Maison walkable entry, not the furnished crate cell.
         connected = add_level_link(furnished, self.MID,
-                                   [0, 5, 5], [1, 5, 5])
+                                   [0, 5, 6], [1, 5, 6])
         styled = edit_building_appearance(connected, self.MID, self.sid,
                                           facade='torchis', roof='plat')
         self.assertIn('crate', [t['feature'] for t in self.scene(styled).interior_floors[0]['tiles']])
