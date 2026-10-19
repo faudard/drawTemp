@@ -36,9 +36,10 @@ class NarrativeGraphView(QGraphicsView):
             x, y = 24 + column * 230, 26 + row * 118
             positions[node['id']] = (x, y)
             rect = scene.addRect(
-                x, y, 195, 79,
+                0, 0, 195, 79,
                 QPen(QColor('#ffd58a' if node['id'] == selection else '#8ca9d0'), 3),
                 QBrush(QColor('#234761')))
+            rect.setPos(x, y)
             rect.setData(0, node['id'])
             label = scene.addText(node['title'][:45] + '\n' + node['id'])
             label.setDefaultTextColor(QColor('#ffffff'))
