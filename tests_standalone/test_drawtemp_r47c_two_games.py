@@ -85,7 +85,7 @@ class TwoGamesTwoModsTests(unittest.TestCase):
 
     def _apply_pair(self, template):
         project_dir = create_template(template, self.root / template)
-        original_content = (project_dir / "game.json").read_bytes()
+        original_content = json.loads((project_dir / "game.json").read_text(encoding="utf-8"))
         session = AuthoringSession.open(project_dir / "game.json")
         registry, docs, archives, pins = setup_registry(self.root / (template + "-packs"))
         # The pack root must be created before build_pack to avoid
@@ -105,9 +105,11 @@ class TwoGamesTwoModsTests(unittest.TestCase):
         self.assertFalse(report["native_export_verified"])
         self.assertFalse(report["release_certified"])
         self.assertEqual(set(report["verified_mod_ids"]), set(pins))
-        self.assertEqual(original_content, (project_dir / "game.json").read_bytes())
+        self.assertEqual(original_content, json.loads(
+            (project_dir / "game.json").read_text(encoding="utf-8")))
         session.save()
-        self.assertEqual(original_content, (project_dir / "game.json").read_bytes())
+        self.assertEqual(original_content, json.loads(
+            (project_dir / "game.json").read_text(encoding="utf-8")))
         self.assertTrue(preflight(project_dir / "game.json")["passed"])
 
         reopened = AuthoringSession.open(project_dir / "game.json")
