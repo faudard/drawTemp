@@ -6,11 +6,16 @@ on:
       - 'drawtemp/studio/r50b_catalog_qt.py'
       - 'drawtemp/studio/r50b_player_journey.py'
       - 'drawtemp/studio/r50b_exploration.py'
+      - 'drawtemp/studio/r50b_action.py'
       - 'sporebound/player_controller.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/action_scene_adapter.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_r50b_catalog.py'
       - 'tests_standalone/test_r50b_player_journey.py'
       - 'tests_standalone/test_r50b_exploration.py'
+      - 'tests_standalone/test_r50b_action.py'
       - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
       - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
   push:
@@ -20,11 +25,16 @@ on:
       - 'drawtemp/studio/r50b_catalog_qt.py'
       - 'drawtemp/studio/r50b_player_journey.py'
       - 'drawtemp/studio/r50b_exploration.py'
+      - 'drawtemp/studio/r50b_action.py'
       - 'sporebound/player_controller.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/action_scene_adapter.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_r50b_catalog.py'
       - 'tests_standalone/test_r50b_player_journey.py'
       - 'tests_standalone/test_r50b_exploration.py'
+      - 'tests_standalone/test_r50b_action.py'
       - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
       - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
   workflow_dispatch:
@@ -56,7 +66,7 @@ jobs:
           fi
       - name: Compile R50.B modules
         run: |
-          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/r50b_player_journey.py drawtemp/studio/r50b_exploration.py sporebound/player_controller.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py tests_standalone/test_r50b_player_journey.py tests_standalone/test_r50b_exploration.py
-      - name: Authoring, realtime/CT and Qt offscreen regression
+          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/r50b_player_journey.py drawtemp/studio/r50b_exploration.py drawtemp/studio/r50b_action.py sporebound/player_controller.py sporebound/game_session.py sporebound/game_project.py sporebound/action_scene_adapter.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py tests_standalone/test_r50b_player_journey.py tests_standalone/test_r50b_exploration.py tests_standalone/test_r50b_action.py
+      - name: Authoring/action/replay and Qt offscreen regression
         run: |
-          python -m unittest -v tests_standalone.test_r50b_catalog tests_standalone.test_r50b_player_journey tests_standalone.test_r50b_exploration tests_standalone.test_r28e_minigames_certification
+          python -m unittest -v tests_standalone.test_r50b_catalog tests_standalone.test_r50b_player_journey tests_standalone.test_r50b_exploration tests_standalone.test_r50b_action tests_standalone.test_r28e_minigames_certification tests_standalone.test_action_runtime_r26
