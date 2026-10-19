@@ -127,6 +127,68 @@ ApplicationWindow {
                 id: sharedViewport
                 anchors.fill: parent
             }
+            // R36.B2: bounded CPU light plan with a Qt Quick fallback.
+            // Concentric halos are a visual approximation (no occlusion/GPU shader).
+            Rectangle {
+                anchors.fill: parent
+                z: 1
+                color: "#091c28"
+                opacity: root.actionData.vfx.ambient_alpha
+            }
+            Item {
+                id: lightLayer
+                anchors.fill: parent
+                z: 2
+                visible: !root.reducedFlashes
+                Repeater {
+                    model: root.actionData.vfx.lights || []
+                    delegate: Item {
+                        required property var modelData
+                        readonly property real unit: renderer.cameraState.zoom
+                        readonly property real diameter: modelData.radius * 2 * unit
+                        x: lightLayer.width / 2 + renderer.cameraState.panX
+                           + modelData.x * 64 * unit - diameter / 2
+                        y: lightLayer.height / 2 + renderer.cameraState.panY
+                           + modelData.y * 64 * unit - diameter / 2
+                        width: diameter
+                        height: diameter
+                        Repeater {
+                            model: 3
+                            delegate: Rectangle {
+                                required property int index
+                                anchors.centerIn: parent
+                                width: parent.width * (1 - index * 0.23)
+                                height: width
+                                radius: width / 2
+                                color: parent.modelData.color
+                                opacity: parent.modelData.alpha * (0.35 + index * 0.15)
+                            }
+                        }
+                    }
+                }
+            }
+            Item {
+                id: particleLayer
+                anchors.fill: parent
+                z: 7
+                visible: !root.reducedFlashes
+                Repeater {
+                    model: root.actionData.vfx.particles || []
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property real unit: renderer.cameraState.zoom
+                        width: modelData.radius * 2 * unit
+                        height: width
+                        radius: width / 2
+                        x: particleLayer.width / 2 + renderer.cameraState.panX
+                           + modelData.x * 64 * unit - width / 2
+                        y: particleLayer.height / 2 + renderer.cameraState.panY
+                           + modelData.y * 64 * unit - height / 2
+                        color: modelData.color
+                        opacity: modelData.alpha
+                    }
+                }
+            }
             // R36.B1: cosmetic bursts positioned by the *same R3 camera*
             // and the committed R26 event tick. Never create gameplay hits.
             Item {
