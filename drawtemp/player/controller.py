@@ -426,16 +426,50 @@ class PlayerController:
                 "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
+                "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "revision": 0,
                 "gear": {"equipped": {}, "inventory": []}}
+        if self.campaign_id.endswith("_journey"):
+            campaign = self.project.campaign(self.campaign_id)
+            if campaign is not None:
+                base["title"] = campaign["name"]
+                base["subtitle"] = campaign["description"]
         if self.session is None or self.show_title:
             return base
         snapshot = self._current()
         base["revision"] = snapshot.revision
         base["missions"] = list(snapshot.missions)
         progress = thaw(snapshot.progress)
+        # R27.D campaign journey: read-only view from the canonical Campaign
+        # snapshot. Never store a second progress ledger or route outside R1.
+        if self.campaign_id.endswith("_journey"):
+            prefix = self.campaign_id[:-len("_journey")]
+            stages = (
+                ("village", "Village"), ("dungeon", "Temple"),
+                ("boss", "Gardien"), ("return", "Retour"),
+            )
+            if all(prefix + "_" + stage in self.content.missions
+                   for stage, _label in stages):
+                completed = set(progress["completed"])
+                unlocked = set(progress["unlocked"])
+                rows = [{
+                    "id": prefix + "_" + stage, "label": label,
+                    "completed": prefix + "_" + stage in completed,
+                    "available": prefix + "_" + stage in snapshot.missions,
+                    "unlocked": prefix + "_" + stage in unlocked,
+                } for stage, label in stages]
+                base["journey"] = {
+                    "enabled": True, "stages": rows,
+                    "completed": (
+                        rows[-1]["completed"] and
+                        progress.get("story_flags", {}).get(
+                            prefix + "_return_cleared") is True),
+                }
+                campaign = self.project.campaign(self.campaign_id)
+                base["title"] = campaign["name"]
+                base["subtitle"] = campaign["description"]
         equipped = progress.get("heroes", {}).get("jeanne", {}).get("equipment", {})
         stock = progress.get("inventory", {})
         base["gear"] = {
