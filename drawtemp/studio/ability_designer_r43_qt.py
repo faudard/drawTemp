@@ -25,6 +25,7 @@ from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.studio.ability_authoring_r43 import (
     AbilityDraft, area_preview,
 )
+from drawtemp.studio.ability_formula_graph_r43 import balance_lab
 from sporebound.rules import default_rules
 
 
@@ -180,6 +181,11 @@ class AbilityDesignerDialog(QDialog):
             "Les formules sur statistiques sont prévisualisables uniquement. "
             "Le bridge CT R43.A refuse leur compilation jusqu'à un adaptateur natif."))
 
+        self.graph_button = QPushButton("Éditer le graphe de formule R43.B2…")
+        self.graph_button.setAccessibleName("Ouvrir l'arbre de formule typé")
+        self.graph_button.clicked.connect(self.edit_formula_graph)
+        left.addWidget(self.graph_button)
+
         right = QWidget()
         right_layout = QVBoxLayout(right)
         sections.addWidget(right)
@@ -208,6 +214,9 @@ class AbilityDesignerDialog(QDialog):
         self.report.setReadOnly(True)
         self.report.setAccessibleName("Diagnostic R43 et contrat de compilation")
         right_layout.addWidget(self.report, 2)
+        self.lab_button = QPushButton("Balance Lab — puissance brute (sans runtime)")
+        self.lab_button.clicked.connect(self.preview_balance)
+        right_layout.addWidget(self.lab_button)
 
         bottom = QHBoxLayout()
         self.preview_button = QPushButton("Prévisualiser sans modifier")
@@ -342,13 +351,13 @@ class AbilityDesignerDialog(QDialog):
             _select(self.stat, formula["input"]["name"])
             self.percent.setValue(formula["amount"])
         else:
-            # R43.B1 does NOT silently flatten nested formula graphs.
+            # R43.B2 edits complex formula ASTs explicitly; simple fields cannot.
             self._unsupported_formula_index = index
             _select(self.formula_kind, "constant")
             self.fixed_power.setValue(0)
             self.report.setPlainText(
-                "Formule avancée R43.A non éditable dans l'inspecteur simple. "
-                "Ne pas appliquer sans éditeur de graphe.")
+                "Formule avancée préservée : utiliser le graphe R43.B2. "
+                "CT refuse encore les formules dynamiques.")
         self._active_effect = index
         self._loading = False
 
@@ -357,8 +366,9 @@ class AbilityDesignerDialog(QDialog):
         if index < 0 or not self.draft:
             return
         if index == self._unsupported_formula_index:
-            return  # Retain authored graph unchanged; block preview below.
-        if self.formula_kind.currentData() == "constant":
+            # Preserve complex R43 AST while updating other effect fields.
+            formula = self.draft.document["effects"][index]["formula"]
+        elif self.formula_kind.currentData() == "constant":
             formula = {"op": "constant", "value": self.fixed_power.value()}
         else:
             formula = {
@@ -369,6 +379,38 @@ class AbilityDesignerDialog(QDialog):
             index, kind=kind, formula=formula, element=self.element.currentData(),
             status=self.status.currentData() if kind in ("status", "cleanse") else "",
             duration=self.duration.value(), scope=self.scope.currentData())
+
+    def edit_formula_graph(self):
+        index = self._active_effect
+        if self.draft is None or index < 0:
+            return False
+        self._sync_effect()
+        from drawtemp.studio.ability_formula_graph_r43_qt import FormulaGraphDialog
+        dialog = FormulaGraphDialog(
+            self.draft.document["effects"][index]["formula"], parent=self)
+        if dialog.exec() != QDialog.Accepted or dialog.result_formula is None:
+            return False
+        self.draft.document["effects"][index]["formula"] = dialog.result_formula
+        self.draft.pending = None
+        self._load_effect(index)
+        self._invalidate()
+        return True
+
+    def preview_balance(self):
+        if self.draft is None:
+            return False
+        self.apply_button.setEnabled(False)
+        try:
+            self._gather()
+            result = balance_lab(self.draft.document)
+            self.report.setPlainText(json.dumps(
+                result, ensure_ascii=False, indent=2, sort_keys=True))
+            return True
+        except (AbilityError, AuthoringError, ValueError, KeyError, TypeError) as exc:
+            self.report.setPlainText(
+                "Balance Lab refusé : " + getattr(exc, "code", "invalid") +
+                " — " + str(exc))
+            return False
 
     def _effect_selected(self, index):
         if self._loading:
@@ -412,16 +454,7 @@ class AbilityDesignerDialog(QDialog):
 
     def _gather(self):
         self._sync_effect()
-        # Never silently rewrite a nested R43.A formula as constant zero when
-        # the simple form cannot represent the original operator tree.
-        for effect in self.draft.document["effects"]:
-            expr = effect["formula"]
-            if (expr["op"] != "constant" and
-                    not (expr["op"] == "percent" and
-                         expr["input"]["op"] == "stat")):
-                raise AbilityError(
-                    "unsupported_formula",
-                    "Formule avancée non éditable dans R43.B1 : graphe conservé")
+        # Both editors preserve the exact R43.A AST; validation is canonical.
         profiles = [key for key in ("TACTICAL_CT", "ACTION_REALTIME", "RPG_TURN")
                     if self.mode_checks[key].isChecked()]
         timing = {key: {"windup": self.windups[key].value(),
