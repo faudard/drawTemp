@@ -86,7 +86,7 @@ class PlatformJourneyR32Tests(unittest.TestCase):
             self.assertEqual(restored.recording(), game.recording())
             self.assertEqual(restored.route_platform_state(),
                              game.route_platform_state())
-            self.move(7, game=restored)
+            self.move(2, game=restored)
             self.assertIn("to_arena", restored.route_platform_state()["available_routes"])
             traveled = restored.route_platform_travel("to_arena")
             self.assertEqual(traveled["scene"], MISSION)
