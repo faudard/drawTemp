@@ -91,12 +91,12 @@ def validate_npc_navigation(spec, exploration):
                     "NPC route exceeds its available schedule minutes")
 
 
-def active_leg(npc, story_flags, minute):
+def active_leg(npc, story_flags, minute, *, skip_conditions=True):
     """Return previous + next eligible stop and absolute local interval."""
     require(type(minute) is int and 0 <= minute < 1440,
             "Invalid NPC calendar minute")
     eligible = [stop for stop in npc["schedule"]
-                if ("when" not in stop or
+                if (not skip_conditions or "when" not in stop or
                     story_flags.get(stop["when"]["flag"], False)
                     is stop["when"]["eq"])]
     if not eligible:
@@ -114,14 +114,21 @@ def active_leg(npc, story_flags, minute):
 
 def resolve_npc(npc, flags, minute, exploration):
     """Find actual cell at arbitrary tick, with no per-tick NPC mutation."""
-    leg = active_leg(npc, flags, minute)
+    positional = "pos" in npc["schedule"][0]
+    # For positional NPCs the geometry is independent from story flags.
+    # Conditions enable/disable *activity*, never change past positions.
+    leg = active_leg(npc, flags, minute, skip_conditions=not positional)
     if leg is None:
         result = {"scene": None, "activity": "unavailable"}
         if "pos" in npc["schedule"][0]:
             result.update({"pos": None, "moving": False})
         return result
     prior, following, _, arrival = leg
-    result = {"scene": prior["scene"], "activity": prior["activity"]}
+    activity = prior["activity"]
+    if positional and "when" in prior:
+        if flags.get(prior["when"]["flag"], False) is not prior["when"]["eq"]:
+            activity = "unavailable"
+    result = {"scene": prior["scene"], "activity": activity}
     if "pos" not in prior:
         return result  # Legacy schedule shape is preserved.
     result.update({"pos": list(prior["pos"]), "moving": False})
