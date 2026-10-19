@@ -28,6 +28,7 @@ ne constitue **pas** un jeu hybride certifié.
 | Hybride narratif | Le conseil des gardes | Bloquée | Manque transition récit/action/CT et retour |
 | Prototype narratif supplémentaire | Le choix du village | Oui (prototype seulement) | Choix, état de récit et checkpoint GameSession |
 | Prototype d'exploration libre | La vallée du guet | Oui (prototype seulement) | Studio R1 → R25 libre à 60 Hz → combat CT → retour, via PlayerController/save/replay |
+| Prototype combat action R26 | Le guet de la clairière | Oui (prototype seulement) | Studio R1 → R26 attaques/ennemi → PlayerController et checkpoint GameSession vérifié |
 
 Les noms de projets sont des intitulés de démonstration, **pas**
 des jeux complets ou des assets préexistants. Aucun contenu tiers n'est
@@ -95,6 +96,42 @@ d'une action-aventure certifiée : `exploration_prototype`.
 
 ```bash
 python -m unittest -v tests_standalone.test_r50b_exploration
+```
+
+## Nouvelle tranche R50.B — Combat action R26 dans GameSession
+
+Le nouveau prototype `action_combat_prototype` utilise effectivement les
+attaques, le cooldown, les dégâts, l'IA ennemie et la récompense **R26**.
+Ce n'est pas le Player action-aventure complet.
+
+- Dans la paire Content/GameProject canonique, `org.drawtemp.actioncombat`
+  déclare en extension de schéma 1 un catalogue de scènes R26 **inertes**.
+  `GameProject.validate` vérifie l'identité, les dimensions, les obstacles,
+  la position initiale et le profil `ACTION_REALTIME` ; les données
+  inconnues, les changements de version ou les géométries divergentes
+  sont rejetés.
+- Dans `GameSession`, `route_action_step` exécute de vrais ticks R26,
+  puis enregistre `scene_action` dans **le même** checkpoint que la
+  campagne et les routes. Le chargement rejoue les commandes et vérifie
+  l'égalité avec la scène autorisée, le checksum et l'état final.
+  Aucun format de sauvegarde parallèle, ni progression fictive.
+- `PlayerController.route_action_step` sauvegarde chaque commande via
+  le mécanisme de transaction existant et restaure le checkpoint précédent
+  après toute erreur.
+- Le test de jeu réalise un premier coup, recharge la partie en plein combat,
+  poursuit jusqu'à la défaite de l'ennemi puis reprend encore la partie.
+  Une commande hors ordre et une altération du journal sont refusées.
+
+**Limite volontaire :** les pièces produites par R26 restent pour
+l'instant dans l'inventaire *local de l'ActionRuntime* ; elles ne sont pas
+encore créditées à la campagne et les scènes R26 ne quittent pas leur
+combat par route. La conversion de ces récompenses et le retour action→CT
+nécessitent une décision transactionnelle explicite et d'autres tests.
+L'entrée de genre `action_adventure` reste désactivée. Les contrôles
+onscreen/manette, exports tri-OS et la certification R50.C manquent.
+
+```bash
+python -m unittest -v tests_standalone.test_r50b_action tests_standalone.test_action_runtime_r26
 ```
 
 ### Restant pour la vraie R50.B
