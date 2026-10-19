@@ -7,7 +7,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDockWidget, QFormLayout, QHBoxLayout,
     QInputDialog, QLabel, QLineEdit, QPushButton, QSpinBox,
-    QTextEdit, QVBoxLayout, QWidget,
+    QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .dungeon_authoring import DungeonStudio
@@ -54,6 +54,9 @@ class DungeonDock(QDockWidget):
         self.kind.addItem("Porte", "door")
         self.kind.addItem("Levier", "switch")
         self.kind.addItem("Coffre", "chest")
+        self.kind.addItem("Clé", "key")
+        self.kind.addItem("Plaque de pression", "plate")
+        self.kind.addItem("Bloc à pousser", "block")
         self.identifier = QLineEdit()
         self.identifier.setPlaceholderText("Identifiant unique (vide = automatique)")
         self.object_x, self.object_y = _spin(7), _spin(2)
@@ -63,17 +66,31 @@ class DungeonDock(QDockWidget):
         self.amount.setValue(25)
         self.locked = QCheckBox("Porte verrouillée")
         self.locked.setChecked(True)
+        self.latch = QCheckBox("Plaque mémorisée après activation")
+        self.latch.setChecked(True)
         objects.addRow("Interaction", self.kind)
         objects.addRow("Identifiant", self.identifier)
         objects.addRow("Position (X/Y)", self._pair(self.object_x, self.object_y))
         objects.addRow("Porte liée au levier", self.link)
         objects.addRow("Gain du coffre", self.amount)
         objects.addRow("", self.locked)
+        objects.addRow("", self.latch)
         layout.addLayout(objects)
         place = QPushButton("Placer l'interaction")
         place.setObjectName("r27_place_object")
         place.clicked.connect(self.place_object)
         layout.addWidget(place)
+        layout.addWidget(QLabel("Séquence de leviers (ex. levier_a, levier_b)"))
+        self.sequence = QLineEdit()
+        self.sequence.setPlaceholderText("IDs séparés par des virgules, dans l'ordre")
+        layout.addWidget(self.sequence)
+        self.reset_sequence = QCheckBox("Réinitialiser après erreur")
+        self.reset_sequence.setChecked(True)
+        layout.addWidget(self.reset_sequence)
+        set_order = QPushButton("Configurer la séquence de la porte sélectionnée")
+        set_order.setObjectName("r27_configure_sequence")
+        set_order.clicked.connect(self.configure_sequence)
+        layout.addWidget(set_order)
 
         self.destination = QComboBox()
         layout.addWidget(QLabel("Carte de destination (graphe de progression)"))
@@ -87,13 +104,20 @@ class DungeonDock(QDockWidget):
         inspect.setObjectName("r27_puzzle_report")
         inspect.clicked.connect(self.show_report)
         layout.addWidget(inspect)
+        layout.addWidget(QLabel("Graphe de puzzles (sélectionner pour localiser)"))
+        self.graph = QTreeWidget()
+        self.graph.setObjectName("r27_puzzle_graph")
+        self.graph.setHeaderLabels(["Nœud", "Type", "Lien / ordre"])
+        self.graph.setMinimumHeight(125)
+        self.graph.itemClicked.connect(self.select_graph_node)
+        layout.addWidget(self.graph)
         self.report = QTextEdit()
         self.report.setReadOnly(True)
         self.report.setObjectName("r27_puzzle_diagnostics")
         self.report.setPlainText(
-            "Analyse statique limitée aux déplacements orthogonaux, "
-            "portes/leviers et objectifs. Combat, clés, sauvegardes et "
-            "conditions narratives non certifiés.")
+            "Recherche bornée : cases, clés, leviers, séquences, plaques "
+            "et blocs. Combat, sauvegardes inter-scènes et transitions "
+            "ne sont pas certifiés.")
         layout.addWidget(self.report, 1)
         self.setWidget(body)
 
@@ -135,6 +159,41 @@ class DungeonDock(QDockWidget):
         if index >= 0:
             self.destination.setCurrentIndex(index)
         self.destination.blockSignals(False)
+        selected = self.graph.currentItem()
+        selected_id = selected.text(0) if selected is not None else None
+        self.graph.blockSignals(True)
+        self.graph.clear()
+        graph = self._studio().puzzle_graph()
+        outgoing = {}
+        for edge in graph["edges"]:
+            outgoing.setdefault(edge["from"], []).append(
+                "{} → {}{}".format(
+                    edge["type"], edge["to"],
+                    " #" + str(edge["order"]) if "order" in edge else ""))
+        for node in graph["nodes"]:
+            item = QTreeWidgetItem([
+                node["id"], node["kind"],
+                "; ".join(outgoing.get(node["id"], ()))])
+            self.graph.addTopLevelItem(item)
+            if node["id"] == selected_id:
+                self.graph.setCurrentItem(item)
+        self.graph.blockSignals(False)
+
+    def select_graph_node(self, item, _column):
+        identifier = item.text(0)
+        target = next((o for o in self.window.studio.mission()["objects"]
+                       if o["id"] == identifier), None)
+        if target is not None:
+            self.set_position(*target["pos"])
+
+    def configure_sequence(self):
+        door_id = self.link.currentData()
+        if not door_id:
+            return
+        order = self.sequence.text().replace(",", " ").split()
+        self.window._safe(lambda: self._studio().set_sequence(
+            door_id, order, reset_on_error=self.reset_sequence.isChecked()))
+        self.refresh()
 
     def create_dungeon(self):
         mid, ok = QInputDialog.getText(
@@ -161,7 +220,8 @@ class DungeonDock(QDockWidget):
         kind = self.kind.currentData()
         mission = self.window.studio.mission()
         existing = {o["id"] for o in mission["objects"]}
-        stem = {"door": "door", "switch": "lever", "chest": "chest"}[kind]
+        stem = {"door": "door", "switch": "lever", "chest": "chest",
+                "key": "key", "plate": "plate", "block": "block"}[kind]
         identifier = self.identifier.text().strip()
         if not identifier:
             identifier = stem
@@ -169,11 +229,18 @@ class DungeonDock(QDockWidget):
             while identifier in existing:
                 identifier = f"{stem}_{index}"
                 index += 1
-        self.window._safe(lambda: self._studio().place_object(
-            identifier, kind,
-            (self.object_x.value(), self.object_y.value()),
-            link=self.link.currentData() or "",
-            amount=self.amount.value(), locked=self.locked.isChecked()))
+        if kind in ("key", "plate", "block"):
+            self.window._safe(lambda: self._studio().place_puzzle(
+                identifier, kind,
+                (self.object_x.value(), self.object_y.value()),
+                door_id=self.link.currentData() or "",
+                latch=self.latch.isChecked()))
+        else:
+            self.window._safe(lambda: self._studio().place_object(
+                identifier, kind,
+                (self.object_x.value(), self.object_y.value()),
+                link=self.link.currentData() or "",
+                amount=self.amount.value(), locked=self.locked.isChecked()))
         self.refresh()
 
     def link_maps(self):
@@ -194,5 +261,10 @@ class DungeonDock(QDockWidget):
             f'Objectifs inaccessibles : {len(result["unreachable_goals"])}',
         ]
         lines += result["warnings"] or ["Aucune impasse détectée dans le modèle statique."]
-        lines += ["Ce diagnostic ne remplace pas un playtest dans le Player."]
+        if result.get("witness"):
+            lines.append("Trajet témoin (recherche headless) :")
+            lines.extend("  " + action for action in result["witness"][:80])
+            if len(result["witness"]) > 80:
+                lines.append("  … parcours tronqué à 80 actions affichées")
+        lines += ["Analyse symbolique ≠ validation du Player, des ennemis ou des sauvegardes."]
         self.report.setPlainText("\n".join(lines))
