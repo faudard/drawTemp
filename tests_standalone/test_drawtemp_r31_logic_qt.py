@@ -197,6 +197,38 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_branch_ui_builds_typed_if_else_without_json(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("branch_qt", True)):
+                view.new_graph()
+            view.add_branch()
+            self.assertEqual(view.draft.graph["schema_version"], 2)
+            self.assertIn("if1", view.canvas._cards)
+            self.assertTrue(view.preview())
+            self.assertIn("cancel_after", view.diagnostics.toPlainText())
+            view.choose_node("if1")
+            with patch.object(QInputDialog, "getItem",
+                              side_effect=[("Remplacer", True), ("tick", True)]), \
+                 patch.object(QInputDialog, "getInt", return_value=(100, True)):
+                view.edit_node()
+            self.assertEqual(view.draft.node("if1")["params"]["predicate"],
+                             {"condition": "tick", "value": 100})
+            self.assertTrue(view.preview())
+            self.assertTrue(view.apply_changes())
+            self.assertEqual(session.revision, 1)
+            native = session.snapshot().to_dict()["content"]["missions"][0]["triggers"]
+            self.assertTrue(all(any(event["id"] == suffix for event in native)
+                                for suffix in ("r31_branch_qt_yes", "r31_branch_qt_no")))
+            view.undo()
+            self.assertEqual(session.revision, 2)
+        finally:
+            view.close()
+
     def test_studio_shell_menu_shares_owner_and_rejects_stale_preview(self):
         from PySide6.QtCore import QSettings
         from drawtemp.studio.qt_shell import StudioWindow
