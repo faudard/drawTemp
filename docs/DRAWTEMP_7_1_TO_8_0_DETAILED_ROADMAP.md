@@ -218,6 +218,8 @@
 
 **Suivi incrémental R36.B2 (non certifiant) :** [timeline de marqueurs visuels versionnée, édition R1/Qt, particules CPU bornées et éclairage 2D approximatif](drawtemp7/R36B2_TIMELINE_PARTICLES_LIGHTING.md). Les contacts précis R32, le rendu GPU et l'éclairage avec occlusion restent ouverts.
 
+**Suivi incrémental R36.B3 (non certifiant) :** [liaison optionnelle des Animation Controllers aux acteurs R26, diagnostic de contacts AABB R32 et masque d'occlusion par cases](drawtemp7/R36B3_ACTOR_COLLISION_OCCLUSION.md). La parité tactique/plateforme, les hitboxes de combat et les ombres GPU restent ouvertes.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.
