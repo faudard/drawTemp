@@ -55,7 +55,7 @@ def create_bridge(controller):
         def load(self):
             try:
                 self.controller.load()
-            except (OSError, ValueError, Exception) as exc:
+            except Exception as exc:
                 self.controller.message = "Reprise refusée : " + str(exc)
             self.stateChanged.emit()
 
@@ -78,7 +78,7 @@ def main(argv=None):
                         default=Path.home() / ".drawtemp" / "action-preview")
     args = parser.parse_args(argv)
     try:
-        from PySide6.QtCore import QTimer, QUrl, Qt
+        from PySide6.QtCore import QTimer, QUrl
         from PySide6.QtGui import QGuiApplication
         from PySide6.QtQml import QQmlApplicationEngine
     except ImportError as exc:
