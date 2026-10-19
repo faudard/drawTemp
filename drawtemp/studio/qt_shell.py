@@ -37,6 +37,9 @@ from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
 from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
+from drawtemp.studio.r49_experience import (
+    OperationTimings, audit_command_bindings, measure_studio, resolve_shortcuts,
+)
 from drawtemp.studio.r18_onboarding import (
     GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
@@ -172,6 +175,8 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self.pages = {}
         self.commands = {}
+        self.r49_timings = OperationTimings()
+        self._r49_audit = None
         self.plugins = StudioPluginRegistry()
         self._plugin_docks = {}
         self._plugin_fields = {}
@@ -401,6 +406,10 @@ class StudioWindow(QMainWindow):
             "Diagnostics", "r2-problems-dock", self.problems, Qt.BottomDockWidgetArea)
 
     def _action(self, key, label, callback):
+        if key in self.commands:
+            raise ValueError("Duplicate Studio command registration: " + key)
+        if not callable(callback):
+            raise ValueError("Studio command has no callable handler: " + key)
         action = QAction(label, self)
         shortcut = self.settings.value("shortcuts/" + key, DEFAULT_SHORTCUTS.get(key, ""))
         if shortcut:
@@ -427,6 +436,7 @@ class StudioWindow(QMainWindow):
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
@@ -440,6 +450,19 @@ class StudioWindow(QMainWindow):
                 "go_" + identifier, "Atelier : " + LABELS[identifier],
                 lambda _checked=False, key=identifier: self.navigate(key))
             action.setCheckable(True)
+        # Detect persisted conflicting shortcuts, keeping the first registered
+        # action functional. Settings stay intact until the user rebinds them.
+        requested = {key: action.shortcut().toString()
+                     for key, action in self.commands.items()}
+        effective, collisions = resolve_shortcuts(requested)
+        for collision in collisions:
+            self.commands[collision.key].setShortcut(QKeySequence())
+            self.problems.addItem(
+                "R49: raccourci en conflit pour " + collision.key +
+                " (déjà affecté à " + collision.owner + ") ; désactivé.")
+        self._r49_audit = audit_command_bindings(self.commands, workspaces=WORKSPACES)
+        for issue in self._r49_audit.issues:
+            self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
@@ -479,6 +502,7 @@ class StudioWindow(QMainWindow):
         review_branch.triggered.connect(self._semantic_merge_dialog)
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["r49_metrics"])
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
@@ -601,6 +625,23 @@ class StudioWindow(QMainWindow):
         if self.session.revision != initial_revision:
             self.refresh()
 
+    def open_r49_metrics(self):
+        """Read-only process-local UI observations; never a GPU benchmark."""
+        summary = self.r49_timings.summary()
+        lines = ["R49.A — mesures observées localement (non certifiantes)"]
+        for operation, stats in summary.items():
+            lines.append(
+                f"{operation}: n={stats['count']} "
+                f"p50={stats['p50_ms']:.3f} ms "
+                f"p95={stats['p95_ms']:.3f} ms "
+                f"p99={stats['p99_ms']:.3f} ms "
+                f"échecs non interceptés={stats['failures_observed']}")
+        if not summary:
+            lines.append("Aucune mesure disponible dans cette session.")
+        lines.append("Aucune collecte externe ; données non persistées. "
+                     "Ne remplace pas les tests hardware/UX.")
+        QMessageBox.information(self, "R49 • Mesures UX locales", "\n".join(lines))
+
     def open_scale_dashboard(self):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
@@ -689,6 +730,7 @@ class StudioWindow(QMainWindow):
                        lambda: self.reference_filter.setCurrentIndex(2))
         menu.exec(self.resource_view.viewport().mapToGlobal(point))
 
+    @measure_studio("studio.refresh")
     def refresh(self):
         snapshot = self.session.snapshot()
         selected_keys = {r.key for r in self._selected}
@@ -1033,6 +1075,7 @@ class StudioWindow(QMainWindow):
                 if row >= 0:
                     child.campaign.setCurrentIndex(row)
 
+    @measure_studio("studio.navigate")
     def navigate(self, identifier):
         host = workspace_host(identifier)
         if identifier == "actors" and "database" in self._models:
@@ -1063,6 +1106,7 @@ class StudioWindow(QMainWindow):
             self.commands["go_" + name].setChecked(name == identifier)
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
+    @measure_studio("studio.workspace_init")
     def _make_workspace(self, identifier):
         if identifier in ("database", "actors") and "database" in self._models:
             child = self._models["database"]
@@ -1572,6 +1616,7 @@ class StudioWindow(QMainWindow):
         # A loaded project is proof of a completed open/create action.
         self._guide_switch_document(path)
 
+    @measure_studio("studio.open")
     def open_path(self, path):
         if not self._confirm_leave():
             return False
