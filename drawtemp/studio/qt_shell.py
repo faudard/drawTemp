@@ -431,6 +431,7 @@ class StudioWindow(QMainWindow):
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r44_atlas", "R44 • World Atlas 2.0…", self.open_world_atlas)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -483,6 +484,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r44_atlas"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -589,6 +591,14 @@ class StudioWindow(QMainWindow):
         dialog = LivingWorldDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
+            self.refresh()
+
+    def open_world_atlas(self):
+        """R44.B region and portal editor; shared R1 history and save."""
+        from drawtemp.studio.world_atlas_qt import WorldAtlasDialog
+        prior = self.session.revision
+        WorldAtlasDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
             self.refresh()
 
     def open_logic_graph(self):
