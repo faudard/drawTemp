@@ -6,7 +6,7 @@
 
 In Qt Studio, open **Outils → R38 • Recherche globale et utilisations…**, or press **Ctrl+Shift+F** (also available from the command palette). Search by display name, stable ID, mission, type or relative registry path. Accents and case are ignored; every token must match. Narrow by family and mission.
 
-The panel includes canonical Content/GameProject resources (project, maps, placed actors/objects/events, campaigns, scenes and cinematics), assets and animation frames, and R31 logic graphs with individual nodes. Results have mission-qualified stable identities; two "gate" objects on separate maps remain distinct. Only the first 200 matches are rendered, in deterministic order.
+The panel includes canonical Content/GameProject resources (project, maps, placed actors/objects/events, campaigns, scenes and cinematics), assets and animation frames, and R31 logic graphs with individual nodes, alongside R35 daily quests and factions. Results have mission-qualified stable identities; two "gate" objects on separate maps remain distinct. Only the first 200 matches are rendered, in deterministic order.
 
 Select a hit to inspect incoming **Utilisé par** and outgoing **Utilise** typed references with exact field and source path. Existing resources navigate through the R2 explorer; graph hits open the R31 workshop. Assets are discoverable and inspectable, not edited via the generic inspector.
 
