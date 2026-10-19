@@ -556,7 +556,7 @@ jobs:
       - run: python -m pip install .
       - name: Real Studio Event authoring to relocated exported Player E2E
         run: >-
-          python scripts/r23f_acceptance.py
+          python -m scripts.r23f_acceptance
           --revision ${{ github.sha }}
           --platform ${{ runner.os }}
           --output r23f-journey.json
