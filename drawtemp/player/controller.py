@@ -180,6 +180,30 @@ class PlayerController:
         self.inspected_skill = "attack"
         return self._changed()
 
+    def toggle_party_member(self, hero_id):
+        """R41 active/reserve toggle through canonical Simulation."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Finish the battle/dialogue before changing party")
+        party = self.session.party_state(expected_revision=state.revision)
+        if party is None:
+            raise ValueError("This project has no RPG_TURN party")
+        selected = list(party["active"])
+        if hero_id not in party["members"]:
+            raise ValueError("Recruit the hero before deploying them")
+        if hero_id in selected:
+            if len(selected) <= 1:
+                raise ValueError("A party needs at least one active hero")
+            selected.remove(hero_id)
+        else:
+            authored = self.project.extensions["drawtemp.party_rpg"]["data"][
+                "campaigns"][self.campaign_id]
+            if len(selected) >= authored["max_active"]:
+                raise ValueError("Active group is full; reserve a hero first")
+            selected.append(hero_id)
+        self.session.party_set_active(selected, expected_revision=state.revision)
+        return self._changed()
+
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
@@ -593,7 +617,9 @@ class PlayerController:
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
-                "gear": {"equipped": {}, "inventory": []}}
+                "gear": {"equipped": {}, "inventory": []},
+                "party": {"enabled": False, "heroes": [], "active": [],
+                          "capacity": 0}}
         if self.campaign_id.endswith("_journey"):
             campaign = self.project.campaign(self.campaign_id)
             if campaign is not None:
@@ -633,6 +659,22 @@ class PlayerController:
                 campaign = self.project.campaign(self.campaign_id)
                 base["title"] = campaign["name"]
                 base["subtitle"] = campaign["description"]
+        party_state = self.session.party_state(expected_revision=snapshot.revision)
+        if party_state is not None:
+            party = thaw(party_state)
+            config = self.project.extensions["drawtemp.party_rpg"]["data"][
+                "campaigns"][self.campaign_id]
+            base["party"] = {
+                "enabled": True, "active": list(party["active"]),
+                "capacity": config["max_active"],
+                "heroes": [{
+                    "id": uid,
+                    "name": uid,
+                    "job": progress["heroes"][uid]["job"],
+                    "xp": progress["heroes"][uid]["xp"],
+                    "active": uid in party["active"],
+                } for uid in party["members"]],
+            }
         equipped = progress.get("heroes", {}).get("jeanne", {}).get("equipment", {})
         stock = progress.get("inventory", {})
         base["gear"] = {
