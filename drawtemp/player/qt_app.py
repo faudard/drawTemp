@@ -391,10 +391,36 @@ def main(argv=None):
                 window.requestActivate()
                 QTest.qWait(60)
 
+                def visual_items(root):
+                    # Qt Quick Repeater delegates are parented in the visual
+                    # QQuickItem scenegraph, not necessarily in QWindow's
+                    # QObject tree: QObject.findChild can miss real buttons.
+                    if root is None:
+                        return
+                    yield root
+                    for child in root.childItems():
+                        yield from visual_items(child)
+
                 def click(name):
-                    item = window.findChild(QObject, name)
+                    item = None
+                    for _attempt in range(12):
+                        QTest.qWait(35)
+                        for candidate in visual_items(window.property("contentItem")):
+                            if candidate.objectName() == name:
+                                item = candidate
+                                break
+                        if item is not None and item.isVisible() and item.isEnabled():
+                            break
                     if item is None or not item.isVisible() or not item.isEnabled():
-                        raise AssertionError("Missing visible/enabled QML control: " + name)
+                        candidates = [
+                            candidate.objectName()
+                            for candidate in visual_items(window.property("contentItem"))
+                            if candidate.objectName().startswith("r14")
+                        ]
+                        raise AssertionError(
+                            "Missing visible/enabled QML control: " + name +
+                            "; found: " + repr(candidates) +
+                            "; Player screen: " + controller.state()["screen"])
                     point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
                     QTest.mouseClick(window, Qt.LeftButton,
                                      pos=QPoint(round(point.x()), round(point.y())))
