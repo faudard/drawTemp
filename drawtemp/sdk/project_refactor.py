@@ -7,12 +7,12 @@ automatic save or rewrite of historic player save slots.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from hashlib import sha256
 import json
 from pathlib import Path
 
 from drawtemp.sdk.authoring import AuthoringPlan, AuthoringSession
 from drawtemp.sdk.semantic_review import fingerprint_pair, semantic_diff
+from drawtemp.sdk.simulation import thaw
 from sporebound.workspace_editing import _locate
 from sporebound.workspace_refactoring import plan_coordinated_rename
 from sporebound.workspace_story_refactoring import (
@@ -132,6 +132,6 @@ def apply_rename(session: AuthoringSession, review: RefactorPreview):
     plan = review.plan
     if (not isinstance(plan, AuthoringPlan) or
             plan.source_revision != review.revision or
-            fingerprint_pair(plan.content, plan.project) != review.after_digest):
+            fingerprint_pair(thaw(plan.content), thaw(plan.project)) != review.after_digest):
         raise RefactorError("changed_preview", "Rename candidate changed since preview")
     return session.apply(plan)
