@@ -1,0 +1,46 @@
+name: DrawTemp R47.C Two Mods Two Games (headless evidence)
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/modding.py'
+      - 'drawtemp/studio/r47_mods_qt.py'
+      - 'tests_standalone/test_drawtemp_r47c_two_games.py'
+      - 'examples/mods/**'
+      - 'docs/drawtemp5/R47C_TWO_GAMES_INTEGRATION.md'
+      - '.github/workflows/drawtemp-r47c-two-games.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-platform:
+    name: R47.C headless / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install SDK without Qt
+        run: python -m pip install .
+      - name: Two games, two mods, save/replay, pack tamper and R24/R30 regressions
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r47c_two_games
+          tests_standalone.test_drawtemp_r47a_modding
+          tests_standalone.test_drawtemp_r30_creator
+          tests_standalone.test_drawtemp5_r15_creator
+          -v
+      - name: R1 deterministic tactical reference (not hardware evidence)
+        run: >-
+          python -m drawtemp.sdk.migration
+          --verify-baseline docs/drawtemp5/reference-baseline.json
