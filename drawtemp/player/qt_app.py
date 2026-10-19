@@ -266,6 +266,10 @@ def create_bridge(controller, renderer):
         def interactObject(self, object_id):
             self.invoke(self.controller.interact_object, object_id)
 
+        @Slot(str)
+        def puzzleAction(self, object_id):
+            self.invoke(self.controller.puzzle_action, object_id)
+
         @Slot(int, int, int)
         def levelMove(self, level, x, y):
             self.invoke(self.controller.level_move, level, (x, y))
