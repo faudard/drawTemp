@@ -337,6 +337,72 @@ class ModRegistry:
                 "verified_mod_ids": verified, "rights_verified": False,
                 "native_export_verified": False, "release_certified": False}
 
+    def replace_version(self, mod_id, document, *, project,
+                        resource_paths=None, allow_downgrade=False):
+        """Atomically replace ONLY inert mod metadata; never migrate project data.
+
+        This deliberately cannot upgrade a schema, namespace or contribution
+        payload. Such changes need a separate validated AuthoringSession
+        migration. Every replacement revokes prior grants, including when
+        the requested permissions are unchanged.
+        """
+        old = self._entry(mod_id)
+        replacement = validate_mod_manifest(document)
+        previous = old["manifest"]
+        if replacement["id"] != mod_id or replacement["namespace"] != previous["namespace"]:
+            _fail("identity_changed", "A version replacement cannot change mod identity")
+        if replacement["extension"] != previous["extension"]:
+            _fail("migration_required", "Project data migration must be explicit")
+        current_version = _version(previous["version"])
+        target_version = _version(replacement["version"])
+        if target_version == current_version:
+            _fail("same_version", "Publish a new SemVer to change a manifest")
+        if type(allow_downgrade) is not bool:
+            _fail("invalid_downgrade", "Expected an explicit downgrade decision")
+        downgrading = target_version < current_version
+        if downgrading and not allow_downgrade:
+            _fail("downgrade_denied", "Downgrade needs explicit approval")
+
+        if hasattr(project, "to_dict"):
+            project = project.to_dict()
+        if type(project) is dict and "project" in project:
+            project = project["project"]
+        if (type(project) is not dict or type(project.get("version")) is not int or
+                project["version"] != 1 or type(project.get("campaigns")) is not list or
+                type(project.get("extensions", {})) is not dict):
+            _fail("invalid_project", "Expected canonical GameProject v1 structure")
+        data = project.get("extensions", {}).get(previous["namespace"])
+        if data is not None and data != {
+                "schema_version": 1, **(previous["extension"] or {})}:
+            _fail("data_in_use", "Existing namespace differs from pinned declaration")
+        if data is not None and previous["extension"] is None:
+            _fail("data_in_use", "Unknown extension data must be kept untouched")
+
+        # Validate dependants before modifying even a temporary registry.
+        for dependent_id, dependent in self._entries.items():
+            if dependent_id == mod_id:
+                continue
+            for need in dependent["manifest"]["dependencies"]:
+                if (need["id"] == mod_id and not (
+                        _version(need["min_version"]) <= target_version <
+                        _version(need["max_version"]))):
+                    _fail("incompatible_dependent",
+                          dependent_id + " requires the installed version")
+
+        paths = (old["resource_paths"] if resource_paths is None else resource_paths)
+        # Install a fully validated replacement in a detached registry first:
+        # SDK/rights syntax, outgoing dependencies, ZIP hashes, ID collisions.
+        staged = ModRegistry()
+        staged._entries = {key: entry for key, entry in self._entries.items()
+                           if key != mod_id}
+        status = staged.install(replacement, resource_paths=paths)
+        # The original registry and all its grants are unchanged on failure.
+        self._entries[mod_id] = staged._entries[mod_id]
+        return {"id": mod_id, "previous_version": previous["version"],
+                "version": status["version"], "downgraded": downgrading,
+                "grants_revoked": True, "project_modified": False,
+                "rights_verified": False}
+
     def uninstall(self, mod_id, *, project):
         """Unregister metadata only; never delete user data or asset files."""
         entry = self._entry(mod_id)
