@@ -135,7 +135,7 @@ IsoViewport {
             board.playing && board.currentClip.actor ?
             renderer.visualClipFrame(board.currentClip, board.phase) : ({})
         readonly property bool hasArt: !!sprite.imageUrl
-        visible: board.playing &&
+        visible: board.playing && projected.sx !== undefined &&
                  ((board.currentClip.kind === "move" ||
                    board.currentClip.kind === "attack") ||
                   ((board.currentClip.kind === "cast" ||
