@@ -155,6 +155,10 @@ def verify_portable(root, *, revision=None, platform=None):
         if not file.is_file() or file.is_symlink() or (
                 file.stat().st_size != row["size"] or _digest(file) != row["sha256"]):
             raise ReleaseError("Distribution integrity mismatch: " + rel)
+        # POSIX executable permissions are part of the relocation contract,
+        # not just immutable file bytes. Windows uses its executable suffix.
+        if os.name != "nt" and (stat.S_IMODE(file.stat().st_mode) & 0o777) != row["mode"]:
+            raise ReleaseError("Distribution file mode mismatch: " + rel)
     actual = {node.relative_to(root).as_posix().casefold() for node in _tree_files(root)}
     if actual != indexed | {"release.json"}:
         raise ReleaseError("Unindexed or missing distribution file")
@@ -165,6 +169,11 @@ def verify_portable(root, *, revision=None, platform=None):
         raise ReleaseError("Studio executable is not launchable")
     if not game_manifest["files"]:
         raise ReleaseError("Empty game bundle")
+    player = root / "Jeanne" / game_manifest["player"]
+    if not player.is_file() or player.is_symlink():
+        raise ReleaseError("Native Player executable absent")
+    if data["platform"] != "Windows" and not player.stat().st_mode & stat.S_IXUSR:
+        raise ReleaseError("Native Player executable is not launchable")
     return data
 
 
