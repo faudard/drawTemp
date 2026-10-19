@@ -41,8 +41,10 @@ def validate_advanced_ai(spec, *, living_world=None):
         require(agent["id"] not in seen, "Duplicate R37 AI actor")
         seen.add(agent["id"])
         if agent["mode"] == "realtime":
-            require(living_world is not None
-                    and agent["id"] in {n["id"] for n in living_world["npcs"]},
+            require(type(living_world) is dict
+                    and type(living_world.get("npcs")) is list
+                    and agent["id"] in {n.get("id") for n in living_world["npcs"]
+                                        if type(n) is dict},
                     "Realtime R37 AI requires an R35 authored NPC")
     return deepcopy(spec)
 
@@ -59,7 +61,7 @@ class AdvancedAI:
     def agent(self, actor_id):
         require(type(actor_id) is str and actor_id in self.agents,
                 "Unknown R37 AI actor")
-        return self.agents[actor_id]
+        return deepcopy(self.agents[actor_id])
 
     def state(self, actor_id=None):
         """Return only detached JSON; preview clients cannot mutate memory."""
@@ -79,6 +81,9 @@ class AdvancedAI:
         self.agent(actor_id)
         require(len(self.history) < MAX_WRITES,
                 "R37 AI blackboard write ledger is full")
+        require(not self.history or type(tick) is int
+                and tick >= self.history[-1]["tick"],
+                "R37 AI write events cannot go backwards in world time")
         # Validate first: an invalid update is never appended.
         updated = update_blackboard(self.blackboards[actor_id], changes, tick=tick)
         event = {"actor_id": actor_id, "tick": tick,
