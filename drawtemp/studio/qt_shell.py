@@ -930,14 +930,22 @@ class StudioWindow(QMainWindow):
                     self, "Fusion VCS", "\n".join(lines) +
                     "\n\nLa version locale inclut déjà ces modifications.")
                 return report
-            answer = QMessageBox.question(
-                self, "Confirmer la fusion sémantique",
+            # Never ask authors to approve an opaque set of changes. The
+            # full deterministic semantic path list is available in Details.
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("Confirmer la fusion sémantique")
+            dialog.setIcon(QMessageBox.Question)
+            dialog.setText(
                 "\n".join(lines) +
-                "\n\nLes documents seront validés ensemble, puis ajoutés "
-                "à l'historique Undo/Redo en une transaction. "
-                "Aucun fichier ne sera sauvegardé automatiquement. Appliquer ?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if answer == QMessageBox.Yes:
+                "\n\nConsultez « Afficher les détails » pour revoir TOUS "
+                "les champs ajoutés, supprimés ou modifiés. "
+                "Fusion en une transaction Undo/Redo ; enregistrement séparé.")
+            dialog.setDetailedText("\n".join(
+                item["op"] + "  " + item["path"]
+                for item in report["remote_diff"]))
+            dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            dialog.setDefaultButton(QMessageBox.No)
+            if dialog.exec() == QMessageBox.Yes:
                 self.apply_semantic_merge(review)
             return report
         except (SemanticMergeError, AuthoringError, ValueError, OSError) as exc:
