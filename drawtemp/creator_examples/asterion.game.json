@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "title": "Asterion — Les Veilleurs du Signal",
+  "subtitle": "Une escouade explore une station orbitale en ruine.",
+  "campaigns": [
+    {
+      "id": "main",
+      "name": "Les Veilleurs du Signal",
+      "description": "Réactiver l'antenne puis sécuriser le cœur de la station.",
+      "start_mission": "signal_depot"
+    }
+  ],
+  "options": {
+    "language": "fr",
+    "music_volume": 70,
+    "effects_volume": 70,
+    "fullscreen": false
+  },
+  "save_slots": 3,
+  "story": {
+    "entry_scenes": {
+      "main": "briefing"
+    },
+    "after_mission": {
+      "signal_depot": "depot_clear"
+    },
+    "scenes": [
+      {
+        "id": "briefing",
+        "title": "Dernier contact",
+        "speaker": "Lyra",
+        "text": "L'antenne principale s'est tue. Nous allons chercher les survivants.",
+        "choices": [
+          {
+            "id": "launch",
+            "label": "Ouvrir les sas et partir.",
+            "effects": [
+              {
+                "kind": "set_flag",
+                "flag": "mission_launched",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "depot_clear",
+        "title": "Fréquence retrouvée",
+        "speaker": "Iro",
+        "text": "L'antenne répond, mais une autre menace veille dans la soute.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Se rendre à la soute du réacteur.",
+            "effects": [
+              {
+                "kind": "unlock_mission",
+                "mission": "reactor_vault"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "extensions": {
+    "org.drawtemp.example.asterion": {
+      "schema_version": 1,
+      "data": {
+        "genre": "science-fiction-tactical",
+        "chapters": 2,
+        "role_templates": [
+          "scout",
+          "engineer"
+        ],
+        "enemy_templates": [
+          "security_drone",
+          "guardian"
+        ]
+      },
+      "references": [
+        {
+          "kind": "campaign",
+          "id": "main"
+        },
+        {
+          "kind": "mission",
+          "id": "signal_depot"
+        },
+        {
+          "kind": "mission",
+          "id": "reactor_vault"
+        }
+      ]
+    }
+  }
+}
