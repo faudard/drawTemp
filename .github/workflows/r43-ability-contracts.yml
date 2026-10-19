@@ -1,0 +1,48 @@
+name: R43 Ability Contracts and CT Compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/ability_contracts.py'
+      - 'sporebound/game_project.py'
+      - 'tests_standalone/test_drawtemp_r43_ability_contracts.py'
+      - '.github/workflows/r43-ability-contracts.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/ability_contracts.py'
+      - 'sporebound/game_project.py'
+      - 'tests_standalone/test_drawtemp_r43_ability_contracts.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: R43.A headless / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 16
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native Python package
+        run: python -m pip install -e .
+      - name: R43 Ability v1 schema, native CT bridge and authoring transactions
+        run: python -m unittest tests_standalone.test_drawtemp_r43_ability_contracts -v
+      - name: R1 original atomic authoring and project persistence
+        run: python -m unittest tests_standalone.test_drawtemp5_r1_authoring -v
+      - name: R25 legacy game-mode behavior
+        run: python -m unittest tests_standalone.test_r25_game_modes -v
+      - name: R31 narrative logic does not regress
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
