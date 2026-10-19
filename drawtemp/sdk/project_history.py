@@ -61,9 +61,9 @@ class RevisionGraph:
         _checked(revision)
         if (not isinstance(parents, (tuple, list)) or
                 not 0 <= len(parents) <= MAX_PARENTS or
+                any(not isinstance(item, str) for item in parents) or
                 len(parents) != len(set(parents)) or
-                any(not isinstance(item, str) or item not in self._nodes
-                    for item in parents)):
+                any(item not in self._nodes for item in parents)):
             raise CollaborationError("invalid_parents", "Expected 0..2 distinct known parent node IDs")
         if (not isinstance(label, str) or len(label) > 120):
             raise CollaborationError("invalid_label", "Revision label exceeds 120 characters")
@@ -111,12 +111,15 @@ class RevisionGraph:
         """Return all non-dominated common ancestors; never choose by recency."""
         left, right = self.ancestors(local_id), self.ancestors(incoming_id)
         common = set(left) & set(right)
+        # Parents are inserted before children. Traverse newest-to-oldest,
+        # dropping the entire ancestry of each accepted maximal candidate.
+        # This avoids quadratic nested ancestry recomputation for long DAGs.
+        remaining = set(common)
         latest = []
-        for candidate in common:
-            if not any(candidate != other and
-                       candidate in self.ancestors(other)
-                       for other in common):
+        for candidate in reversed(self._nodes):
+            if candidate in remaining:
                 latest.append(candidate)
+                remaining.difference_update(self.ancestors(candidate))
         return tuple(sorted(latest))
 
     def choose_base(self, local_id: str, incoming_id: str, *,
