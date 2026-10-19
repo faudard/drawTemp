@@ -264,6 +264,28 @@ class PlayerController:
                              expected_revision=state.revision)
         return self._changed()
 
+    def puzzle_action(self, object_id):
+        """Commit only the revision-checked contextual canonical command.
+
+        Qt sends an object ID, never an unchecked push direction or door
+        policy. The actual engine remains authoritative at execution time.
+        """
+        state = self._current()
+        if state.battle is None or state.battle["result"] or state.scene:
+            raise ValueError("No actionable puzzle battle")
+        projection = self.session.tactical_presentation(
+            self.selected, self.inspected_skill,
+            expected_revision=state.revision)
+        from drawtemp.sdk.simulation import thaw
+        puzzle = thaw(projection)["puzzle"]
+        command = next(
+            (item["command"] for item in puzzle["actions"]
+             if item["id"] == object_id and item["enabled"]), None)
+        if command is None:
+            raise ValueError("Puzzle action unavailable or out of reach")
+        self.session.execute(command, expected_revision=state.revision)
+        return self._changed()
+
     def inspect_skill(self, skill_id):
         state = self._current()
         battle = state.battle
@@ -405,7 +427,8 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
-                "battle": {}, "tactical": {}, "revision": 0,
+                "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
+                "revision": 0,
                 "gear": {"equipped": {}, "inventory": []}}
         if self.session is None or self.show_title:
             return base
@@ -436,6 +459,8 @@ class PlayerController:
                 self.selected, self.inspected_skill,
                 expected_revision=snapshot.revision)
             base["tactical"] = thaw(projection) if projection is not None else {}
+            base["puzzle"] = base["tactical"].get(
+                "puzzle", {"enabled": False, "actions": [], "status": []})
             battle = thaw(snapshot.battle)
             # The renderer must never receive RNG state, full journals, or rules.
             base["battle"] = {key: battle.get(key) for key in (
