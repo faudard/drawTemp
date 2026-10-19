@@ -333,6 +333,9 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
             if 0 <= x < scene["width"] and 0 <= y < scene["height"]:
                 overlay_by_cell[(x, y)] = kind
 
+    light_cells = scene.get("light_cells")
+    if light_cells is not None and type(light_cells) is not dict:
+        raise ValueError("R36 cosmetic cell lighting must be a mapping")
     rows = []
     for t in index.visible_tiles(camera, projection):
         x, y, z = t["x"], t["y"], t["height"]
@@ -349,6 +352,9 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                      "southDrop": max(0, z - elev.get((x, y + 1), 0)),
                      "overlay": overlay,
                      "overlayColor": OVERLAY_COLORS.get(overlay, "transparent"),
+                     **({"lightShade": round(max(0., 0.50 -
+                             min(1., light_cells.get(f"{x}:{y}", 0.) / .15) * .47), 4)}
+                        if light_cells is not None else {}),
                      "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
