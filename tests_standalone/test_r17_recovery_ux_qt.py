@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 HAS_QT = importlib.util.find_spec("PySide6") is not None
 
@@ -83,6 +84,24 @@ class RecoveryQmlTests(unittest.TestCase):
                 self.assertEqual(auto.read_bytes(), old_backup)
                 self.assertEqual(auto.with_suffix(".json.damaged").read_bytes(),
                                  b"externally changed primary")
+            finally:
+                for window in engine.rootObjects():
+                    window.close()
+                engine.deleteLater()
+
+    def test_write_failure_displays_disk_action_without_changing_live_game(self):
+        with TemporaryDirectory() as folder:
+            game, bridge, engine = self.setup_player(folder)
+            try:
+                bridge.newGame()
+                expected = game.session.recording()
+                with patch.object(game, "save", side_effect=OSError("disk full")):
+                    bridge.saveGame(1)
+                self.assertTrue(bridge.recoveryNotice["active"])
+                self.assertEqual(bridge.recoveryNotice["code"], "io_error")
+                self.assertIn("espace", bridge.recoveryNotice["advice"].lower())
+                self.assertEqual(game.session.recording(), expected)
+                self.assertFalse((Path(folder) / "slot_1.json").exists())
             finally:
                 for window in engine.rootObjects():
                     window.close()
