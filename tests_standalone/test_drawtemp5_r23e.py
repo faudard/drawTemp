@@ -69,6 +69,45 @@ class RightsReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(EvidenceError, "mismatched"):
                 verify_asset_inventory(report, revision=REV, platform="Windows")
 
+    def test_r17e_structured_asset_rights_are_inventoried_not_automatically_approved(self):
+        """Structured R17.E attestation passes technical checks, never legal signoff."""
+        from drawtemp.export.r15 import preflight
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            project = create_template("jeanne", base / "creator")
+            content = project / "game.json"
+            assets = preflight(content)["assets"]
+            self.assertTrue(assets)
+            runtime = base / "runtime"
+            runtime.mkdir()
+            binary = runtime / ("DrawTempPlayer.exe" if os.name == "nt"
+                                else "DrawTempPlayer")
+            binary.write_bytes(b"fixture")
+            evidence = project / "licenses" / "synthetic-only.txt"
+            evidence.parent.mkdir()
+            evidence.write_text("TEST FIXTURE. Not actual permission.\\n")
+            rights = {
+                relative: {
+                    "status": "approved", "rights_holder": "Test fixture",
+                    "license_id": "TEST-ONLY",
+                    "evidence_path": "licenses/synthetic-only.txt",
+                    "sha256": sha256((project / relative).read_bytes()).hexdigest(),
+                    "allow_modification": True, "allow_redistribution": True,
+                } for relative in assets
+            }
+            (project / "asset-licenses.json").write_text(
+                json.dumps({"schema": 1, "assets": rights}), encoding="utf-8")
+            bundle = export_game(content, runtime, base / "bundle",
+                                 require_licenses=True)
+            report = asset_inventory(bundle, revision=REV, platform="Linux")
+            self.assertEqual(len(report["assets"]), len(assets))
+            self.assertTrue(all(row["license_declaration"] == "TEST-ONLY"
+                                for row in report["assets"]))
+            self.assertTrue(all(row["rights_holder_approved"] == "not-asserted"
+                                for row in report["assets"]))
+            self.assertEqual(report["legal_status"],
+                             "blocked-pending-human-rights-review")
+
     def test_inventory_rejects_license_claims_or_forged_legal_review(self):
         good = rights("Linux")
         self.assertEqual(verify_asset_inventory(
