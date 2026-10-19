@@ -108,7 +108,13 @@ class Simulation:
             state = freeze({**battle.state(), 'mission_id': battle.mission.id,
                             'objective': battle.mission.objective,
                             'width': battle.board.width, 'height': battle.board.height})
-        exploration = session.exploration_state() if session.mode == 'campaign' and scene else None
+        exploration = None
+        if session.mode == "campaign":
+            if scene is not None:
+                exploration = session.exploration_state()
+            elif (session.scene_router.enabled
+                  and session.route_scene in session.project.exploration):
+                exploration = session.route_state()
         return StateSnapshot(self._revision, session.mode, session.campaign_id,
                              tuple(session.available_missions()),
                              freeze(asdict(session.progress)), freeze(scene), state,
@@ -184,7 +190,14 @@ class Simulation:
         return self._apply('roguelite_restart', expected_revision=expected_revision)
 
     def explore_move(self, dx, dy, *, expected_revision=None):
-        return self._apply('explore_move', dx, dy, expected_revision=expected_revision)
+        session = self._session
+        # R25 routed exploration is not a narrative StoryBook scene.
+        # The Player must use the same canonical route command as GameSession.
+        routed = (session.scene_router.enabled
+                  and session.active_scene() is None
+                  and session.route_scene in session.project.exploration)
+        operation = 'route_move' if routed else 'explore_move'
+        return self._apply(operation, dx, dy, expected_revision=expected_revision)
 
     def explore_interact(self, point_id, *, expected_revision=None):
         return self._apply('explore_interact', point_id, expected_revision=expected_revision)
