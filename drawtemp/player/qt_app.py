@@ -310,14 +310,27 @@ def main(argv=None):
     parser.add_argument("--campaign", help="Campaign ID from the selected project")
     parser.add_argument("--character-pack", type=Path, help="Published R7 atlas export directory")
     parser.add_argument("--character-variant", help="Initial authored outfit ID")
+    parser.add_argument("--actor-pack", action="append", default=[], metavar="ID=R7_DIR",
+                        help="Opt-in one published R7 pack for an enemy/actor ID; repeatable")
     parser.add_argument("--gui-journey", action="store_true",
                         help="R14 Qt input journey: title, story, battle, F5, menu, reload")
     args = parser.parse_args(argv)
+    if len(args.actor_pack) > 32:
+        parser.error("Too many actor packs (maximum 32)")
+    actor_packs = {}
+    for raw in args.actor_pack:
+        actor_id, separator, folder = raw.partition("=")
+        if (not separator or not actor_id or not folder or
+                actor_id in actor_packs or not actor_id.replace("_", "").isalnum()):
+            parser.error("Expected a unique --actor-pack ID=R7_DIR")
+        actor_packs[actor_id] = Path(folder).expanduser()
     if args.gui_journey and (not args.reference or args.smoke or args.save_dir is None):
         parser.error("--gui-journey requires --reference and an isolated --save-dir")
 
     # R15: a frozen Player must never run unverified or substitute game data.
     if getattr(sys, "frozen", False):
+        if actor_packs:
+            parser.error("Unverified external actor packs are not allowed in frozen releases")
         from drawtemp.export.r15 import verify_bundle
         bundle = Path(sys.executable).resolve().parent.parent
         try:
@@ -363,9 +376,14 @@ def main(argv=None):
     presentation = (PresentationAssets.for_project(
         controller.project, controller.asset_project_path)
         if controller.asset_project_path is not None else None)
-    renderer = make_controller(scene_for_player(controller), assets=presentation,
-                               character_pack=args.character_pack,
-                               character_variant=args.character_variant)
+    try:
+        renderer = make_controller(
+            scene_for_player(controller), assets=presentation,
+            character_pack=args.character_pack,
+            character_variant=args.character_variant,
+            character_packs=actor_packs)
+    except (OSError, ValueError) as exc:
+        parser.error("Invalid character pack: " + str(exc))
     if controller.session is not None:
         renderer.sync_progress(controller.session.snapshot().progress,
                                controller.content.equipment)
