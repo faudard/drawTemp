@@ -46,6 +46,9 @@ from drawtemp.studio.r49_workspaces import (
 from drawtemp.studio.r49_inspector_integrity import (
     reference_audit, problems_for_selection,
 )
+from drawtemp.studio.r49_playtest import (
+    EditorReturnContext, PlaytestRun, TERMINAL,
+)
 from drawtemp.studio.r18_onboarding import (
     GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
@@ -186,6 +189,8 @@ class StudioWindow(QMainWindow):
         self._r49_navigating = False
         self._r49_reference_cache = None
         self._r49_reference_key = None
+        self._r49_playtest = PlaytestRun()
+        self._r49_player_process = None
         self._r49_focus = WorkspaceFocusMemory({
             name: self.settings.value(focus_settings_key(name))
             for name in WORKSPACES
@@ -449,6 +454,11 @@ class StudioWindow(QMainWindow):
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
         self._action("playtest", "Jouer / Playtest", self.playtest)
+        self._action("stop_playtest", "Arrêter le playtest", self.stop_playtest)
+        self._action("return_playtest", "Revenir à l'édition testée",
+                     self.return_to_playtest_editor)
+        self._action("playtest_report", "Diagnostics du dernier playtest…",
+                     self.show_playtest_report)
         self._action("export", "Exporter le Player…", self.export_player)
         self._action("preferences", "Préférences…", self.open_preferences)
         self._action("undo", "Annuler", self.undo)
@@ -498,8 +508,10 @@ class StudioWindow(QMainWindow):
         for key in ("save", "save_as"):
             file_menu.addAction(self.commands[key])
         file_menu.addSeparator()
-        for key in ("playtest", "export"):
+        for key in ("playtest", "stop_playtest", "return_playtest",
+                    "playtest_report", "export"):
             file_menu.addAction(self.commands[key])
+        self._sync_playtest_commands()
         edit_menu = self.menuBar().addMenu("&Édition")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
@@ -1403,6 +1415,13 @@ class StudioWindow(QMainWindow):
         play = QPushButton("Playtest du projet enregistré")
         play.clicked.connect(self.playtest)
         panel.addWidget(play)
+        stop = QPushButton("Arrêter le playtest en cours")
+        stop.clicked.connect(self.stop_playtest)
+        panel.addWidget(stop)
+        # These buttons use the same actions, keeping their state synchronized.
+        self._r49_publication_play = play
+        self._r49_publication_stop = stop
+        self._sync_playtest_commands()
         export = QPushButton("Vérifier et exporter le Player…")
         export.clicked.connect(self.export_player)
         panel.addWidget(export)
@@ -1860,6 +1879,8 @@ class StudioWindow(QMainWindow):
         return True
 
     def new_project_template(self):
+        if self._r49_playtest.active:
+            return False
         from drawtemp.export.templates import TEMPLATES
         kind, accepted = QInputDialog.getItem(
             self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
@@ -1881,6 +1902,8 @@ class StudioWindow(QMainWindow):
 
     def new_document(self):
         """R22: use the canonical CreatorDialog and shared R1 session."""
+        if self._r49_playtest.active:
+            return False
         from drawtemp.studio.r15_creator import CreatorDialog
         dialog = CreatorDialog(self)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
@@ -1889,6 +1912,8 @@ class StudioWindow(QMainWindow):
 
     def new_project(self):
         """R28: guided multi-genre flow without a second Studio session."""
+        if self._r49_playtest.active:
+            return False
         from drawtemp.studio.genre_wizard_qt import GenreProjectWizard
         dialog = GenreProjectWizard(self)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
@@ -1988,6 +2013,10 @@ class StudioWindow(QMainWindow):
             self.set_scale(int(scale.currentText()))
 
     def _confirm_leave(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Terminez le Player avant de fermer ou de changer de projet.")
+            return False
         if self._edited_fields:
             self.inspector_error.setText(
                 "Propriétés en cours : appliquez-les ou ignorez-les avant de quitter.")
