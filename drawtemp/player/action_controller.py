@@ -10,6 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from sporebound.action_runtime import ActionRuntime, SCALE, validate_scene
+from drawtemp.render.committed_fx import CommittedFxDirector
 
 
 def demo_scene():
@@ -48,6 +49,7 @@ class ActionPlayerController:
         self.scene = validate_scene(scene)
         self.save_path = Path(save_path) if save_path is not None else None
         self.runtime = ActionRuntime(self.scene)
+        self.fx = CommittedFxDirector()
         self.paused = False
         self.message = "Explorez la prairie. Ouvrez le coffre avant la porte."
         self.events = ()
@@ -76,6 +78,7 @@ class ActionPlayerController:
         snapshot["prompt"] = self._nearby() if self.runtime.hero["alive"] else ""
         snapshot["message"] = self.message
         snapshot["events"] = deepcopy(self.events)
+        snapshot["fx"] = self.fx.snapshot()
         return snapshot
 
     def step(self, dx=0, dy=0, *, attack=False, dodge=False, guard=False,
@@ -89,6 +92,7 @@ class ActionPlayerController:
             "interact": target,
         })
         self.events = deepcopy(events)
+        self.fx.observe(self.runtime.snapshot(), events)
         if events:
             self.message = " · ".join(event["kind"].replace("_", " ")
                                       for event in events[-3:])
@@ -110,6 +114,7 @@ class ActionPlayerController:
             raise ValueError("No R26 action checkpoint path provided")
         verified = ActionRuntime.load(self.save_path, expected_scene=self.scene)
         self.runtime = verified
+        self.fx.reset(self.runtime.tick)
         self.paused = False
         self.events = ()
         self.message = "Point de sauvegarde action vérifié et rechargé."
@@ -127,6 +132,7 @@ class ActionPlayerController:
                 self.message = "Réapparition au point de sauvegarde."
                 return self.state()
         self.runtime = ActionRuntime(self.scene)
+        self.fx.reset(self.runtime.tick)
         self.paused = False
         self.events = ()
         self.message = "Retour au départ de la scène."
