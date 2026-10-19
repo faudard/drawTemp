@@ -233,6 +233,15 @@ class GameSession:
                 "Current route is not an exploration scene")
         return self.exploration.state(self.progress, self.route_scene)
 
+    def route_interact(self, point_id):
+        """R25 routed exploration uses the canonical interaction flag ledger."""
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration,
+                "Routed exploration interactions require an active scene")
+        return self.exploration.interact(self.progress, self.route_scene, point_id)
+
     def route_move(self, dx, dy):
         """Legacy cardinal exploration remains available before free movement starts."""
         require(self.scene_router.enabled and self.mode == "campaign"
