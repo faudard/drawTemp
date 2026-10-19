@@ -148,6 +148,17 @@ class Simulation:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
 
+    def living_world_state(self, scene=None):
+        """Opt-in detached world projection for Player/Qt; no state mutation."""
+        if self._session._living_world is None:
+            return None
+        return freeze(self._session.living_world_state(scene=scene))
+
+    def living_world_advance(self, ticks=1, *, expected_revision=None):
+        """Player-facing explicit time step, checked through R1 revisions."""
+        return self._apply("living_world_advance", ticks,
+                           expected_revision=expected_revision)
+
     def explore_move(self, dx, dy, *, expected_revision=None):
         return self._apply('explore_move', dx, dy, expected_revision=expected_revision)
 
