@@ -170,6 +170,20 @@ class GameSession:
                 "Daily quests require an active exploration session")
         return self._living_world.finish_daily_quest(quest_id, self.progress)
 
+    def living_world_trade(self, shop_id, item_id, action, quantity,
+                           transaction_id):
+        """Atomic buy/sell in canonical Campaign inventory and currency."""
+        require(self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Trading requires active exploration without a pending dialogue")
+        return self._living_world.transact(
+            self.progress, self.progress.story_flags, self.route_scene,
+            shop_id, item_id, action, quantity, transaction_id)
+
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
         require(self.scene_router.enabled, "Scene routing is not enabled")
