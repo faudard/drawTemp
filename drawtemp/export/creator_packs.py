@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import zipfile
+import zlib
 
 from drawtemp.sdk.capability_contracts import CapabilityError, require_sdk
 
@@ -198,7 +199,8 @@ def inspect_pack(path: str | Path) -> PackInspection:
         with zipfile.ZipFile(BytesIO(archive_bytes), "r") as archive:
             checked = _read_and_verify(archive)
         digest = hashlib.sha256(archive_bytes).hexdigest()
-    except (OSError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
+    except (OSError, zipfile.BadZipFile, RuntimeError, EOFError,
+            NotImplementedError, zlib.error) as exc:
         raise PackError("invalid_archive", str(exc)) from exc
     doc = checked["manifest"]
     return PackInspection(doc["id"], doc["version"], doc["kind"],
