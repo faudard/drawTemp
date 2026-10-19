@@ -54,6 +54,7 @@ class BehaviorTreeDialog(QDialog):
             ("selector", "+ Sélecteur", lambda: self.add_node("selector")),
             ("condition", "+ Condition", lambda: self.add_node("condition")),
             ("action", "+ Action", lambda: self.add_node("action")),
+            ("invert", "Inverser", self.wrap_inverter),
             ("edit", "Modifier feuille", self.edit_leaf),
             ("delete", "Supprimer", self.remove_node),
             ("up", "Monter", lambda: self.reorder(-1)),
@@ -207,6 +208,11 @@ class BehaviorTreeDialog(QDialog):
         self._perform(lambda: self.draft.add(
             parent, kind, fact=self.fact.text(),
             equals=self._expected_value(), action=self.action.text()))
+
+    def wrap_inverter(self):
+        node_id = self._current_id()
+        if node_id is not None:
+            self._perform(lambda: self.draft.wrap_inverter(node_id))
 
     def edit_leaf(self):
         node_id = self._current_id()
