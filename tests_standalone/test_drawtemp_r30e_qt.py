@@ -39,7 +39,7 @@ class GalleryQtTests(unittest.TestCase):
         self.assertEqual(self.dialog.gallery_table.rowCount(), 4)
         self.assertEqual(self.dialog.tabs.count(), 4)
         self.assertFalse(self.dialog.gallery_apply_button.isEnabled())
-        self.assertIn("narrative", self.dialog.gallery_status.text().lower())
+        self.assertIn("scènes", self.dialog.gallery_status.text().lower())
         self.dialog.gallery_filter.setCurrentIndex(2)
         shown = [index for index in range(4)
                  if not self.dialog.gallery_table.isRowHidden(index)]
