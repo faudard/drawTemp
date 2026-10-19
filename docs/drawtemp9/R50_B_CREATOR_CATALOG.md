@@ -51,6 +51,26 @@ La fenêtre ne lance **pas** un faux Player Qt. Les champs
 `native_player_tested`, `qt_onscreen_tested`,
 `standalone_export_tested` et `release_9_0_ready` restent à `false`.
 
+### Second lot : PlayerController réel (headless)
+
+L'API `check_player_journey` charge la **paire publiée par le Studio**,
+passe par `sporebound.player_controller.PlayerController`, sélectionne une
+campagne et un slot temporaires, applique une action acceptée
+(démarrage de la mission CT ou choix narratif), puis relit le slot avec une
+nouvelle instance du contrôleur. La reprise est comparée à l'enregistrement
+de référence, et les deux documents auteurs sont vérifiés **inchangés
+octet pour octet**. Les sauvegardes sont isolées hors du projet.
+
+Une paire corrompue est rejetée au preflight, sans tentative de réparation
+silencieuse. Si le Player échoue dans le dossier temporaire, la création
+du starter n'est **pas publiée**. Cette vérification rapproche R50.B du
+Player réel mais ne lance ni QML, ni Player natif, ni installateur.
+
+```bash
+python -m unittest -v tests_standalone.test_r50b_player_journey
+python -m unittest -v tests_standalone.test_r50b_catalog
+```
+
 ### Restant pour la vraie R50.B
 
 - R41.B : RPG classique jouable par menus, groupe et sauvegarde.
