@@ -303,9 +303,15 @@ class ModRegistry:
                 continue
             if doc["extension"] is not None:
                 namespace_data = namespaces[doc["namespace"]]
-                if (type(namespace_data) is not dict or
-                        namespace_data.get("schema_version") != 1):
+                expected_data = {"schema_version": 1, **doc["extension"]}
+                if type(namespace_data) is not dict:
                     errors.append(mod_id + ": invalid_namespace")
+                    continue
+                # R47.A allows only an initial immutable declarative insert.
+                # A future mutable mod schema will require an explicit
+                # versioned migration instead of silently trusting edits.
+                if namespace_data != expected_data:
+                    errors.append(mod_id + ": namespace_changed")
                     continue
             damaged = False
             for resource in doc["resources"]:
