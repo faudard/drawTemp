@@ -7,7 +7,7 @@ Roadmap: [R41 / DrawTemp 8.1–9.0](../DRAWTEMP_8_1_TO_9_0_DETAILED_ROADMAP_R41_
 ## Architecture decision
 
 - Reuse R25 game_modes: classic_rpg already resolves to RPG_TURN. Tactical missions still resolve to TACTICAL_CT by existing validation.
-- Authored membership defaults live in GameProject.extensions under the versioned drawtemp.party_rpg namespace (existing R24 envelope, not an external JSON file).
+- Authored membership defaults live in GameProject.extensions under the versioned drawtemp.partyrpg namespace (existing R24 envelope, not an external JSON file).
 - The running roster, active group and bounded replay journal belong exclusively to GameSession.
 - XP, classes, equipment and skills stay in the existing Campaign.heroes / HeroProgress data model. Gold and inventory stay in Campaign. No second database, combat engine or inventory.
 - The deterministic rpg_turn_order speed/ID primitive is not a turn-based battle executor. It does not alter CT or settle encounters.
