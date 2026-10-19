@@ -27,6 +27,9 @@ from drawtemp.studio.inspector_model import (
     InspectorError, common_value, edit_properties, shared_specs,
 )
 from drawtemp.studio.resource_links import connections
+from drawtemp.sdk.controlled_scripting import (
+    StudioScriptError, read_script_manifest, install_script,
+)
 from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
@@ -373,6 +376,9 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
+        import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
+        import_hooks.triggered.connect(self._import_hooks_dialog)
         plugin_menu = tools_menu.addMenu("Plugins Studio")
         load_plugin = plugin_menu.addAction("Charger un manifeste…")
         load_plugin.triggered.connect(self._load_plugin_dialog)
@@ -872,6 +878,35 @@ class StudioWindow(QMainWindow):
                 listing.addItem(item.title + "  [" + item.resource_id + "]")
         layout.addWidget(listing)
         return page
+
+    def apply_controlled_hooks(self, path, *, grants):
+        """Opt-in import into native narrative effects; editor remains owner."""
+        source = read_script_manifest(path)
+        result = install_script(
+            self.session, source, granted_permissions=grants,
+            expected_revision=self.session.revision)
+        self.refresh()
+        self.problems.addItem("Hooks contrôlés importés : " + source["id"])
+        return result
+
+    def _import_hooks_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importer hooks contrôlés", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            source = read_script_manifest(path)
+            approved = QMessageBox.question(
+                self, "Permissions des hooks",
+                source["id"] + "\n\nActions autorisées :\n" +
+                "\n".join("• " + item for item in source["permissions"]) +
+                "\n\nCes effets deviendront des données natives du GameProject "
+                "(annulables avant sauvegarde). Autoriser ?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if approved == QMessageBox.Yes:
+                self.apply_controlled_hooks(path, grants=source["permissions"])
+        except (StudioScriptError, AuthoringError, ValueError, OSError) as exc:
+            self.report_error(exc)
 
     # R24.B: only the host creates widgets and commits edits. A plugin is
     # inert JSON; it never owns a QWidget, callback, model or Editor session.
