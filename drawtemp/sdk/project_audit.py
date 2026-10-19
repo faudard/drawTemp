@@ -141,16 +141,26 @@ class LocalAuditLog:
                 raise AuditError("oversized_log", "Audit size limit reached")
             if self.path.is_symlink():
                 raise AuditError("unsafe_path", "Symlink audit targets are forbidden")
-            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
+            flags = os.O_RDWR | os.O_APPEND | os.O_CREAT
             if hasattr(os, "O_BINARY"):
                 flags |= os.O_BINARY
             if hasattr(os, "O_NOFOLLOW"):
                 flags |= os.O_NOFOLLOW
             fd = os.open(self.path, flags, 0o600)
             try:
-                # Also catch external appenders bypassing our lock, pre-write.
+                # Recheck the actual opened inode and its bytes, not merely
+                # the path/size read before acquiring the append descriptor.
                 if os.fstat(fd).st_size != len(current):
                     raise AuditError("external_change", "Audit was modified during append")
+                os.lseek(fd, 0, os.SEEK_SET)
+                existing = bytearray()
+                while len(existing) < len(current):
+                    piece = os.read(fd, min(65536, len(current) - len(existing)))
+                    if not piece:
+                        break
+                    existing.extend(piece)
+                if existing != current:
+                    raise AuditError("external_change", "Audit bytes changed during append")
                 view = memoryview(encoded)
                 while view:
                     count = os.write(fd, view)
