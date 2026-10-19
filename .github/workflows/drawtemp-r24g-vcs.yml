@@ -1,0 +1,58 @@
+name: DrawTemp R24.G semantic VCS merge
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/r24g_semantic_vcs.py'
+      - 'drawtemp/sdk/r24g_cli.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_drawtemp5_r24g.py'
+      - '.github/workflows/drawtemp-r24g-vcs.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/r24g_semantic_vcs.py'
+      - 'drawtemp/sdk/r24g_cli.py'
+      - 'drawtemp/sdk/__init__.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_drawtemp5_r24g.py'
+      - '.github/workflows/drawtemp-r24g-vcs.yml'
+
+jobs:
+  semantic-merge-regressions:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.10'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.12'
+          - os: macos-latest
+            python: '3.12'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install canonical packages
+        run: python -m pip install -e .
+      - name: Semantic diff, conflicts and SDK authoring regression
+        run: python -m unittest tests_standalone.test_drawtemp5_r24g.SemanticDiffTests tests_standalone.test_drawtemp5_r24g.StudioMergeTests tests_standalone.test_drawtemp5_r24g.LocalFileMergeTests tests_standalone.test_drawtemp5_r24a
+  qt-studio-merge-offscreen:
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e . 'PySide6==6.8.3'
+      - name: Qt Studio merge with undo
+        run: python -m unittest tests_standalone.test_drawtemp5_r24g.QtSemanticMergeTests
