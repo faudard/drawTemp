@@ -28,7 +28,7 @@ _EVENTS = frozenset(("comment", "resolve", "reopen"))
 _ANCHOR = re.compile(
     r"(?:/(?:project|content)|/content/missions/[A-Za-z0-9_-]{1,64}"
     r"|/project/story/scenes/[A-Za-z0-9_-]{1,64}"
-    r"|/project/(?:campaigns|cinematics)/[A-Za-z0-9_-]{1,64})\\Z"
+    r"|/project/(?:campaigns|cinematics)/[A-Za-z0-9_-]{1,64})\Z"
 )
 _FIELDS = frozenset(("schema", "sequence", "previous", "kind", "node",
                      "document", "anchor", "author", "text", "thread", "digest"))
