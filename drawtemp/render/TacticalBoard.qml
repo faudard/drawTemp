@@ -141,13 +141,22 @@ IsoViewport {
                   ((board.currentClip.kind === "cast" ||
                     board.currentClip.kind === "impact" ||
                     board.currentClip.kind === "block") && hasArt))
-        readonly property var pos: board.scenePoint(board.clipCell())
+        // Use R3's canonical iso projection and easing, including real
+        // terrain elevation. Do not calculate a second motion path in QML.
+        readonly property var projected: board.playing ?
+            renderer.motionPoint(board.currentClip, board.phase) : ({})
         readonly property real ratio: renderer.cameraState.zoom
+        readonly property var pos: projected.sx !== undefined ?
+            [board.width / 2 + renderer.cameraState.panX + projected.sx * ratio,
+             board.height / 2 + renderer.cameraState.panY + projected.sy * ratio] :
+            board.scenePoint(board.clipCell())
         x: pos[0] - (hasArt ? sprite.pivotX : 20) * ratio
         y: pos[1] - (hasArt ? sprite.pivotY : 68) * ratio
         width: (hasArt ? sprite.frameWidth : 40) * ratio
         height: (hasArt ? sprite.frameHeight : 68) * ratio
-        z: (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
+        z: projected.worldX !== undefined ?
+           (projected.worldX + projected.worldY) * 100 + 75 :
+           (board.clipCell()[0] + board.clipCell()[1]) * 100 + 75
         Image {
             id: actionSprite
             objectName: "r12-action-sprite"
