@@ -15,6 +15,7 @@ from sporebound.model import RuleError
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.player.qt_cinematic import CinematicStage
 from drawtemp.cinematics.timeline import TimelineScale
+from drawtemp.cinematics.projection import audio_payload
 from drawtemp.studio.cinematic_timeline import TimelineBlock, TimelineKeyframe, TimelineView
 
 LANES = ("background", "camera", "actor", "dialogue", "fade",
@@ -37,6 +38,7 @@ class CinematicEditor(QMainWindow):
         self.clip_id = ""
         self.event_id = ""
         self.fields = {}
+        self.timeline_zoom = 1.0
         self.setWindowTitle("DrawTemp 5.0 — Cinématiques, audio et effets")
         self.resize(1460, 880)
         body = QSplitter(Qt.Horizontal, self)
@@ -72,6 +74,14 @@ class CinematicEditor(QMainWindow):
             asset_root=document.source_path.parent if document.source_path else None)
         self.stage.pause()
         ml.addWidget(self.stage, 4)
+        # Read-only projections from the canonical R11 Player stage.
+        self.subtitle_preview = QLabel("Sous-titres : —")
+        self.subtitle_preview.setWordWrap(True)
+        self.subtitle_preview.setAccessibleName("Sous-titre courant de la cinématique")
+        ml.addWidget(self.subtitle_preview)
+        self.voice_preview = QLabel("Voix : —")
+        self.voice_preview.setAccessibleName("Piste vocale courante")
+        ml.addWidget(self.voice_preview)
         controls = QHBoxLayout()
         self.play_button = QPushButton("Lire")
         self.play_button.clicked.connect(self._toggle_play)
@@ -94,7 +104,16 @@ class CinematicEditor(QMainWindow):
             lambda _: self.stage.set_speed(self.speed.currentData()))
         controls.addWidget(self.speed)
         ml.addLayout(controls)
-        ml.addWidget(QLabel("Timeline multipiste · sélectionner un événement pour l'éditer"))
+        timeline_controls = QHBoxLayout()
+        timeline_controls.addWidget(QLabel("Timeline · déplacer, rogner, zoomer, scrubber"))
+        self.zoom_combo = QComboBox()
+        for factor in (.5, 1.0, 2.0, 4.0, 8.0):
+            self.zoom_combo.addItem(f"{factor * 100:g} %", factor)
+        self.zoom_combo.setCurrentIndex(1)
+        self.zoom_combo.setAccessibleName("Zoom de la timeline")
+        self.zoom_combo.currentIndexChanged.connect(self._zoom_timeline)
+        timeline_controls.addWidget(self.zoom_combo)
+        ml.addLayout(timeline_controls)
         self.timeline_scene = QGraphicsScene(self)
         self.timeline_scene.selectionChanged.connect(self._on_track_selected)
         self.timeline = TimelineView(self.timeline_scene)
@@ -298,9 +317,23 @@ class CinematicEditor(QMainWindow):
         with QSignalBlocker(self.slider):
             self.slider.setValue(ms)
         self.clock_label.setText(f"{ms/1000:.2f} / {self.stage.clip['duration_ms']/1000:.2f} s")
-        # Lightweight playhead only; never redraw the timeline on each tick.
-        if hasattr(self, "_playhead"):
-            self._playhead.setX(130 + 920 * ms / self.stage.clip["duration_ms"])
+        # Lightweight playhead only; never rebuild the timeline on each tick.
+        if hasattr(self, "_playhead") and self.timeline.scale is not None:
+            self._playhead.setX(self.timeline.scale.time_to_x(ms))
+        frame = self.stage.bridge.frame
+        speaker = frame.get("speaker", "")
+        line = frame.get("dialogue", "")
+        self.subtitle_preview.setText(
+            f"{speaker} : {line}" if line else "Sous-titres : —")
+        voices = [track["cue"] for track in audio_payload(self.stage.clip, ms)
+                  if track["bus"] == "voice"]
+        self.voice_preview.setText("Voix : " + (", ".join(voices) if voices else "—"))
+
+    def _zoom_timeline(self):
+        self.timeline_zoom = float(self.zoom_combo.currentData())
+        self._draw_timeline()
+        self.timeline.centerOn(self.timeline.scale.time_to_x(self.stage.time_ms),
+                               self.timeline_scene.sceneRect().height() / 2)
 
     def _toggle_play(self):
         if self.stage.playing:
@@ -325,6 +358,14 @@ class CinematicEditor(QMainWindow):
             # Discard an invalid/stale ghost even if validation rejects the edit.
             self._draw_timeline()
 
+    def _commit_event_trim(self, clip_id, event_id, duration_ms, revision):
+        self.stage.pause()
+        if self._apply(self.document.trim_event, clip_id, event_id, duration_ms,
+                       expected_revision=revision):
+            self.statusBar().showMessage("Piste rognée · Ctrl+Z pour annuler", 3500)
+        else:
+            self._draw_timeline()
+
     def _commit_key_drag(self, clip_id, event_id, old_ms, at_ms, revision):
         self.stage.pause()
         if self._apply(self.document.update_keyframe, clip_id, event_id,
@@ -344,20 +385,24 @@ class CinematicEditor(QMainWindow):
         try:
             scene.clear()
             clip = self.document.clip(self.clip_id) if self.clip_id else self._empty_clip()
-            scale = TimelineScale(clip["duration_ms"])
+            scale = TimelineScale(clip["duration_ms"],
+                                  width_px=920 * self.timeline_zoom)
             self.timeline.scale = scale
-            scene.setSceneRect(0, 0, 1080, 35 + len(LANES) * 32)
+            scene_right = scale.time_to_x(clip["duration_ms"])
+            scene.setSceneRect(0, 0, scene_right + 32, 35 + len(LANES) * 32)
             for lane_index, lane in enumerate(LANES):
                 y = 26 + lane_index * 32
                 label = scene.addText(lane)
                 label.setDefaultTextColor(QColor("#b6c5d5"))
                 label.setPos(4, y - 3)
-                scene.addLine(128, y + 24, 1056, y + 24, QPen(QColor("#444b59")))
-            for second in range(0, clip["duration_ms"] // 1000 + 1):
-                x = scale.time_to_x(second * 1000)
+                scene.addLine(128, y + 24, scene_right + 12, y + 24,
+                              QPen(QColor("#444b59")))
+            tick_ms = scale.major_tick_ms()
+            for tick in range(0, clip["duration_ms"] + 1, tick_ms):
+                x = scale.time_to_x(tick)
                 scene.addLine(x, 17, x, 31 + len(LANES) * 32,
                               QPen(QColor("#586477")))
-                label = scene.addText(str(second) + " s")
+                label = scene.addText(f"{tick / 1000:g} s")
                 label.setDefaultTextColor(QColor("#abb6c5"))
                 label.setScale(.7)
                 label.setPos(x + 2, -2)
@@ -366,9 +411,12 @@ class CinematicEditor(QMainWindow):
                 row = LANES.index(_lane(event))
                 on_event = lambda eid, ms, rev, cid=clip["id"]: (
                     self._commit_event_drag(cid, eid, ms, rev))
+                on_trim = lambda eid, duration, rev, cid=clip["id"]: (
+                    self._commit_event_trim(cid, eid, duration, rev))
                 block = TimelineBlock(event, scale, 26 + row * 32,
                                       self.document.revision, on_event,
-                                      COLORS[_lane(event)])
+                                      COLORS[_lane(event)],
+                                      trim_callback=on_trim)
                 scene.addItem(block)
                 if event["id"] == self.event_id:
                     block.setSelected(True)
