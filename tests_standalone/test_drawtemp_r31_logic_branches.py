@@ -17,6 +17,8 @@ from drawtemp.studio.logic_graph_draft import LogicGraphDraft
 from sporebound.engine import Battle
 from sporebound.rules.triggers import dispatch
 from sporebound.model import Content
+from sporebound.event_composer import condition
+from drawtemp.studio.events import EventStudio
 
 
 def new_session():
@@ -209,6 +211,32 @@ class BranchGraphTests(unittest.TestCase):
             stale.apply(self.session)
         self.assertEqual(error.exception.code, "stale_revision")
         self.assertEqual(state, self.session.snapshot().to_dict())
+
+    def test_external_native_r9_edit_or_order_is_detected(self):
+        graph = branch_graph()
+        apply_graph(self.session, graph)
+        studio = EventStudio(self.session)
+        studio.set_condition(MISSION, "r31_gatechoice_yes", condition("tick", tick=2))
+        protected = self.session.snapshot().to_dict()
+        with self.assertRaises(AuthoringError):
+            apply_graph(self.session, graph)
+        self.assertEqual(self.session.snapshot().to_dict(), protected)
+        self.session.undo()
+        studio.move_event(MISSION, "r31_gatechoice_no", -1)
+        swapped = self.session.snapshot().to_dict()
+        with self.assertRaises(AuthoringError):
+            apply_graph(self.session, graph)
+        self.assertEqual(self.session.snapshot().to_dict(), swapped)
+
+    def test_two_graphs_cannot_claim_the_same_r9_trigger_id(self):
+        graph = branch_graph()
+        apply_graph(self.session, graph)
+        colliding = LogicGraphDraft.new(
+            MISSION, "gatechoice_yes", source_revision=self.session.revision)
+        state = self.session.snapshot().to_dict()
+        with self.assertRaises(AuthoringError):
+            colliding.apply(self.session)
+        self.assertEqual(self.session.snapshot().to_dict(), state)
 
     def test_disconnected_and_forked_drafts_never_commit(self):
         draft = LogicGraphDraft.new(MISSION, "ports", source_revision=0)
