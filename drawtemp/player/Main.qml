@@ -594,6 +594,37 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                        ColumnLayout {
+                            id: r41PartyHud
+                            objectName: "r41-party-hud"
+                            visible: root.playerData.party.enabled &&
+                                     root.playerData.screen === "exploration"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "GROUPE RPG · " +
+                                      root.playerData.party.active.length + "/" +
+                                      root.playerData.party.capacity + " actifs"
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.party.heroes || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-party-hero-" + modelData.id
+                                    text: (modelData.active ? "● " : "○ ") +
+                                          modelData.name + " · " + modelData.job +
+                                          " · XP " + modelData.xp
+                                    enabled: !root.inputLocked
+                                    onClicked: player.togglePartyMember(modelData.id)
+                                    Accessible.name: "Groupe RPG : " + modelData.name +
+                                                     (modelData.active ? ", actif" : ", réserve")
+                                }
+                            }
+                        }
                         Label {
                             visible: renderer.characterOutfits.length > 1
                             text: "TENUE · aperçu visuel (non sauvegardé)"
