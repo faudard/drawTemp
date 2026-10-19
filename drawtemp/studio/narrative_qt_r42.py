@@ -154,6 +154,7 @@ class NarrativeStudioDialog(QDialog):
             ('break', 'Point d’arrêt', self.debug_breakpoint),
             ('next', 'Pas suivant', self.debug_step),
             ('choose', 'Tester un choix', self.debug_choose),
+            ('forecast', 'Prévoir les effets', self.debug_forecast),
             ('reset', 'Arrêter le debugger', self.debug_reset),
         ):
             button = QPushButton(title)
@@ -521,3 +522,24 @@ class NarrativeStudioDialog(QDialog):
                 self.debug_render()
         except Exception as exc:
             QMessageBox.warning(self, 'Choix narratif', str(exc))
+
+    def debug_forecast(self):
+        """Read-only canonical consequence forecast; no debugger step or edit."""
+        if self.debugger is None:
+            return
+        try:
+            options = [row['id'] for row in self.debugger.inspect()['choices']
+                       if row['available']]
+            if not options:
+                QMessageBox.information(
+                    self, 'Prévision', 'Aucun choix autorisé à cette réplique.')
+                return
+            choice, ok = QInputDialog.getItem(
+                self, 'Prévoir les effets', 'Choix', options, 0, False)
+            if ok:
+                forecast = self.debugger.preview_choice(choice)
+                self.debug_output.setPlainText(
+                    'Prévision isolée, aucun effet appliqué :\n' +
+                    json.dumps(forecast, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            QMessageBox.warning(self, 'Prévision narrative', str(exc))
