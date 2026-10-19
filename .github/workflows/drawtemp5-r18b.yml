@@ -47,6 +47,13 @@ jobs:
           QT_QUICK_BACKEND: software
         run: |
           python -m unittest tests_standalone.test_drawtemp5_r18b tests_standalone.test_drawtemp5_r2_cd tests_standalone.test_drawtemp5_r18a -v
+      - name: Real map and construction context (Linux software Qt)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          DRAWTEMP_R18B_MAP_GUI: '1'
+        run: python -m unittest tests_standalone.test_drawtemp5_r18b.InspectorQtTests.test_real_map_construction_switch_disables_paint_and_keeps_session -v
       - name: Construction workspace CLI smoke (Linux software Qt)
         if: runner.os == 'Linux'
         env:
