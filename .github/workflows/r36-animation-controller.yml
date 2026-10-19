@@ -1,0 +1,65 @@
+name: R36 Animation Controller
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/animation_graph.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/studio/animation_graph_authoring.py'
+      - 'drawtemp/studio/animation_graph_qt.py'
+      - 'drawtemp/studio/r28d_workflow_qt.py'
+      - 'tests_standalone/test_r36_animation_graph.py'
+      - 'tests_standalone/test_r36_animation_graph_qt.py'
+      - '.github/workflows/r36-animation-controller.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/animation_graph.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/studio/animation_graph_authoring.py'
+      - 'drawtemp/studio/animation_graph_qt.py'
+      - 'drawtemp/studio/r28d_workflow_qt.py'
+      - 'tests_standalone/test_r36_animation_graph.py'
+      - 'tests_standalone/test_r36_animation_graph_qt.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  r36-headless:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install -e .
+      - name: Compile touched modules
+        run: python -m compileall -q sporebound/animation_graph.py drawtemp/studio/animation_graph_authoring.py drawtemp/studio/animation_graph_qt.py drawtemp/studio/r28d_workflow_qt.py
+      - name: Animation graph deterministic and canonical persistence
+        run: python -m unittest tests_standalone.test_r36_animation_graph -v
+      - name: Legacy R28 and R12 animation regressions
+        run: python -m unittest tests_standalone.test_r28d_animation_events_roundtrip tests_standalone.test_drawtemp5_r12_animation -v
+
+  r36-qt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt
+        run: python -m pip install -e ".[qt6]"
+      - name: Qt offscreen widget authoring (not a GPU certification)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest tests_standalone.test_r36_animation_graph_qt -v
