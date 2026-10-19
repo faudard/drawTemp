@@ -7,9 +7,15 @@ on:
       - 'sporebound/game_session.py'
       - 'sporebound/game_project.py'
       - 'drawtemp/sdk/ai_decision.py'
+      - 'drawtemp/sdk/behavior_tree.py'
+      - 'drawtemp/studio/ai_tree_authoring.py'
+      - 'drawtemp/studio/ai_tree_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
       - 'drawtemp/sdk/__init__.py'
       - 'tests_standalone/test_r37_ai_decision.py'
       - 'tests_standalone/test_r37_ai_session.py'
+      - 'tests_standalone/test_r37_behavior_tree.py'
+      - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   push:
     branches: [master]
@@ -18,9 +24,15 @@ on:
       - 'sporebound/game_session.py'
       - 'sporebound/game_project.py'
       - 'drawtemp/sdk/ai_decision.py'
+      - 'drawtemp/sdk/behavior_tree.py'
+      - 'drawtemp/studio/ai_tree_authoring.py'
+      - 'drawtemp/studio/ai_tree_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
       - 'drawtemp/sdk/__init__.py'
       - 'tests_standalone/test_r37_ai_decision.py'
       - 'tests_standalone/test_r37_ai_session.py'
+      - 'tests_standalone/test_r37_behavior_tree.py'
+      - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   workflow_dispatch:
 
@@ -52,5 +64,22 @@ jobs:
         run: python -m unittest tests_standalone.test_r37_ai_session -v
       - name: R35/R25 realtime and legacy checkpoint compatibility
         run: python -m unittest tests_standalone.test_r35_living_world tests_standalone.test_r25_fixed_realtime tests_standalone.test_game_session -v
+      - name: R37.C Behavior Trees and transactional authoring
+        run: python -m unittest tests_standalone.test_r37_behavior_tree -v
       - name: R31 compatible declarative graph contracts
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
+
+  qt-behavior-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install optional Qt editor
+        run: python -m pip install -e ".[qt6]"
+      - name: R37.C visual tree, diagnostics and Undo/Redo
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt -v
