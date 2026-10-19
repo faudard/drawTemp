@@ -73,7 +73,7 @@ class LogicGraphContractTests(unittest.TestCase):
             ("port_type", lambda g: g["edges"][0].update(out="boolean")),
             ("dangling_edge", lambda g: g["edges"][0].update(to="ghost")),
             ("multiple_connections", lambda g: g["edges"][1].update({"from": "interact"})),
-            ("cycle", lambda g: g["edges"][1].update({"to": "message"})),
+            ("cycle", lambda g: g["edges"][1].update({"from": "danger"})),
         ]
         for code, mutate in invalid:
             with self.subTest(code=code):
