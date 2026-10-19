@@ -280,11 +280,10 @@ class LivingEconomyDialog(QDialog):
     def _refresh_all(self, shop_id=None, recipe_id=None):
         self.shop_list.blockSignals(True)
         self.shop_list.clear()
-        self.shop_list.addItems([row["id"] for row in self.document.get("shops", [])])
-        if shop_id is not None:
-            found = self.shop_list.findItems(shop_id, 0)
-            if found:
-                self.shop_list.setCurrentItem(found[0])
+        shops = [row["id"] for row in self.document.get("shops", [])]
+        self.shop_list.addItems(shops)
+        if shop_id is not None and shop_id in shops:
+            self.shop_list.setCurrentRow(shops.index(shop_id))
         elif self.shop_list.count():
             self.shop_list.setCurrentRow(0)
         self.shop_list.blockSignals(False)
@@ -295,11 +294,10 @@ class LivingEconomyDialog(QDialog):
         self.recipe_outputs.set_catalogue(item_ids)
         self.recipe_list.blockSignals(True)
         self.recipe_list.clear()
-        self.recipe_list.addItems([row["id"] for row in self.document.get("recipes", [])])
-        if recipe_id is not None:
-            found = self.recipe_list.findItems(recipe_id, 0)
-            if found:
-                self.recipe_list.setCurrentItem(found[0])
+        recipes = [row["id"] for row in self.document.get("recipes", [])]
+        self.recipe_list.addItems(recipes)
+        if recipe_id is not None and recipe_id in recipes:
+            self.recipe_list.setCurrentRow(recipes.index(recipe_id))
         elif self.recipe_list.count():
             self.recipe_list.setCurrentRow(0)
         self.recipe_list.blockSignals(False)
