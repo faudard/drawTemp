@@ -119,8 +119,18 @@ class GameProject:
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
-            validate_physics_catalog(self.extensions[PHYSICS_EXTENSION]["data"],
-                                     known_ids=physics_scene_ids(content, self))
+            physics_data = validate_physics_catalog(
+                self.extensions[PHYSICS_EXTENSION]["data"],
+                known_ids=physics_scene_ids(content, self))
+            routes = {(row["source"], row["id"]) for row in
+                      self.scene_routes.get("links", [])}
+            for physics_id, physics_scene in physics_data["scenes"].items():
+                require(physics_id in self.exploration,
+                        "R32 platform scenes need a canonical exploration identity")
+                for collider in physics_scene["colliders"]:
+                    if "route" in collider:
+                        require((physics_id, collider["route"]) in routes,
+                                "R32 route trigger must reference its own authored scene link")
         if "drawtemp.metroidvania" in self.extensions:
             from .metroidvania import validate_metroidvania
             validate_metroidvania(
