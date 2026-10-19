@@ -236,6 +236,16 @@ class Simulation:
         return self._apply('acknowledge_scene_cinematic', clip_id,
                            expected_revision=expected_revision)
 
+    def narrative_line(self, *, expected_revision=None):
+        """Detached persisted line projection; never exposes mutable Campaign."""
+        self._check_revision(expected_revision, 'narrative_line')
+        return freeze(self._session.narrative_line())
+
+    def advance_narrative_line(self, *, expected_revision=None):
+        """Revision-checked line progression with normal save/rollback."""
+        return self._apply('advance_narrative_line',
+                           expected_revision=expected_revision)
+
     def choose_story_option(self, choice, *, expected_revision=None):
         return self._apply('choose_story_option', choice, expected_revision=expected_revision)
 
