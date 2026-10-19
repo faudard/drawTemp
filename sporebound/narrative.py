@@ -98,6 +98,11 @@ def _effect(effect, content):
 def validate_story(raw, content, campaigns):
     """Strict authoring validation, no mutation and no unbounded scene chains."""
     require(isinstance(raw, dict), 'Story must be an object')
+    if raw.get('schema_version') == 2:
+        # R42.A annotations are opt-in; the R9 projection remains the only
+        # condition/effect evaluator and all historical story digests survive.
+        from .narrative_r42 import validate_story_v2
+        return validate_story_v2(raw, content, campaigns)
     if not raw:
         require(not any(event.get('after_choice')
                         for mission in content.missions.values()
