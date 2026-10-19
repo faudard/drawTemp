@@ -130,31 +130,28 @@ class AnimationHitboxStudio:
         }
 
     def hitboxes(self, mission_id):
-        """Display ONLY canonical authored unit footprints (not editable physics)."""
+        """Project real Battle Unit.occupied_cells(), never a parallel collider."""
         pair = _snapshot(self.session)
-        missions = {m["id"]: m for m in pair["content"]["missions"]}
-        if mission_id not in missions:
+        raw = pair["content"]
+        content = Content.from_dict(raw, rules=authored_rules_for_document(raw))
+        if mission_id not in content.missions:
             raise R28DError("Mission inconnue.")
-        mission = missions[mission_id]
-        rows = []
-        for row in mission["units"]:
-            width, height = row.get("footprint", [1, 1])
-            x, y = row["pos"]
-            rows.append({
-                "id": row["id"], "team": row["team"],
-                "origin": [x, y], "footprint": [width, height],
-                "occupied_cells": [
-                    [x + dx, y + dy]
-                    for dy in range(height) for dx in range(width)
-                ],
-            })
+        mission = content.missions[mission_id]
+        rows = [
+            {
+                "id": unit.id, "team": unit.team,
+                "origin": list(unit.pos), "footprint": list(unit.footprint),
+                "occupied_cells": [list(cell) for cell in sorted(unit.occupied_cells())],
+            }
+            for unit in mission.units
+        ]
         return {
             "mission": mission_id,
-            "board": [mission["board"]["width"], mission["board"]["height"]],
+            "board": [mission.board.width, mission.board.height],
             "units": rows,
             "editable": False,
-            "note": "Footprints Content v1 du moteur CT ; aucune hitbox temps réel "
-                    "ni collider de sprite n'est inventé.",
+            "note": "Empreintes Unit.occupied_cells() du moteur CT ; aucune "
+                    "hitbox temps réel ni collider de sprite n'est inventé.",
         }
 
 
