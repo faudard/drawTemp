@@ -123,8 +123,8 @@ Régressions R48.A2 :
 python -m unittest tests_standalone.test_drawtemp_r48a2_refactor_audit -v
 ```
 
-**Rebase trans-générations, arbitrage d'ancêtres divergents, UX Qt R48.B
-et gate R48.C restent ouverts.** La CI du SHA de la branche doit être
+**Le rebase automatique, l'UX de revue complète avec annotations et le
+gate R48.C restent ouverts.** La CI du SHA de la branche doit être
 validée avant tout statut « prêt à fusionner ».
 
 ## R48.A3 : DAG local, historique multi-générations et rapprochement d'audit
@@ -210,11 +210,56 @@ bases et décisions manuelles, et examine la provenance et l'audit.
 **R48.C** : test réel 2 auteurs/2 branches, journaux crash/recovery,
 références, sauvegardes/replay et Player/export sur plusieurs OS.
 
+## R48.B1 : Project History & Review dans le Studio Qt
+
+Le menu **Outils → Collaboration / VCS → Historique et revue collaborative
+R48…** ouvre `drawtemp/studio/r48_history_qt.py::ProjectHistoryDialog`.
+
+L'interface conserve la même `AuthoringSession` que la fenêtre Studio,
+avec une façade **Qt-independent** dans
+`drawtemp/studio/r48_history_review.py` :
+
+1. Le snapshot initial de la session est capturé comme **racine** en mémoire.
+   Capturer le Studio actuel produit un nœud enfant d'un parent choisi.
+2. Importer un Content JSON exige son **GameProject adjacent**, via le lecteur
+   validé et épinglé par SHA de R30.C. Les sources ne sont pas modifiées.
+   L'utilisateur déclare un auteur, un libellé et un parent. Cette relation
+   n'est pas une preuve d'ascendance Git ni une signature.
+3. Les sélecteurs « Locale », « Entrante » et « Ancêtre commun » recensent
+   les révisions connues et les bases maximales. Les bases ambiguës doivent
+   être choisies ; les historiques sans ancêtre commun sont refusés.
+4. Les différences typées Content/GameProject, l'avant/après et les conflits
+   apparaissent dans un tableau dédié. Chaque conflit exige **local** ou
+   **entrant** explicitement ; changer de sélection invalide la revue.
+5. La confirmation applique le candidat uniquement au Studio actif, une
+   seule transaction, avec **Undo**, staleness/ABA et validation canonique
+   R1. **Aucun autosave, checkout Git, push, conflit auto-résolu**.
+6. Optionnel : choisir un journal d'audit local JSONL pour lire son
+   statut sans écriture. Son HEAD est épinglé à l'ouverture du fichier ;
+   une modification ultérieure est signalée. Cette vérification ne certifie
+   ni auteur ni exhaustivité.
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48b_history_qt -v
+# Qt offscreen sur les trois OS, avec :
+# QT_QPA_PLATFORM=offscreen
+# QT_QUICK_BACKEND=software
+# pip install ".[qt6]"
+```
+
+**Portée volontairement limitée à R48.B1 :** historique en mémoire, import
+manuel des branches et revue des conflits. Fermer la boîte de dialogue perd
+l'index historique local non sauvegardé ; les documents Content/GameProject du
+Studio restent inchangés tant que l'on n'a pas explicitement appliqué la revue.
+Les commentaires/reviews persistants attachés aux IDs, les invitations,
+la collaboration en temps réel et les tests GUI *onscreen* sont hors lot.
+La suite R48.B2 doit traiter ces fonctions et les gates d'accessibilité.
+
 ## Tranches restantes
 
 - **R48.A4** : rebase documentaire automatique contrôlé, publication durable
   des nœuds et crash/recovery, cas de parents aux digests identiques.
-- **R48.B** : panneau Qt Project History & Review, détail des conflits,
-  provenance et commentaires localisés aux IDs, QTest et review onscreen.
+- **R48.B2** : annotations/reviews attachées aux IDs, persistance explicite
+  et sûreté des liens, contrôles clavier/screen readers, tests GUI onscreen.
 - **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
   sauvegarde et replay, export reproductible et gate d'intégration final.
