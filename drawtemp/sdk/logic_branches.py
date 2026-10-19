@@ -9,8 +9,8 @@ from __future__ import annotations
 from copy import deepcopy
 
 
-MAX_EXPRESSION_DEPTH = 4
-MAX_EXPRESSION_NODES = 32
+MAX_EXPRESSION_DEPTH = 3
+MAX_EXPRESSION_NODES = 31
 MAX_NODES = 64
 
 
@@ -34,6 +34,7 @@ def validate_expression(expression, *, depth=0, count=None):
     if count is None:
         count = [0]
     count[0] += 1
+    # ELSE adds one R9 NOT wrapper: reserve a depth level and node slot.
     if count[0] > MAX_EXPRESSION_NODES or depth >= MAX_EXPRESSION_DEPTH:
         _fail("expression_budget", "Expression depth/nodes exceed canonical R9 limits")
     if type(expression) is not dict:
