@@ -91,6 +91,8 @@ def create_bridge(controller, renderer):
             self.controller = controller
             self.renderer = renderer
             self.animator = AnimationDirector()
+            self._pending_recovery = None  # ephemeral confirmation, never gameplay
+            self._recovery_notice = {}
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
@@ -100,15 +102,131 @@ def create_bridge(controller, renderer):
         def animationPlan(self):
             return self.animator.snapshot()
 
-        def invoke(self, call, *args, visual=None):
+        @Property("QVariantMap", notify=stateChanged)
+        def recoveryOffer(self):
+            if self._pending_recovery is None:
+                return {"pending": False}
+            slot, _fingerprints = self._pending_recovery
+            title = ("Autosauvegarde" if slot == 0 else
+                     "Emplacement " + str(slot))
+            return {
+                "pending": True, "source": slot, "title": title,
+                "description": (
+                    "Le fichier principal est invalide ou absent. "
+                    "Restaurer le secours vérifié peut revenir à une "
+                    "progression antérieure. Le fichier corrompu sera "
+                    "conservé pour diagnostic. Cette opération est irréversible "
+                    "sans une autre copie de sauvegarde."),
+            }
+
+        @Property("QVariantMap", notify=stateChanged)
+        def recoveryNotice(self):
+            return dict(self._recovery_notice)
+
+        def _display_error(self, error):
+            code = getattr(error, "code", None)
+            if not isinstance(code, str):
+                code = "io_error" if isinstance(error, OSError) else "operation_failed"
+            guidance = {
+                "primary_valid": ("Sauvegarde déjà valide",
+                                  "La restauration risquerait de remplacer la progression actuelle."),
+                "stale_recovery": ("Sauvegarde modifiée",
+                                   "Les fichiers ont changé après confirmation. Examinez-les de nouveau."),
+                "backup_invalid": ("Secours indisponible",
+                                   "Aucune copie de secours vérifiée ne peut être restaurée."),
+                "no_valid_save": ("Reprise impossible",
+                                  "Choisissez un emplacement valide ou inspectez les copies de secours."),
+                "recovery_required": ("Récupération nécessaire",
+                                      "Examinez le secours avant de restaurer manuellement."),
+                "incompatible_save": ("Sauvegarde incompatible",
+                                      "Ce fichier ne correspond pas à la version ou au projet courant."),
+                "wrong_campaign": ("Campagne incompatible",
+                                   "La sauvegarde ne correspond pas à cette campagne."),
+                "unsafe_path": ("Chemin de sauvegarde dangereux",
+                                "Inspectez les fichiers sur disque avant toute nouvelle tentative."),
+                "evidence_exists": ("Copie endommagée déjà présente",
+                                    "Conservez les preuves et inspectez-les manuellement."),
+                "io_error": ("Erreur d'accès au disque",
+                             "Vérifiez l'espace libre, les permissions et le support."),
+            }
+            title, advice = guidance.get(
+                code, ("Action impossible",
+                       "Aucune sauvegarde n'a été restaurée automatiquement. "
+                       "Vérifiez l'état des fichiers avant de réessayer."))
+            self._recovery_notice = {
+                "active": True, "code": code, "title": title,
+                "advice": advice, "detail": str(error).replace("\n", " ")[:360],
+            }
+            self.controller.message = title + " : " + str(error)[:240]
+
+        def _recovery_store(self, source):
+            # 0 is a UI-only autosave selector, not a valid manual slot.
+            if type(source) is not int:
+                raise ValueError("Invalid recovery selection")
+            if source == 0:
+                return self.controller.saves._store("auto")
+            return self.controller._store(source)
+
+        @Slot(int)
+        def requestRecovery(self, source):
+            from drawtemp.sdk.slots import SlotError
+            self._pending_recovery = None
+            self._recovery_notice = {}
+            try:
+                store = self._recovery_store(source)
+                status = store.inspect()
+                if status.primary == "valid":
+                    raise SlotError("primary_valid",
+                                    "Le fichier principal est sain : restauration refusée")
+                if status.backup != "valid":
+                    raise SlotError("backup_invalid",
+                                    "Aucune sauvegarde de secours valide")
+                self._pending_recovery = (
+                    source, store.recovery_fingerprints())
+            except Exception as exc:
+                self._display_error(exc)
+            self.stateChanged.emit()
+
+        @Slot()
+        def cancelRecovery(self):
+            if self._pending_recovery is not None:
+                self._pending_recovery = None
+                self.stateChanged.emit()
+
+        @Slot()
+        def dismissRecoveryNotice(self):
+            if self._recovery_notice:
+                self._recovery_notice = {}
+                self.stateChanged.emit()
+
+        @Slot()
+        def confirmRecovery(self):
+            pending = self._pending_recovery
+            self._pending_recovery = None
+            if pending is None:
+                self._display_error(ValueError("Aucune restauration à confirmer"))
+                self.stateChanged.emit()
+                return
+            source, fingerprints = pending
+            if source == 0:
+                self.invoke(self.controller.restore_autosave_backup,
+                            expected_fingerprints=fingerprints)
+            else:
+                self.invoke(self.controller.restore_backup, source,
+                            expected_fingerprints=fingerprints)
+
+        def invoke(self, call, *args, visual=None, **kwargs):
             before = (self.controller.session.snapshot()
                       if self.controller.session is not None else None)
             try:
-                call(*args)
+                call(*args, **kwargs)
+                self._recovery_notice = {}
+                self._pending_recovery = None
                 after = (self.controller.session.snapshot()
                          if self.controller.session is not None else None)
                 reset = (call.__name__ in
-                         {"new_game", "load", "restore_backup", "title"})
+                         {"new_game", "load", "load_autosave", "continue_game",
+                          "restore_backup", "restore_autosave_backup", "title"})
                 if reset or self.controller.show_title:
                     self.animator.cancel()
                 elif (before is not None and after is not None and
@@ -119,7 +237,9 @@ def create_bridge(controller, renderer):
                     # Existing R8 equipment and injuries are already serialized
                     # in Campaign.progress, and validated by Simulation.load().
                     # No parallel visual save-state is introduced here.
-                    if call.__name__ in ("new_game", "load", "restore_backup"):
+                    if call.__name__ in ("new_game", "load", "load_autosave",
+                                            "continue_game", "restore_backup",
+                                            "restore_autosave_backup"):
                         self.renderer.clear_outfit_preview()
                     snapshot = self.controller.session.snapshot()
                     self.renderer.sync_progress(snapshot.progress,
@@ -138,7 +258,8 @@ def create_bridge(controller, renderer):
                     self.renderer.play_actor(*visual)
             except Exception as exc:
                 # An invalid rule does not publish a new clip or overwrite saves.
-                self.controller.message = str(exc)
+                # The user sees a deliberate action rather than a raw traceback.
+                self._display_error(exc)
             self.stateChanged.emit()
 
         def settings_update(self, method, *args):

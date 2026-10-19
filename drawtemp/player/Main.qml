@@ -20,7 +20,8 @@ ApplicationWindow {
     property int currentSlot: 1
     property real textScale: playerData.settings.display.text_scale
     property bool highContrast: playerData.settings.display.high_contrast
-    property bool inputLocked: pausePopup.opened || optionsPopup.opened
+    property bool inputLocked: pausePopup.opened || optionsPopup.opened ||
+                               recoveryPopup.opened || recoveryErrorPopup.opened
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
         if (smokeMode) return
@@ -48,7 +49,13 @@ ApplicationWindow {
 
     Connections {
         target: player
-        function onStateChanged() { root.playerData = player.view }
+        function onStateChanged() {
+            root.playerData = player.view
+            if (player.recoveryOffer.pending && !recoveryPopup.opened)
+                recoveryPopup.open()
+            if (player.recoveryNotice.active && !recoveryErrorPopup.opened)
+                recoveryErrorPopup.open()
+        }
     }
 
     Rectangle {
@@ -272,7 +279,8 @@ ApplicationWindow {
                     text: "Restaurer auto (.bak)"
                     enabled: root.playerData.save_manager.autosave.recoverable &&
                              root.playerData.save_manager.autosave.status !== "valid"
-                    onClicked: player.restoreAutosaveBackup()
+                    objectName: "r17RequestAutosaveRecovery"
+                    onClicked: player.requestRecovery(0)
                 }
             }
             RowLayout {
@@ -291,8 +299,11 @@ ApplicationWindow {
                 }
                 Button {
                     text: "Restaurer secours"
-                    enabled: root.playerData.backups.indexOf(root.currentSlot) !== -1
-                    onClicked: player.restoreBackup(root.currentSlot)
+                    objectName: "r17RequestManualRecovery"
+                    enabled: root.playerData.save_manager.sources.length > root.currentSlot &&
+                             root.playerData.save_manager.sources[root.currentSlot].recoverable &&
+                             root.playerData.save_manager.sources[root.currentSlot].status !== "valid"
+                    onClicked: player.requestRecovery(root.currentSlot)
                 }
             }
             Button {
@@ -894,6 +905,119 @@ ApplicationWindow {
                 objectName: "r14SaveGame"
                 text: "Sauvegarder · " + root.binding("save")
                 onClicked: player.saveGame(root.currentSlot)
+            }
+        }
+    }
+
+    // R17.11: every recovery is a separate explicit user decision. The
+    // approved bytes are SHA-bound in R1 under the single-writer lock.
+    Popup {
+        id: recoveryPopup
+        objectName: "r17RecoveryDialog"
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(root.width - 48, 530)
+        height: 300
+        padding: 22
+        onClosed: player.cancelRecovery()
+        background: Rectangle {
+            radius: 10
+            color: "#1d3039"
+            border.color: "#dbb67e"
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Label {
+                text: "Confirmer la restauration"
+                color: root.gold
+                font.pixelSize: 22 * root.textScale
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            Label {
+                text: player.recoveryOffer.title || ""
+                color: root.ivory
+                font.pixelSize: 16 * root.textScale
+            }
+            Label {
+                text: player.recoveryOffer.description || ""
+                color: root.ivory
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Accessible.name: text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    objectName: "r17CancelRecovery"
+                    text: "Annuler"
+                    onClicked: recoveryPopup.close()
+                }
+                Button {
+                    objectName: "r17ConfirmRecovery"
+                    text: "Restaurer le secours vérifié"
+                    enabled: player.recoveryOffer.pending
+                    onClicked: {
+                        player.confirmRecovery()
+                        recoveryPopup.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: recoveryErrorPopup
+        objectName: "r17RecoveryError"
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(root.width - 48, 515)
+        height: 295
+        padding: 22
+        onClosed: player.dismissRecoveryNotice()
+        background: Rectangle {
+            radius: 10
+            color: "#26323b"
+            border.color: "#ed9b8c"
+        }
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+            Label {
+                text: player.recoveryNotice.title || "Action impossible"
+                color: "#ffb1a2"
+                font.bold: true
+                font.pixelSize: 22 * root.textScale
+                Layout.fillWidth: true
+            }
+            Label {
+                text: player.recoveryNotice.advice || ""
+                color: root.ivory
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Label {
+                    text: player.recoveryNotice.detail || ""
+                    width: parent.width
+                    color: root.muted
+                    wrapMode: Text.Wrap
+                    Accessible.name: text
+                }
+            }
+            Button {
+                objectName: "r17DismissRecoveryError"
+                text: "Compris"
+                Layout.alignment: Qt.AlignRight
+                onClicked: recoveryErrorPopup.close()
             }
         }
     }
