@@ -56,7 +56,11 @@ class R40StarterTests(unittest.TestCase):
                          {"arrival", "r40_ruins", "r40_citadel"})
         self.assertEqual(resolve_scene_profile(
             project.game_modes, "r40_ruins")["combat"], "ACTION_REALTIME")
-        self.assertFalse(project.scene_routes)
+        self.assertEqual(project.scene_routes["start"], "arrival")
+        self.assertEqual(
+            [link["id"] for link in project.scene_routes["links"]],
+            ["to_ruins", "back_to_village", "to_citadel", "back_to_ruins"])
+        self.assertEqual(project.story["entry_scenes"], {})
         self.assertFalse(project.assets)
         project.validate(content)
 
