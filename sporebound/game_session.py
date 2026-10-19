@@ -98,6 +98,12 @@ class GameSession:
         self._rt_position = None
         self._rt_journal = None
         self._platform = None  # R32 opt-in side-view adapter, never CT.
+        # R34.C is opt-in, versioned and owned by this GameSession.
+        from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
+        run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
+        self._roguelite = (RogueliteRun(
+            run_spec["data"], content=self.content, project=self.project)
+            if run_spec is not None else None)
         # R35.A: optional clock owned by this session, not by the renderer.
         from .living_world import EXTENSION, LivingWorld
         spec = self.project.extensions.get(EXTENSION)
@@ -146,6 +152,33 @@ class GameSession:
                     "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def roguelite_state(self):
+        """Detached run/meta snapshot; never expose mutable gameplay state."""
+        require(self._roguelite is not None, "R34 roguelite is not configured")
+        return self._roguelite.snapshot()
+
+    def _roguelite_action(self, kind, value=None):
+        require(self._roguelite is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R34 run commands require an active campaign without combat/dialogue")
+        return self._roguelite.action(kind, value)
+
+    def roguelite_move(self, room_id):
+        return self._roguelite_action("move", room_id)
+
+    def roguelite_claim(self):
+        return self._roguelite_action("claim")
+
+    def roguelite_die(self):
+        return self._roguelite_action("die")
+
+    def roguelite_restart(self):
+        return self._roguelite_action("restart")
+
+    def roguelite_checkpoint(self):
+        return self._roguelite_action("checkpoint")
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -891,6 +924,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._roguelite is not None:
+            data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
             data["siege_id"] = self.siege_id
         if self.tactical_story_pending:
@@ -916,7 +951,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -947,6 +982,16 @@ class GameSession:
         else:
             require("living_world" not in data,
                     "Unexpected living-world state in legacy checkpoint")
+        if session._roguelite is not None:
+            require("roguelite" in data,
+                    "R34 configured project checkpoint is missing its run state")
+            from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
+            session._roguelite = RogueliteRun.from_recording(
+                project.extensions[ROGUELITE_EXTENSION]["data"], data["roguelite"],
+                content=session.content, project=session.project)
+        else:
+            require("roguelite" not in data,
+                    "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
