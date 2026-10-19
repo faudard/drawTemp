@@ -362,6 +362,7 @@ class StudioWindow(QMainWindow):
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
+        self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -406,6 +407,7 @@ class StudioWindow(QMainWindow):
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
         tools_menu.addAction(self.commands["r30_creator"])
+        tools_menu.addAction(self.commands["r31_logic"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -499,6 +501,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.r30_creator_qt import R30CreatorDialog
         initial_revision = self.session.revision
         dialog = R30CreatorDialog(self.session, content_path=self.content_path, parent=self)
+        dialog.exec()
+        if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_logic_graph(self):
+        """R31.B logic graphs share the Studio R1 owner, never a second project."""
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        initial_revision = self.session.revision
+        dialog = LogicGraphDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != initial_revision:
             self.refresh()
