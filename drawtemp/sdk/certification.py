@@ -76,7 +76,8 @@ def _without_ephemeral_ids(record, identities):
     tactical = value.get("tactical")
     if isinstance(tactical, dict) and isinstance(tactical.get("battle_id"), str):
         original = tactical["battle_id"]
-        token = identities.setdefault(original, "<battle-%d>" % len(identities))
+        token = identities.setdefault(
+            original, "<battle-%d>" % len(set(identities.values())))
         tactical["battle_id"] = token
     groups = value.get("front_battle_ids")
     if isinstance(groups, dict):
@@ -203,6 +204,12 @@ def certify_trace(content, project, campaign_id, commands, *,
                     raise CertificationError("disk_divergence",
                                              "Checkpoint changes after disk replay")
                 replayed = verify_recording(recorded, content, project)
+                # The resumed timeline now holds the authenticated continuous
+                # battle IDs, rather than the independent IDs from the command
+                # just executed. Preserve each established token lease across
+                # this switch; a later command must not mislabel the same
+                # battle as a fresh identity or rewrite campaign history.
+                resumed_ids.update(continuous_ids)
                 replay_step = _witness(index, command.operation, replayed, recorded)
                 if replay_step != _witness(index, command.operation, continuous, recorded):
                     raise CertificationError("state_divergence",
