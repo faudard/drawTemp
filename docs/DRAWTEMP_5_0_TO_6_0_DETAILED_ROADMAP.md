@@ -217,6 +217,8 @@
 
 **Intégration en cours :** [R23.A — intégrité et journal de certification](drawtemp5/R23A_RELEASE_HARDENING.md) renforce l'export R15 et fournit des preuves CI multi-OS liées au commit. Ce n'est **pas** une certification 5.5 : les installateurs signés, licences, métriques GPU physiques, essais utilisateurs et gate Go/No-go final restent ouverts.
 
+**Suite empilée :** [R23.B — endurance, accessibilité et QA utilisateurs](drawtemp5/R23B_ENDURANCE_ACCESSIBILITY_QA.md) ajoute des mesures headless de reprise/réexécution des sauvegardes, une vérification des réglages Player et l'acceptation de rapports humains opt-in. Les tests Qt offscreen/Tk Xvfb restent distincts de la certification sur écran/GPU réel. Le verdict reste **NO-GO** sans endurance de plusieurs heures et retests externes.
+
 **But :** publier un produit de création utilisable et maintenable, pas une succession de builds.
 
 | ID | Priorité | Livrable vérifiable et comportement attendu | Dépendances et preuves |
