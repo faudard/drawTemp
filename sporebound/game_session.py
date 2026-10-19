@@ -170,6 +170,13 @@ class GameSession:
                 "Daily quests require an active exploration session")
         return self._living_world.finish_daily_quest(quest_id, self.progress)
 
+    def living_world_timeline(self, *, scene=None, limit=512):
+        """Read-only R35 authoring diagnostics, never advances simulation."""
+        require(self._living_world is not None, "Living world is not configured")
+        from .living_world_diagnostics import timeline
+        return timeline(self._living_world, self.progress.story_flags,
+                        scene=scene, limit=limit)
+
     def living_world_trade(self, shop_id, item_id, action, quantity,
                            transaction_id):
         """Atomic buy/sell in canonical Campaign inventory and currency."""
