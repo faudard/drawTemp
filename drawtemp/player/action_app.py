@@ -42,12 +42,18 @@ def create_bridge(controller, renderer):
             from sporebound.action_runtime import SCALE
             target = (hero["pos"][0] / SCALE - .5,
                       hero["pos"][1] / SCALE - .5)
-            self.renderer.replace_scene(
-                scene_from_action(
-                    self.controller.runtime,
-                    animation_frames=(self.controller.animation.frames()
-                                      if self.controller.animation is not None else None)),
-                follow_world=target)
+            scene = scene_from_action(
+                self.controller.runtime,
+                animation_frames=(self.controller.animation.frames()
+                                  if self.controller.animation is not None else None))
+            # Pure optical diagnostic: geometry is the authored R26 wall grid.
+            # Lighting cannot alter the committed rules engine or collision.
+            from drawtemp.render.cell_lighting import project_cell_lighting
+            lights = self.controller.state()["vfx"]["lights"]
+            if lights:
+                scene["light_cells"] = project_cell_lighting(
+                    self.controller.scene, lights)
+            self.renderer.replace_scene(scene, follow_world=target)
             self.stateChanged.emit()
 
         def _resync(self):
