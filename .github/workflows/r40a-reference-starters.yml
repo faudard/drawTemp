@@ -5,13 +5,17 @@ on:
     paths:
       - "drawtemp/sdk/r40_starters.py"
       - "drawtemp/export/templates.py"
+      - "drawtemp/quality/r40_headless.py"
       - "tests_standalone/test_r40_reference_starters.py"
+      - "tests_standalone/test_r40_headless.py"
       - ".github/workflows/r40a-reference-starters.yml"
   pull_request:
     paths:
       - "drawtemp/sdk/r40_starters.py"
       - "drawtemp/export/templates.py"
+      - "drawtemp/quality/r40_headless.py"
       - "tests_standalone/test_r40_reference_starters.py"
+      - "tests_standalone/test_r40_headless.py"
       - ".github/workflows/r40a-reference-starters.yml"
 
 jobs:
@@ -32,6 +36,8 @@ jobs:
       - name: Verify four starters and wizard
         run: |
           python -m unittest tests_standalone.test_r40_reference_starters -v
+          python -m unittest tests_standalone.test_r40_headless -v
+          python -m drawtemp.quality.r40_headless --report r40-source-audit.json
           python -m unittest tests_standalone.test_drawtemp5_r22_project_wizard -v
 
   qt-offscreen-smoke:
