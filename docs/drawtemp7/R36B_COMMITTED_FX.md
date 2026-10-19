@@ -39,6 +39,9 @@ primitive shapes, so there is no unverified artwork licensing in this lot.
   GameSession and ActionRuntime recording schemas remain unchanged.
   Load/respawn clears cosmetic history and resynchronizes from the restored
   logical tick.
+- A rejected cosmetic projection is **fail-soft**: the visual history is
+  cleared, `state()["fx_warning"]` reports the cause and the already committed
+  action/replay remains intact. This is tested by forced renderer failure.
 - The default renderer is the shared R3 top-down Qt Quick viewport;
   overlay camera/zoom uses the same projection. It is a **software-capable
   fallback**, *not* proof of GPU particle acceleration or performance.
