@@ -15,6 +15,7 @@ from drawtemp.render.qt_viewport import make_controller
 from drawtemp.sdk.authoring import AuthoringError
 from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
+from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
 
 try:
@@ -51,6 +52,7 @@ class MapWindow(QMainWindow):
         self.pending_operation = None
         self.pending_transform = None
         self.preview_anchor = None
+        self.pending_generation = None
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
@@ -68,6 +70,7 @@ class MapWindow(QMainWindow):
             ("Rétablir", self.redo),
             ("Copier", self.copy_selection),
             ("Coller", self.paste_selection),
+            ("Génération biome…", self.show_generator),
             ("Test IA", self.playtest),
         ):
             action = toolbar.addAction(name)
@@ -200,12 +203,14 @@ class MapWindow(QMainWindow):
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
         self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        self._make_generator_dock()
 
         from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
         # Its dock is contextual, not a second map editor or renderer.
         self.construction = ConstructionDock(
             ConstructionWorkspace(self.studio.authoring, self.studio.mission_id), self)
+        self.construction.context_enabled = lambda: self.mode.currentIndex() == 1
         self.addDockWidget(Qt.RightDockWidgetArea, self.construction)
         self.construction.hide()
         from .dungeon_dock import DungeonDock
@@ -224,15 +229,40 @@ class MapWindow(QMainWindow):
         from .r15_creator import open_creator
         open_creator(self)
 
+    def _map_context(self, operation):
+        if self.mode.currentIndex() == 2 and operation == "map.stroke":
+            return True  # Preserve R27 dungeon placement.
+        mode = "construction" if self.mode.currentIndex() == 1 else "map"
+        try:
+            require_context(mode, operation)
+        except ContextCommandError as exc:
+            self.statusBar().showMessage(str(exc))
+            return False
+        return True
+
     def _construction_mode(self, *_):
         current = self.mode.currentIndex()
         active = current == 1
+        self.cancel_stroke()
+        self.cancel_transform()
+        if current != 0:
+            self.cancel_generation()
+        self.generator_dock.setEnabled(current == 0)
         root = self.viewport.rootObject()
         root.setProperty("interactionMode", "construction" if active else "edit")
         self.construction.setVisible(active)
         self.dungeon.setVisible(current == 2)
         self.tools.setEnabled(current == 0)
         self.material.setEnabled(current == 0)
+        self.additive_selection.setEnabled(current == 0)
+        self.layers_panel.setEnabled(current == 0)
+        for name in ("Nouvelle carte", "Dupliquer", "Renommer", "Copier", "Coller",
+                     "Déplacer sélection", "Dupliquer sélection", "Rotation ↻",
+                     "Rotation ↺", "Miroir horizontal", "Miroir vertical",
+                     "Appliquer aperçu", "Annuler aperçu"):
+            action = self.toolbar_actions.get(name)
+            if action is not None:
+                action.setEnabled(current == 0)
         self._construction_view()
         self.statusBar().showMessage(
             "R6 : sélectionner directement toiture, murs, fenêtres, porte et étages"
@@ -287,6 +317,7 @@ class MapWindow(QMainWindow):
     def change_map(self, row):
         if row < 0:
             return
+        self.cancel_generation()
         def action():
             self.studio.select_map(self.studio.map_ids()[row])
             self.selection = []
@@ -304,6 +335,8 @@ class MapWindow(QMainWindow):
         return identifier.strip(), name.strip()
 
     def create_map(self):
+        if not self._map_context("map.create"):
+            return
         value = self._name_id("Nouvelle carte", "village")
         if value is None:
             return
@@ -311,6 +344,8 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def duplicate_map(self):
+        if not self._map_context("map.duplicate"):
+            return
         value = self._name_id("Dupliquer la carte", self.studio.mission_id + "_copy")
         if value is None:
             return
@@ -318,6 +353,8 @@ class MapWindow(QMainWindow):
         self.refresh_maps()
 
     def rename_map(self):
+        if not self._map_context("map.rename"):
+            return
         name, ok = QInputDialog.getText(
             self, "Renommer", "Nouveau nom", text=self.studio.mission()["name"])
         if ok and name.strip():
@@ -362,6 +399,7 @@ class MapWindow(QMainWindow):
         if StudioTransactionStore(path).pending:
             self.recover_project(path)
             return
+        self.cancel_generation()
         self._safe(lambda: self._load_verified_project(path))
 
     def recover_project(self, path=None):
@@ -496,11 +534,13 @@ class MapWindow(QMainWindow):
             self._save_conflict(exc)
 
     def undo(self):
+        self.cancel_generation()
         self.cancel_transform()
         self._safe(self.studio.undo)
         self.refresh_maps()
 
     def redo(self):
+        self.cancel_generation()
         self.cancel_transform()
         self._safe(self.studio.redo)
         self.refresh_maps()
@@ -517,6 +557,8 @@ class MapWindow(QMainWindow):
                     result["final_mode"], result["result"] or "En cours"))
 
     def copy_selection(self):
+        if not self._map_context("map.copy"):
+            return
         if not self.selection:
             QMessageBox.information(self, "Copier", "Sélectionnez des cases au rectangle ou au lasso.")
             return
@@ -526,10 +568,118 @@ class MapWindow(QMainWindow):
                 "Copie terrain + objectifs prête. Identités d'unités/objets non dupliquées.")
 
     def paste_selection(self):
+        if not self._map_context("map.paste"):
+            return
         if self.studio.region_clipboard is None:
             QMessageBox.information(self, "Coller", "Copiez une sélection avant le collage.")
             return
         self.start_transform("paste")
+
+    def _make_generator_dock(self):
+        """R22.2A uses existing R3 ghost overlay and R5 selection geometry."""
+        from .map_generation import BIOMES
+        panel = QWidget()
+        form = QVBoxLayout(panel)
+        form.addWidget(QLabel("Terrain déterministe — seuls les emplacements vides sont modifiés."))
+        self.gen_biome = QComboBox()
+        self.gen_biome.setObjectName("r22_biome")
+        self.gen_biome.addItems(tuple(BIOMES))
+        form.addWidget(QLabel("Biome"))
+        form.addWidget(self.gen_biome)
+        self.gen_seed = QSpinBox()
+        self.gen_seed.setObjectName("r22_seed")
+        self.gen_seed.setRange(0, 2147483647)
+        self.gen_seed.setValue(17)
+        form.addWidget(QLabel("Graine reproductible"))
+        form.addWidget(self.gen_seed)
+        self.gen_coverage = QSpinBox()
+        self.gen_coverage.setObjectName("r22_coverage")
+        self.gen_coverage.setRange(1, 100)
+        self.gen_coverage.setSuffix(" %")
+        self.gen_coverage.setValue(75)
+        form.addWidget(QLabel("Couverture des cellules disponibles"))
+        form.addWidget(self.gen_coverage)
+        self.gen_selected_only = QCheckBox("Limiter à la sélection / au lasso")
+        self.gen_selected_only.setObjectName("r22_selected_only")
+        form.addWidget(self.gen_selected_only)
+        self.gen_report = QLabel("Prévisualiser avant d'appliquer ; Ctrl+Z pour annuler.")
+        self.gen_report.setWordWrap(True)
+        form.addWidget(self.gen_report)
+        self.gen_preview_button = QPushButton("Prévisualiser sans modifier")
+        self.gen_preview_button.clicked.connect(self.preview_generation)
+        form.addWidget(self.gen_preview_button)
+        self.gen_apply_button = QPushButton("Appliquer la génération")
+        self.gen_apply_button.setEnabled(False)
+        self.gen_apply_button.clicked.connect(self.apply_generation)
+        form.addWidget(self.gen_apply_button)
+        cancel = QPushButton("Annuler l'aperçu")
+        cancel.clicked.connect(self.cancel_generation)
+        form.addWidget(cancel)
+        self.generator_dock = self._dock(
+            "R22 — Génération de carte", panel, Qt.RightDockWidgetArea)
+        self.generator_dock.hide()
+        # Changing any input invalidates the prior visible, validated preview.
+        self.gen_biome.currentIndexChanged.connect(self.cancel_generation)
+        self.gen_seed.valueChanged.connect(self.cancel_generation)
+        self.gen_coverage.valueChanged.connect(self.cancel_generation)
+        self.gen_selected_only.toggled.connect(self.cancel_generation)
+
+    def show_generator(self):
+        self.generator_dock.show()
+        self.generator_dock.raise_()
+
+    def cancel_generation(self, *_):
+        if self.pending_generation is not None and self.viewport.rootObject():
+            self.viewport.rootObject().setProperty("transformCells", [])
+        self.pending_generation = None
+        if hasattr(self, "gen_apply_button"):
+            self.gen_apply_button.setEnabled(False)
+            self.gen_report.setText("Aucun aperçu actif.")
+
+    def preview_generation(self):
+        if self.mode.currentIndex() != 0:
+            QMessageBox.warning(self, "Génération", "Passez en mode Édition carte.")
+            return
+        if self.gen_selected_only.isChecked() and not self.selection:
+            QMessageBox.warning(self, "Génération", "Sélectionnez une région avec le rectangle ou le lasso.")
+            return
+        self.cancel_transform()
+        self.cancel_generation()
+        preview = self._safe(lambda: self.studio.preview_generation(
+            seed=self.gen_seed.value(),
+            biome=self.gen_biome.currentText(),
+            coverage=self.gen_coverage.value(),
+            cells=self.selection if self.gen_selected_only.isChecked() else None,
+        ))
+        if preview is None:
+            return
+        self.pending_generation = preview
+        self.gen_apply_button.setEnabled(True)
+        self.viewport.rootObject().setProperty(
+            "transformCells", self._project_cells(preview.cells)
+        )
+        message = (
+            f"{len(preview.cells)} cases proposées · "
+            f"{preview.protected_count} cases protégées · "
+            "aucun document modifié · Appliquer pour confirmer"
+        )
+        self.gen_report.setText(message)
+        self.statusBar().showMessage(message)
+
+    def apply_generation(self):
+        if self.pending_generation is None:
+            QMessageBox.information(self, "Génération", "Prévisualisez d'abord le terrain.")
+            return
+        preview = self.pending_generation
+        changed = len(preview.cells)
+        result = self._safe(
+            lambda: self.studio.commit_generation(preview)
+        )
+        if result is not None:
+            self.cancel_generation()
+            self.statusBar().showMessage(
+                f"{changed} cases générées en une transaction. Ctrl+Z annule le tout."
+            )
 
     def _selection_origin(self):
         if not self.selection:
@@ -568,6 +718,9 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def start_transform(self, operation):
+        if not self._map_context("map.transform"):
+            return
+        self.cancel_generation()
         if operation != "paste" and not self.selection:
             QMessageBox.information(self, "Sélection", "Choisissez d'abord une région.")
             return
@@ -637,6 +790,8 @@ class MapWindow(QMainWindow):
             self.viewport.rootObject().setProperty("transformCells", [])
 
     def apply_transform(self, *_):
+        if not self._map_context("map.apply_transform"):
+            return
         if self.pending_transform is None:
             QMessageBox.information(
                 self, "Placement", "Choisissez une destination valide (aperçu non rouge).")
@@ -654,6 +809,8 @@ class MapWindow(QMainWindow):
                 "Transformation validée en une transaction. Ctrl+Z pour annuler.")
 
     def change_objective(self):
+        if not self._map_context("map.objective"):
+            return
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
 
     def _tool(self):
@@ -675,17 +832,25 @@ class MapWindow(QMainWindow):
         self.stroke = []
 
     def begin_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         self.stroke = [(x, y)]
         self.selected = (x, y)
 
     def extend_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            return
         if self.stroke and (x, y) != self.stroke[-1]:
             self.stroke.append((x, y))
             self.selected = (x, y)
 
     def finish_stroke(self, x, y):
+        if not self._map_context("map.stroke"):
+            self.cancel_stroke()
+            return
         if not self.stroke:
             return
+        self.cancel_generation()
         self.extend_stroke(x, y)
         cells = self.stroke
         self.stroke = []
@@ -734,6 +899,10 @@ class MapWindow(QMainWindow):
         self._safe(apply)
 
     def refresh(self, *_):
+        if self.pending_generation is not None and (
+                self.pending_generation.mission_id != self.studio.mission_id or
+                self.pending_generation.revision != self.studio.authoring.revision):
+            self.cancel_generation()
         self.layers_panel.set_mission(self.studio.mission_id)
         if hasattr(self, "construction"):
             workspace = self.construction.workspace
@@ -757,6 +926,9 @@ class MapWindow(QMainWindow):
             self.dungeon.refresh()
         root = self.viewport.rootObject()
         self._render_selection()
+        if self.pending_generation is not None:
+            root.setProperty("transformCells",
+                             self._project_cells(self.pending_generation.cells))
         root.setProperty("showGrid", self.show_grid.isChecked())
         root.setProperty("showBlocked", self.show_blocked.isChecked())
         root.setProperty("showHeights", self.show_height.isChecked())
