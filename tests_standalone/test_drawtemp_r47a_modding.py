@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from drawtemp.sdk.authoring import AuthoringSession
+from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.reference import reference_project
 from drawtemp.sdk.modding import (
     ModError, ModRegistry, read_mod_manifest, validate_mod_manifest,
@@ -106,9 +106,9 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ModError) as error:
             self.registry.apply_extension("quest-mod", self.editor, expected_revision=0)
         self.assertEqual(error.exception.code, "stale_revision")
-        with self.assertRaises(ModError) as error:
+        with self.assertRaises(AuthoringError) as error:
             self.registry.apply_extension("quest-mod", self.editor, expected_revision=1)
-        self.assertEqual(error.exception.code, "already_exists")
+        self.assertEqual(error.exception.code, "invalid_edit")
         self.editor.undo()
         self.assertEqual(self.editor.snapshot().to_dict()["project"], before["project"])
         self.editor.redo()
