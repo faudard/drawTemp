@@ -20,7 +20,7 @@ ApplicationWindow {
     property int currentSlot: 1
     property real textScale: playerData.settings.display.text_scale
     property bool highContrast: playerData.settings.display.high_contrast
-    property bool inputLocked: pausePopup.opened || optionsPopup.opened ||
+    property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
                                recoveryPopup.opened || recoveryErrorPopup.opened
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
@@ -1083,6 +1083,169 @@ ApplicationWindow {
                 text: "Compris"
                 Layout.alignment: Qt.AlignRight
                 onClicked: recoveryErrorPopup.close()
+            }
+        }
+    }
+
+    // R20.C.1: a presentation-only cinematic overlay, projected with the
+    // shared R11 frame_payload. Engine choices remain blocked until the next
+    // clip is acknowledged in the canonical campaign checkpoint.
+    Shortcut {
+        sequence: "Escape"
+        enabled: cinematicOverlay.visible && !pausePopup.opened && !optionsPopup.opened
+        onActivated: player.cinematicSkip()
+    }
+
+    Rectangle {
+        id: cinematicOverlay
+        objectName: "r20CinematicOverlay"
+        property var clip: root.playerData.cinematic || ({})
+        property var frameData: clip.frame || ({})
+        anchors.fill: parent
+        visible: Boolean(clip.id) && !root.smokeMode
+        z: 100
+        color: frameData.background || "#101a2b"
+        border.color: "#987f61"
+        border.width: 2
+
+        // Capture clicks over the campaign and tactical scene during playback.
+        MouseArea { anchors.fill: parent }
+
+        Timer {
+            interval: 40
+            repeat: true
+            running: cinematicOverlay.visible && Boolean(cinematicOverlay.clip.playing)
+            onTriggered: player.cinematicTick()
+        }
+
+        Label {
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: 30
+            text: cinematicOverlay.clip.title || "Jeanne d'Arc"
+            color: "#efdcad"
+            font.pixelSize: 28 * root.textScale
+            font.family: "serif"
+            font.bold: true
+        }
+
+        Item {
+            id: cinematicCanvas
+            anchors.fill: parent
+            anchors.topMargin: 82
+            anchors.bottomMargin: 205
+            clip: true
+            Repeater {
+                model: cinematicOverlay.frameData.actors || []
+                delegate: Item {
+                    width: 90
+                    height: 120
+                    x: (0.5 + (modelData.x - 0.5 -
+                        (cinematicOverlay.frameData.cameraX || 0)) *
+                        (cinematicOverlay.frameData.zoom || 1)) * cinematicCanvas.width - width/2
+                    y: (0.5 + (modelData.y - 0.5 -
+                        (cinematicOverlay.frameData.cameraY || 0)) *
+                        (cinematicOverlay.frameData.zoom || 1)) * cinematicCanvas.height - height/2
+                    Image {
+                        anchors.fill: parent
+                        source: modelData.image || ""
+                        fillMode: Image.PreserveAspectFit
+                        visible: Boolean(modelData.image)
+                    }
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 58; height: 70; radius: 29
+                        color: "#baa27a"
+                        border.color: "#f1e2b8"
+                        visible: !modelData.image
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData.name.slice(0, 2).toUpperCase()
+                            font.bold: true
+                            color: "#1b2531"
+                        }
+                    }
+                    Label {
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: modelData.name
+                        color: "#f4e7ca"
+                        font.pixelSize: 14 * root.textScale
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: cinematicDialogue
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: cinematicControls.top
+            anchors.leftMargin: 36; anchors.rightMargin: 36
+            anchors.bottomMargin: 16
+            height: 132
+            color: "#121d2c"
+            border.color: "#c1a878"
+            border.width: 1
+            radius: 8
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 17
+                Label {
+                    text: cinematicOverlay.frameData.speaker || cinematicOverlay.clip.title
+                    font.bold: true
+                    color: "#f5ca91"
+                    font.pixelSize: 17 * root.textScale
+                }
+                Label {
+                    text: cinematicOverlay.frameData.dialogue || "..."
+                    color: "#f5ead5"
+                    font.pixelSize: 18 * root.textScale
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: cinematicOverlay.frameData.transition === "dissolve" ? "#101a2b" : "#000000"
+            opacity: Math.max(cinematicOverlay.frameData.transitionOpacity || 0,
+                              cinematicOverlay.frameData.fadeOpacity || 0)
+            visible: opacity > 0
+        }
+
+        RowLayout {
+            id: cinematicControls
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 25
+            spacing: 14
+            Button {
+                objectName: "r20CinematicPause"
+                text: cinematicOverlay.clip.playing ? "Pause" : "Lire"
+                onClicked: cinematicOverlay.clip.playing ? player.cinematicPause() :
+                           player.cinematicPlay()
+            }
+            Slider {
+                id: cinematicSeek
+                Layout.fillWidth: true
+                from: 0
+                to: cinematicOverlay.clip.durationMs || 1
+                value: cinematicOverlay.frameData.timeMs || 0
+                onMoved: player.cinematicSeek(Math.round(value))
+            }
+            Label {
+                text: Math.round((cinematicOverlay.frameData.timeMs || 0)/1000) +
+                      " / " + Math.round((cinematicOverlay.clip.durationMs || 0)/1000) + " s"
+                color: "#f5ead5"
+            }
+            Button {
+                objectName: "r20CinematicSkip"
+                text: "Passer la cinématique  Esc"
+                onClicked: player.cinematicSkip()
             }
         }
     }
