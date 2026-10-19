@@ -229,7 +229,7 @@ def scene_from_exploration(stage, *, revision=0, living_world=None):
             "tiles": tiles, "actors": actors, "objects": objects}
 
 
-def scene_from_action(runtime):
+def scene_from_action(runtime, *, animation_frames=None):
     """Adapt R26 logical state into the unchanged R3 scene record contract.
 
     The headless simulation is the sole source of authority. Positions are
@@ -267,6 +267,17 @@ def scene_from_action(runtime):
                        "hp": enemy["hp"], "level": 0,
                        "direction": facing_to_direction(enemy["facing"]),
                        "combat_state": enemy["state"]})
+    if animation_frames is not None:
+        if type(animation_frames) is not dict:
+            raise ValueError("Expected detached actor animation frames")
+        for actor in actors:
+            frame = animation_frames.get(actor["id"])
+            if frame is not None:
+                if type(frame) is not dict or not {
+                        "state", "sprite", "frame_index"} <= set(frame):
+                    raise ValueError("Invalid visual animation actor frame")
+                actor["animation_state"] = frame["state"]
+                actor["sprite_id"] = frame["sprite"]
     objects = [
         {"id": obj["id"], "kind": obj["kind"],
          "x": obj["pos"][0], "y": obj["pos"][1],
@@ -362,6 +373,9 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
                          "hp": a.get("hp"), "combatState": a.get("combat_state", ""),
+                         **({"animationState": a["animation_state"],
+                             "spriteId": a["sprite_id"]}
+                            if "animation_state" in a else {}),
                          "zOrder": int(y * 100) + 60 if top_down
                          else (x + y) * 100 + 60})
     from .building_geometry import building_surfaces
