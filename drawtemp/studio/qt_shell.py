@@ -596,6 +596,9 @@ class StudioWindow(QMainWindow):
         import_hooks.triggered.connect(self._import_hooks_dialog)
         tools_menu.addAction(self.commands["preferences"])
         tools_menu.addAction(self.commands["guide"])
+        package_menu = tools_menu.addMenu("Packages de ressources R58")
+        manage_packages = package_menu.addAction("Gérer les packages…")
+        manage_packages.triggered.connect(self.open_package_manager)
         plugin_menu = tools_menu.addMenu("Plugins Studio")
         load_plugin = plugin_menu.addAction("Charger un manifeste…")
         load_plugin.triggered.connect(self._load_plugin_dialog)
@@ -1915,6 +1918,16 @@ class StudioWindow(QMainWindow):
             self.plugins.disable(selected)
             self._unmount_plugin(selected)
             self.statusBar().showMessage("Plugin désactivé : " + selected)
+
+    def open_package_manager(self):
+        """R58.B1 native manager shares the canonical Studio session and Undo."""
+        from drawtemp.studio.package_manager_qt import PackageManagerDialog
+        revision = self.session.revision
+        dialog = PackageManagerDialog(
+            self.session, content_path=self.content_path, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
 
     def open_mod_manager(self):
         """Open the R47 inspector; Studio remains owner of edits and grants."""
