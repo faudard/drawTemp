@@ -59,7 +59,8 @@ class ClassicEncounter:
     Inputs: attack, guard, skill, item/potion or flee. Enemies automatically
     choose the weakest remaining party member (ID tie-break). No RNG or timer.
     """
-    def __init__(self, encounter_id, config, party, content, inventory):
+    def __init__(self, encounter_id, config, party, content, inventory,
+                 hero_progress=None):
         self.id = encounter_id
         self.scene = config["scene"]
         self.reward_gold = config["reward_gold"]
@@ -86,6 +87,28 @@ class ClassicEncounter:
                 "speed": template.speed, "skills": list(template.skills),
                 "guard": False,
             }
+            if uid in party and hero_progress is not None:
+                progress = hero_progress.get(uid)
+                require(progress is not None,
+                        "Active RPG hero must exist in canonical Campaign")
+                row = self.actors[uid]
+                row["max_hp"] += (progress.level - 1) * 3
+                row["attack"] += (progress.level - 1) // 3
+                # Reuse R8 jobs/equipment bonuses, not a competing stat model.
+                bonuses = [content.jobs.get(progress.job, {}).get("bonuses", {})]
+                for item_id in progress.equipment.values():
+                    require(item_id in content.equipment,
+                            "Equipped R41 item missing from Content")
+                    bonuses.append(content.equipment[item_id].get("bonuses", {}))
+                for source in bonuses:
+                    for stat, amount in source.items():
+                        if stat in ("max_hp", "max_mp", "attack", "defense",
+                                    "magic", "weapon_power", "speed"):
+                            require(type(amount) is int, "R41 equipment stat is invalid")
+                            row[stat] += amount
+                row["hp"], row["mp"] = row["max_hp"], row["max_mp"]
+                require(1 <= row["speed"] <= 999,
+                        "R41 equipped hero speed is out of bounds")
         require(all(0 < a["hp"] <= a["max_hp"] and
                     0 <= a["mp"] <= a["max_mp"] for a in self.actors.values()),
                 "Invalid canonical actor vitality for classic encounter")
@@ -241,7 +264,8 @@ class ClassicEncounter:
                 "view": self.view()}
 
     @classmethod
-    def replay(cls, recording, *, encounter_id, config, party, content):
+    def replay(cls, recording, *, encounter_id, config, party, content,
+               hero_progress=None):
         require(type(recording) is dict
                 and set(recording) == {"version", "id", "party",
                                        "start_inventory", "commands", "view"}
@@ -253,7 +277,7 @@ class ClassicEncounter:
                 and len(recording["commands"]) <= MAX_COMMANDS,
                 "Malformed RPG_TURN encounter checkpoint")
         result = cls(encounter_id, config, party, content,
-                     recording["start_inventory"])
+                     recording["start_inventory"], hero_progress=hero_progress)
         for action in recording["commands"]:
             result.command(action)
         require(result.recording() == recording,
