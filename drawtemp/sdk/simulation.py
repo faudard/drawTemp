@@ -207,6 +207,47 @@ class Simulation:
         operation = 'route_interact' if routed else 'explore_interact'
         return self._apply(operation, point_id, expected_revision=expected_revision)
 
+    def platform_state(self, *, expected_revision=None):
+        """Immutable R32 render projection without creating an engine journal.
+
+        Viewing an untouched scene must not materialize GameSession._platform:
+        only a genuine fixed-tick command may begin its replay stream.
+        """
+        self._check_revision(expected_revision, "platform_state")
+        session = self._session
+        if (session.mode != "campaign" or session.progress.story_pending
+                or session.tactical_story_pending or not session.scene_router.enabled
+                or session.route_scene not in session.project.exploration):
+            return None
+        from sporebound.physics_scenes import EXTENSION
+        authored = (session.project.extensions.get(EXTENSION, {})
+                    .get("data", {}).get("scenes", {}).get(session.route_scene))
+        if authored is None or session._rt_journal is not None:
+            return None
+        if session._platform is not None:
+            runtime = session._platform
+        else:
+            from sporebound.platform_physics import PlatformPhysics
+            opened = [row["opens"] for row in authored["colliders"]
+                      if "opens" in row
+                      and session.progress.story_flags.get(
+                          session._platform_flag(row["opens"])) is True]
+            runtime = PlatformPhysics(
+                authored, initial_disabled=sorted(set(opened)),
+                max_air_jumps=session._metroidvania_air_jumps())
+        return freeze({"world": deepcopy(authored), "state": runtime.snapshot()})
+
+    def platform_step(self, move=0, jump=False, attack=False, *,
+                      expected_revision=None):
+        """Exactly one real 60 Hz GameSession tick, revision-guarded and atomic."""
+        return self._apply("route_platform_step", move, jump, False, attack,
+                           expected_revision=expected_revision)
+
+    def platform_travel(self, link_id, *, expected_revision=None):
+        """Only a contacted R32 portal may authorize an R25 scene transition."""
+        return self._apply("route_platform_travel", link_id,
+                           expected_revision=expected_revision)
+
     def route_options(self, *, expected_revision=None):
         """Read-only R25 exit catalogue for Studio/Player; no new route ledger.
 
