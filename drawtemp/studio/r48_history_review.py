@@ -10,6 +10,7 @@ from __future__ import annotations
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.collaboration import CollaborationError, make_revision
 from drawtemp.sdk.project_history import HistoryReviewController, RevisionGraph
+from drawtemp.sdk.project_history_store import LocalHistoryStore, HistoryStoreError
 from drawtemp.sdk.semantic_review import fingerprint_pair
 from drawtemp.studio.r30_creator_review import _disk_pair
 
@@ -31,6 +32,8 @@ class ProjectHistoryWorkspace:
                                  author="studio")
             self.graph.add(root, label="Studio à l'ouverture")
         self.current_review = None
+        self.history_path = None
+        self.history_digest = None
 
     def revisions(self):
         """Return insertion-order, validated immutable revisions for Qt rows."""
@@ -77,6 +80,34 @@ class ProjectHistoryWorkspace:
         transition = self.controller.apply(self.current_review, choices)
         self.current_review = None
         return transition
+
+    def save_history(self, path=None):
+        """Explicitly save a complete validated DAG; never overwrite blindly."""
+        target = LocalHistoryStore(path if path is not None else self.history_path)
+        if self.history_path is not None and target.path != self.history_path:
+            raise HistoryStoreError(
+                "wrong_destination", "Choose another workspace before switching history files")
+        digest = target.save(self.graph, expected_digest=self.history_digest)
+        self.history_path, self.history_digest = target.path, digest
+        return digest
+
+    def load_history(self, path):
+        """Replace only the history INDEX after verifying it includes this editor.
+
+        No Content/GameProject modifications occur, and the previous index is
+        retained unchanged on all failures (including cross-project imports).
+        """
+        store = LocalHistoryStore(path)
+        graph, digest = store.load()
+        live = self.live_digest()
+        if all(node.revision.digest != live for node in graph.nodes()):
+            raise HistoryStoreError(
+                "unrelated_project", "History contains no snapshot of the active Studio")
+        self.invalidate()
+        self.graph = graph
+        self.controller = HistoryReviewController(self.session, graph)
+        self.history_path, self.history_digest = store.path, digest
+        return graph
 
     def live_digest(self):
         snap = self.session.snapshot().to_dict()
