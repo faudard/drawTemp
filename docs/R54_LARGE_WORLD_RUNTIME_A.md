@@ -57,3 +57,9 @@ et retour tardif, échec de chargeur et dépassement mémoire.
 
 **Statut de gate :** R54.A seulement. Aucun viewport Qt, export Player,
 endurance ou certification GPU n'est revendiqué.
+
+## Suite livrée dans cette PR
+
+Voir [R54.B — World Streaming Inspector](R54_WORLD_STREAMING_INSPECTOR_B.md)
+pour la prévisualisation Qt, l'authoring no-JSON, le budget du cache et les
+tests de l'atelier. Le branchement au Player et la gate complète demeurent R54.C.
