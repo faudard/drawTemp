@@ -34,7 +34,7 @@ def validate_arena(scene, preset, setup):
     _check(_id(boss) and boss in ids and
            type(flankers) is list and len(flankers) == 2 and
            all(_id(name) and name in ids for name in flankers) and
-           len({boss, *flankers}) == 3,
+           len({boss, *flankers}) == 3 and ids == {boss, *flankers},
            "R65.C requires three distinct authored enemies")
     phases = {1: [], 2: []}
     for row in preset["boss_patterns"]:
@@ -267,15 +267,14 @@ class ActionArenaR65(ActionCombatR65):
         # explicitly opted-in scene's AI decisions and attack sequencing.
         self._advance_flankers(guard)
         self._advance_boss()
+        self._advance_hostile_shots()
 
     def step(self, command):
         # Additional state must also roll back if the R65.A transaction fails.
         extra = deepcopy((self.boss, self.flankers,
                           self.hostile_shots, self.next_hostile_id))
         try:
-            result = super().step(command)
-            self._advance_hostile_shots()
-            return deepcopy(self.last_events)
+            return super().step(command)
         except Exception:
             self.boss, self.flankers, self.hostile_shots, self.next_hostile_id = extra
             raise
