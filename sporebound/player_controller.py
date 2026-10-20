@@ -240,6 +240,10 @@ class PlayerController:
         """Persist one R26 combat tick into the canonical Player checkpoint."""
         return self._apply(self.session.route_action_step, command)
 
+    def route_action_settle(self, link_id):
+        """Commit replay-proven R26 rewards and its route in one Player slot."""
+        return self._apply(self.session.route_action_settle, link_id)
+
     def explore_actor(self, actor_id, action):
         return self._apply(self.session.explore_actor, actor_id, action)
 
