@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -31,11 +32,20 @@ class BoundActorQtTests(unittest.TestCase):
             session.save_as(content_path)
             project_path = content_path.with_suffix(".game.json")
             self.assertTrue(project_path.is_file())
+            from tests_standalone.test_r36_sprite_rendering import write_sprite_art
+            write_sprite_art(Path(directory))
+            report = Path(directory) / "cpu-profile.json"
             self.assertEqual(main([
                 "--smoke", "--content", str(content_path),
                 "--animation-project", str(project_path),
                 "--hero-controller", "hero_animation",
+                "--profile-r36", str(report),
                 "--save-dir", directory]), 0)
+            self.assertTrue(report.is_file())
+            measured = json.loads(report.read_text(encoding="utf-8"))
+            self.assertGreaterEqual(measured["samples"], 1)
+            self.assertGreaterEqual(measured["max_actors"], 1)
+            self.assertIsNotNone(measured["cpu_ms"])
 
 
 if __name__ == "__main__":
