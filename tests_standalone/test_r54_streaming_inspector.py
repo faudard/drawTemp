@@ -90,6 +90,8 @@ class WorldStreamingInspectorTests(unittest.TestCase):
         self.assertEqual(rows["pass"]["lod"], "detail")
         self.assertEqual(rows["forest"]["lod"], "overview")
         self.assertEqual(rows["arrival"]["lod"], "outline")
+        self.assertEqual(rows["arrival"]["map_size"], [4, 4])
+        self.assertEqual(rows["arrival"]["tile_preview"][1], "..#.")
         self.assertEqual(report["cache"]["resident_bytes"], 0)
         self.assertEqual(len(report["edges"]), 2)
         self.assertGreater(report["estimated_total_bytes"], 0)
