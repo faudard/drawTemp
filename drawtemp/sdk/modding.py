@@ -330,8 +330,8 @@ class ModRegistry:
         plan = self.preview_extension(mod_id, editor)
         return editor.apply(plan)
 
-    def audit_project(self, project, *, expected_pins):
-        """R47.C: read-only fail-closed mod inventory for a canonical project.
+    def audit_project(self, project, *, expected_pins, managed_namespaces=()):
+        """R47.C/F: read-only fail-closed mod inventory for a canonical project.
 
         Caller supplies IDs and pinned manifest SHA-256 values from a
         separately trusted inventory. This NEVER approves legal rights or a
@@ -343,6 +343,12 @@ class ModRegistry:
                     type(digest) is not str or not _SHA.fullmatch(digest)
                     for mid, digest in expected_pins.items())):
             _fail("invalid_pins", "Expected a bounded mapping of mod IDs to SHA-256")
+        if (type(managed_namespaces) not in (list, tuple, set, frozenset) or
+                len(managed_namespaces) > 32 or
+                any(type(namespace) is not str or not _NAMESPACE.fullmatch(namespace)
+                    for namespace in managed_namespaces) or
+                len(managed_namespaces) != len(set(managed_namespaces))):
+            _fail("invalid_namespaces", "Expected unique, bounded managed namespaces")
         if hasattr(project, "to_dict"):
             project = project.to_dict()
         if type(project) is dict and "project" in project:
@@ -354,6 +360,21 @@ class ModRegistry:
         # GameProject.to_dict() omits an empty extensions mapping by design.
         namespaces = project.get("extensions", {})
         errors, verified = [], []
+        # Unlisted installed modules are never allowed to smuggle new
+        # project namespaces past an otherwise valid trusted pin inventory.
+        for registered_id, entry in sorted(self._entries.items()):
+            if (registered_id not in expected_pins and
+                    entry["manifest"]["namespace"] in namespaces):
+                errors.append(registered_id + ": unpinned_mod")
+        # Missing mod manifests cannot identify arbitrary existing namespaces:
+        # the host must supply the managed namespace scope independently.
+        known = {
+            self._entries[mod_id]["manifest"]["namespace"]
+            for mod_id in expected_pins if mod_id in self._entries
+        }
+        for namespace in sorted(managed_namespaces):
+            if namespace in namespaces and namespace not in known:
+                errors.append(namespace + ": orphan_namespace")
         for mod_id, expected_sha in sorted(expected_pins.items()):
             entry = self._entries.get(mod_id)
             if entry is None:
