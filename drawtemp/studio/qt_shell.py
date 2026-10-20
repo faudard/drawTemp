@@ -488,6 +488,10 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
+        self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
+        self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
+        self._action("r37_boss", "Boss & AI Director R37.E…", self.open_ai_bosses)
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
@@ -569,6 +573,10 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r37_ai"])
+        tools_menu.addAction(self.commands["r37_sensor"])
+        tools_menu.addAction(self.commands["r37_squad"])
+        tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -736,6 +744,46 @@ class StudioWindow(QMainWindow):
         dialog = SystemDesignerDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
+            self.refresh()
+
+    def open_ai_bosses(self):
+        """R37.E boss phase presentation over existing Content R8 triggers."""
+        from drawtemp.studio.ai_boss_qt import BossDirectorDialog
+        revision = self.session.revision
+        dialog = BossDirectorDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_ai_squads(self):
+        """R37.D3 role and radio assignment, with the canonical R1 history."""
+        from drawtemp.studio.ai_squad_qt import AISquadDialog
+        initial = self.session.revision
+        dialog = AISquadDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial:
+            self.refresh()
+
+    def open_ai_sensors(self):
+        """R37.D sensor design uses the canonical R1 editor history."""
+        from drawtemp.studio.ai_sensor_qt import AISensorDialog
+        initial = self.session.revision
+        dialog = AISensorDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial:
+            self.refresh()
+
+    def open_behavior_trees(self):
+        """R37.C tree editor uses the existing R1 authoring history."""
+        from drawtemp.studio.ai_tree_qt import BehaviorTreeDialog
+        original = self.session.revision
+        dialog = BehaviorTreeDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != original:
             self.refresh()
 
     def open_living_world(self):

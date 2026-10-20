@@ -122,6 +122,15 @@ class GameSession:
         self._cinematic_pro = (
             CinematicProRuntime(self.project)
             if CINEMATIC_PRO_EXTENSION in self.project.extensions else None)
+        # R37.B: opt-in AI memory belongs to the canonical session, not a
+        # parallel engine or the renderer. Legacy projects remain unchanged.
+        from .advanced_ai import EXTENSION as ADVANCED_AI_EXTENSION, AdvancedAI
+        ai_spec = self.project.extensions.get(ADVANCED_AI_EXTENSION)
+        self._advanced_ai = (
+            AdvancedAI(ai_spec["data"],
+                       living_world=spec["data"] if spec is not None else None,
+                       content=self.content)
+            if ai_spec is not None else None)
         # R55: canonical GameSession-owned economy, opt-in for authored projects.
         from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
         system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
@@ -337,6 +346,332 @@ class GameSession:
         return self._living_world.craft(
             self.progress, self.progress.story_flags, self.route_scene,
             recipe_id, quantity, transaction_id)
+
+    def ai_state(self, actor_id=None):
+        """R37.B detached, opt-in memory inspection (no tactical mutation)."""
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        return self._advanced_ai.state(actor_id)
+
+    def _ai_suspicion(self, actor_id):
+        value = self._advanced_ai.state(actor_id)["values"].get("suspicion", 0)
+        require(type(value) is int and 0 <= value <= 3,
+                "R37 suspicion must be an integer in 0..3")
+        return value
+
+    def ai_boss_preview(self, director_id):
+        """R37.E: project-authored presentation of an actual CT boss encounter.
+
+        No second phase counter, no imaginary reinforcements and no implicit
+        execution. Battle remains authoritative for all triggers/telegraphs.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        catalog = self._advanced_ai.spec.get("boss_directors", [])
+        require(type(director_id) is str, "Invalid R37 director ID")
+        director = next((row for row in catalog
+                         if row["id"] == director_id), None)
+        require(director is not None, "Unknown R37 boss director")
+        require(self.mode == "battle" and self.battle is not None
+                and self.battle.mission.id == director["mission"],
+                "R37 boss director requires its own active CT encounter")
+        from .ai_boss_director import preview_boss_director
+        return preview_boss_director(self.battle, director)
+
+    def ai_boss_replay_audit(self, director_id, *, command_budget=512):
+        """R37.E3 certified preview from actual, bounded official Battle replay.
+
+        No separate command history, simulated phase progression or write.
+        A mismatch in tactical state OR boss signals fails closed.
+        """
+        require(type(command_budget) is int
+                and 1 <= command_budget <= 512,
+                "R37 boss audit requires a 1..512 command budget")
+        current = self.ai_boss_preview(director_id)
+        require(self.battle is not None
+                and len(self.battle.commands) <= command_budget,
+                "R37 boss audit exceeds its bounded command budget")
+        from .engine import Battle
+        from .ai_boss_director import preview_boss_director
+        director = next(row for row in
+                        self._advanced_ai.spec["boss_directors"]
+                        if row["id"] == director_id)
+        restored = Battle.replay(self.battle.recording(), rules=self.rules)
+        require(restored.digest() == self.battle.digest(),
+                "R37 boss audit found CT state replay divergence")
+        reproduced = preview_boss_director(restored, director)
+        require(current == reproduced,
+                "R37 boss audit found telegraph/phase divergence")
+        return {
+            "version": 1, "director_id": director_id,
+            "mission": self.battle.mission.id,
+            "battle_digest": self.battle.digest(),
+            "preview_digest": current["digest"],
+            "commands_checked": len(self.battle.commands),
+            "verified": True,
+            "phase_events": deepcopy(current["observed_phase_events"]),
+        }
+
+    def ai_squad_preview(self, squad_id):
+        """R37.D3 — direct same-scene radio sharing and role proposals only.
+
+        Positions and signal strength are taken from canonical R35 projections
+        and each actor's verified sensor/blackboard. No secondary NPC state,
+        full-map omniscience or implicit gameplay command execution.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        from .ai_squad import coordinate_squad
+        agents = sorted((
+            row for row in self._advanced_ai.agents.values()
+            if row.get("squad", {}).get("id") == squad_id),
+            key=lambda row: row["id"])
+        require(agents, "Unknown R37 authored squad")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 squad requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 squad scene is completed")
+        members = []
+        for agent in agents:
+            actor_id = agent["id"]
+            pose = self._living_world.npc_pose(
+                actor_id, self.progress.story_flags)
+            if pose["scene"] != self.route_scene or pose.get("pos") is None:
+                continue
+            perception = self.ai_perception_preview(actor_id)["perception"]
+            values = self._advanced_ai.state(actor_id)["values"]
+            fresh = perception["signal"]
+            if fresh in ("seen", "heard"):
+                known = list(perception["target"])
+                signal = fresh
+            elif (self._ai_suspicion(actor_id) > 0
+                  and values.get("last_known_scene") == self.route_scene
+                  and all(name in values
+                          for name in ("last_known_x", "last_known_y"))):
+                known = [values["last_known_x"], values["last_known_y"]]
+                signal = "memory"
+            else:
+                known = None
+                signal = "none"
+            members.append({
+                "actor_id": actor_id, "pos": list(pose["pos"]),
+                "role": agent["squad"]["role"],
+                "radio_range": agent["squad"]["radio_range"],
+                "signal": signal, "known_pos": known,
+            })
+        require(members, "No R37 squad members are present in this scene")
+        return coordinate_squad(stage, squad_id, members,
+                                scene=self.route_scene,
+                                tick=self._living_world.ticks)
+
+    def ai_squad_share(self, squad_id):
+        """Explicit atomic broadcast of *fresh* sightings to in-range peers.
+
+        Each recipient is written at most once per world tick. The regular
+        R37.B journal replay is the source of persistence; CT remains opt-out.
+        """
+        report = self.ai_squad_preview(squad_id)
+        recipients = [
+            row for row in report["members"]
+            if row["shared_from"] is not None and
+            row["received_signal"] in ("seen", "heard")]
+        require(recipients, "R37 squad has no deliverable fresh radio signals")
+        tick = report["tick"]
+        for row in recipients:
+            require(not any(
+                event["actor_id"] == row["actor_id"]
+                and event["tick"] == tick
+                and "squad_source" in event["changes"]
+                for event in self._advanced_ai.history),
+                "R37 squad already notified an actor this tick")
+        writes = []
+        for row in sorted(recipients, key=lambda item: item["actor_id"]):
+            signal = row["received_signal"]
+            known = row["known_pos"]
+            writes.append({
+                "actor_id": row["actor_id"],
+                "changes": {
+                    "alert": True, "suspicion": 3 if signal == "seen" else 2,
+                    "last_known_x": known[0], "last_known_y": known[1],
+                    "last_known_scene": report["scene"],
+                    "squad_source": row["shared_from"], "squad_signal": signal,
+                },
+            })
+        saved = self._advanced_ai.remember_batch(writes, tick=tick)
+        return {"preview": report, "delivered": [
+            {"actor_id": row["actor_id"], "source": row["shared_from"]}
+            for row in recipients], "blackboards": saved}
+
+    def ai_decision_context(self, actor_id):
+        """Derive observable facts from canonical CT or R35 exploration state.
+
+        Never trust client-supplied facts for authoritative decision previews.
+        No new AI simulation clock, LOS claims or campaign mutations.
+        """
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        if agent["mode"] == "ct":
+            require(self.mode == "battle" and self.battle is not None,
+                    "CT AI requires an active tactical battle")
+            actor = self.battle.unit(actor_id)
+            require(actor.alive, "CT AI actor is not alive")
+            from .model import distance
+            opponents = sorted((unit for unit in self.battle.units
+                                if unit.alive and unit.team != actor.team),
+                               key=lambda unit: unit.id)
+            facts = {"hp": actor.hp, "has_opponents": bool(opponents)}
+            if opponents:
+                facts["distance"] = min(distance(actor.pos, foe.pos)
+                                        for foe in opponents)
+            tick = self.battle.tick
+        else:
+            require(self.mode == "campaign" and self._living_world is not None
+                    and self.scene_router.enabled
+                    and self.route_scene in self.project.exploration
+                    and not self.progress.story_pending,
+                    "Realtime AI requires an active R35 exploration scene")
+            pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+            same_scene = pose["scene"] == self.route_scene
+            facts = {"activity": pose["activity"], "same_scene": same_scene}
+            if same_scene and pose.get("pos") is not None:
+                player = self.exploration.state(
+                    self.progress, self.route_scene)["position"]
+                npc = pose["pos"]
+                facts["distance"] = abs(npc[0] - player[0]) + abs(npc[1] - player[1])
+            tick = self._living_world.ticks
+            if "squad" in agent:
+                preview = self.ai_squad_preview(agent["squad"]["id"])
+                own = next((row for row in preview["members"]
+                            if row["actor_id"] == actor_id), None)
+                if own is not None:
+                    facts.update({
+                        "squad_alert": own["known_pos"] is not None,
+                        "squad_role": own["role"],
+                        "squad_intent": own["intent"],
+                        "squad_reachable": own["reachable"],
+                    })
+            if "sensor" in agent:
+                memory = self._advanced_ai.state(actor_id)["values"]
+                if same_scene and pose.get("pos") is not None:
+                    perception = self.ai_perception_preview(actor_id)["perception"]
+                    facts.update({
+                        "enemy_visible": perception["visible"],
+                        "noise_heard": perception["heard"],
+                        "alert": perception["alert"],
+                        "target_reachable": perception["reachable"],
+                    })
+                else:
+                    facts.update({
+                        "enemy_visible": False, "noise_heard": False,
+                        "alert": self._ai_suspicion(actor_id) > 0,
+                        "target_reachable": False,
+                    })
+        board = self._advanced_ai.state(actor_id)
+        require(board["updated_tick"] <= tick,
+                "R37 blackboard is newer than the canonical game clock")
+        return {"schema_version": 1, "actor_id": actor_id,
+                "mode": agent["mode"], "tick": tick,
+                "seed": self.seed, "facts": facts}
+
+    def ai_decision_preview(self, actor_id):
+        """Read-only R37 policy explanation. Never invoke Battle.execute."""
+        context = self.ai_decision_context(actor_id)
+        return self._advanced_ai.preview(context)
+
+    def ai_perception_preview(self, actor_id):
+        """R37.D sensor from R35 NPC, canonical hero cell and verified R25 input.
+
+        Does not dispatch combat moves, infer LOS from Manhattan distance,
+        advance world time or mutate NPC memory.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        require(agent["mode"] == "realtime" and "sensor" in agent,
+                "R37 perception requires an authored realtime sensor")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 perception requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 perception scene is completed")
+        pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+        require(pose["scene"] == self.route_scene
+                and pose.get("pos") is not None,
+                "R37 NPC is not positioned in the player's scene")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        prior = None
+        if self._ai_suspicion(actor_id) > 0:
+            if (memory.get("last_known_scene") == self.route_scene
+                    and "last_known_x" in memory
+                    and "last_known_y" in memory):
+                prior = [memory["last_known_x"], memory["last_known_y"]]
+        movement = False
+        if self._rt_journal is not None:
+            journal = self._rt_journal.recording()
+            if journal["inputs"]:
+                latest = journal["inputs"][-1]
+                command = latest["command"]
+                movement = (
+                    latest["tick"] == self._rt_journal.tick
+                    and latest["source"] == "hero"
+                    and command["kind"] == "move"
+                    and (command["dx"] != 0 or command["dy"] != 0))
+        from .ai_perception import perceive_grid
+        report = perceive_grid(stage, pose["pos"], stage["position"],
+                               agent["sensor"], movement=movement,
+                               remembered=prior)
+        return {"actor_id": actor_id, "scene": self.route_scene,
+                "tick": self._living_world.ticks, "perception": report}
+
+    def ai_observe(self, actor_id):
+        """Commit one explicit observation per actor/world tick to R37 ledger.
+
+        Suspicion persists for three authored observations after sight and
+        two after sound. Each later explicit observation without a signal
+        decreases it once; there is no implicit frame-driven countdown.
+        """
+        report = self.ai_perception_preview(actor_id)
+        tick = report["tick"]
+        observation = report["perception"]
+        require(not any(
+            row["actor_id"] == actor_id and row["tick"] == tick
+            and "observation_kind" in row["changes"]
+            for row in self._advanced_ai.history),
+            "R37 AI already observed this actor at this world tick")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        signal = observation["signal"]
+        suspicion = (3 if signal == "seen" else 2 if signal == "heard"
+                     else max(0, self._ai_suspicion(actor_id) - 1))
+        changes = {"suspicion": suspicion, "alert": suspicion > 0,
+                   "observation_kind": signal,
+                   "heard_noise": observation["heard"]}
+        if signal != "none":
+            changes["last_known_x"] = observation["target"][0]
+            changes["last_known_y"] = observation["target"][1]
+            changes["last_known_scene"] = report["scene"]
+        updated = self._advanced_ai.remember(actor_id, changes, tick=tick)
+        return {"observation": report, "blackboard": updated}
+
+    def ai_remember(self, actor_id, changes):
+        """Journal bounded R35 NPC memory against its authoritative world tick.
+
+        CT policy inspection is supported; writable CT memory awaits an
+        encounter-scoped replay adapter in R37.C to avoid tick-reset hazards.
+        """
+        context = self.ai_decision_context(actor_id)
+        require(context["mode"] == "realtime",
+                "CT memory writes require a future encounter-scoped adapter")
+        require(type(changes) is dict and not (
+                set(changes) & {
+                    "squad_source", "squad_signal",
+                    "last_known_scene", "observation_kind"}),
+                "R37 sensor and squad provenance must come from observation APIs")
+        return self._advanced_ai.remember(actor_id, changes,
+                                          tick=context["tick"])
 
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
@@ -1183,6 +1518,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._advanced_ai is not None:
+            data["advanced_ai"] = self._advanced_ai.recording()
         if self._systems is not None:
             data["systems"] = self._systems.snapshot()
         if self._stream_world is not None:
@@ -1216,7 +1553,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1520,6 +1857,25 @@ class GameSession:
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()
+        # Reconstruct each snapshot from its write ledger after the canonical
+        # combat / realtime clocks have been verified and loaded.
+        if session._advanced_ai is not None:
+            require("advanced_ai" in data,
+                    "R37 configured project checkpoint is missing AI state")
+            session._advanced_ai.restore(data["advanced_ai"])
+            for actor_id, agent in session._advanced_ai.agents.items():
+                updated = session._advanced_ai.blackboards[actor_id]["updated_tick"]
+                if agent["mode"] == "realtime":
+                    require(session._living_world is not None
+                            and updated <= session._living_world.ticks,
+                            "R37 AI memory exceeds replayed world time")
+                elif session.mode == "battle" and session.battle is not None:
+                    if any(unit.id == actor_id for unit in session.battle.units):
+                        require(updated <= session.battle.tick,
+                                "R37 CT memory exceeds replayed battle time")
+        else:
+            require("advanced_ai" not in data,
+                    "Unexpected R37 memory in legacy checkpoint")
         return session
 
     @classmethod
