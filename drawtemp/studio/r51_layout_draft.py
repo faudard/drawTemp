@@ -26,13 +26,35 @@ def new_layout(kind="HUD_CT"):
             {"id": "continue_action", "type": "button", "text": "Continuer",
              "action": "menu.continue"},
         ]
+    if kind == "DIALOGUE":
+        buttons = [{"id": "main_action", "type": "button",
+                    "text": "Suite de la conversation",
+                    "action": "dialogue.advance"}]
+    if kind == "INVENTORY":
+        buttons = [{"id": "main_action", "type": "button",
+                    "text": "Fermer le sac", "action": "inventory.close"}]
+    extra = []
+    if kind == "DIALOGUE":
+        extra = [
+            {"id": "dialogue_title", "type": "text",
+             "binding": {"path": "dialogue.title", "type": "str"}},
+            {"id": "dialogue_speaker", "type": "text",
+             "binding": {"path": "dialogue.speaker", "type": "str"}},
+            {"id": "dialogue_text", "type": "text",
+             "binding": {"path": "dialogue.text", "type": "str"}},
+            {"id": "dialogue_progress", "type": "text",
+             "binding": {"path": "dialogue.progress", "type": "str"}},
+        ]
+    if kind == "INVENTORY":
+        extra = [{"id": "inventory_count", "type": "text",
+                  "binding": {"path": "inventory.item_count", "type": "int"}}]
     return {
         "kind": kind,
         "root": {
             "id": "root", "type": "column",
             "children": [
                 {"id": "welcome", "type": "text", "text": "Interface personnalisable"},
-                *buttons,
+                *extra, *buttons,
             ],
         },
         "breakpoints": [{"min_width": 0, "columns": 1},
@@ -206,6 +228,11 @@ def editor_sample(layout, width):
         "combat.selection": "Case 2,3",
         "combat.active_hp": 24,
         "combat.active_max_hp": 30,
+        "dialogue.title": "La rencontre",
+        "dialogue.speaker": "Narrateur",
+        "dialogue.text": "Un dialogue de démonstration.",
+        "dialogue.progress": "Réplique 1 / 2",
+        "inventory.item_count": 3,
     }
 
     def resolve(node):
