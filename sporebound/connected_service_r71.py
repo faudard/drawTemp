@@ -132,6 +132,9 @@ class ConnectedLabService:
                 "counts": deepcopy(self._counts),
                 "recent_events": [dict(row) for row in self._events]}
 
+    def snapshot(self):
+        return self._lab.snapshot()
+
     def recording(self):
         return self._lab.recording()
 
@@ -155,7 +158,7 @@ class FaultProfile:
         require(0 <= self.drop_percent <= 100 and
                 0 <= self.duplicate_percent <= 100,
                 "Invalid packet fault probability")
-        require(0 <= self.reorder_every <= 32 and
+        require((self.reorder_every == 0 or 2 <= self.reorder_every <= 32) and
                 0 <= self.reorder_extra_steps <= 32 and
                 (self.reorder_every == 0 or self.reorder_extra_steps > 0),
                 "Invalid packet reordering schedule")
@@ -189,12 +192,14 @@ class SimulatedSessionLink:
                 "Invalid simulated transport frame")
         require(self._sent < 100000, "Simulated transport input limit reached")
         next_id = self._sent + 1
+        random_state = self._random.getstate()
         lost = self._random.randrange(100) < self.profile.drop_percent
         duplicate = (not lost and
                      self._random.randrange(100) < self.profile.duplicate_percent)
         copies = 0 if lost else 1 + int(duplicate)
-        require(len(self._pending) + copies <= MAX_PENDING_PACKETS,
-                "Simulated transport queue is full")
+        if len(self._pending) + copies > MAX_PENDING_PACKETS:
+            self._random.setstate(random_state)
+            raise RuleError("Simulated transport queue is full")
         self._sent = next_id
         self._counts["sent"] += 1
         if lost:
