@@ -859,6 +859,148 @@ ApplicationWindow {
                             }
                         }
                         ColumnLayout {
+                            id: survivalHud
+                            objectName: "r63-survival-hud"
+                            // The authoritative values come from the one GameSession.
+                            // QML is projection-only; buttons dispatch revisioned commands.
+                            visible: (root.playerData.screen === "exploration" ||
+                                      root.playerData.screen === "platform") &&
+                                     root.playerData.survival !== null &&
+                                     root.playerData.survival !== undefined
+                            property var stats: root.playerData.survival || ({})
+                            property bool mayAct: root.playerData.screen === "exploration" &&
+                                                  !root.inputLocked
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "SURVIE & ARTISANAT · TICK " +
+                                      (survivalHud.stats.tick || 0)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: [
+                                    {"key": "energy", "name": "Énergie"},
+                                    {"key": "hunger", "name": "Satiété"},
+                                    {"key": "temperature", "name": "Chaleur"}
+                                ]
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    property int meter: survivalHud.stats.needs ?
+                                        survivalHud.stats.needs[modelData.key] : 0
+                                    Label {
+                                        text: modelData.name + " · " + parent.meter + " / 100"
+                                        color: parent.meter <= 20 ? "#f9a99c" : root.ivory
+                                        Layout.fillWidth: true
+                                    }
+                                    ProgressBar {
+                                        Layout.fillWidth: true
+                                        from: 0
+                                        to: 100
+                                        value: parent.meter
+                                        Accessible.name: modelData.name + " : " + value + " sur 100"
+                                    }
+                                }
+                            }
+                            Label {
+                                visible: survivalHud.stats.needs &&
+                                         survivalHud.stats.needs.temperature <= 20
+                                text: "Froid critique : la fatigue augmente à chaque tick."
+                                color: "#f9a99c"
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Attendre 1 tick"
+                                visible: root.playerData.screen === "exploration"
+                                Layout.fillWidth: true
+                                enabled: survivalHud.mayAct
+                                onClicked: player.survivalWait(1)
+                            }
+                            Label {
+                                text: "RESSOURCES"
+                                color: root.gold
+                                font.bold: true
+                                visible: (survivalHud.stats.nodes || []).length > 0
+                            }
+                            Repeater {
+                                model: survivalHud.stats.nodes || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.item +
+                                              " (" + modelData.remaining + ")" +
+                                              (modelData.cold ? " · froid -" + modelData.cold : "")
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Collecter"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalGather(modelData.id)
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "RECETTES"
+                                color: root.gold
+                                font.bold: true
+                                visible: (survivalHud.stats.recipes || []).length > 0
+                            }
+                            Repeater {
+                                model: survivalHud.stats.recipes || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Fabriquer"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalCraft(modelData.id)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: survivalHud.stats.shelters || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "Refuge : " + modelData.id
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Se reposer"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalRest(modelData.id)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: survivalHud.stats.foods || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.item + " · +" +
+                                              modelData.nutrition + " satiété"
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Manger"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalEat(modelData.item)
+                                    }
+                                }
+                            }
+                        }
+                        ColumnLayout {
                             // R55 opt-in canonical economy; never display journals
                             // or run simulation on a render frame.
                             visible: root.playerData.screen === "exploration" &&
