@@ -11,6 +11,7 @@ on:
       - 'tests_standalone/test_r63_survival.py'
       - 'tests_standalone/test_r63_journey.py'
       - 'examples/r63_survival_refuge.py'
+      - 'sporebound/survival_balance.py'
       - 'tests_standalone/test_r63_player.py'
       - 'tests_standalone/test_r63_survival_gui.py'
       - 'drawtemp/studio/survival_designer_qt.py'
