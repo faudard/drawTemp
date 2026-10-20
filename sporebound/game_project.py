@@ -245,6 +245,17 @@ class GameProject:
                 self.extensions[SETTLEMENT_EXTENSION]["data"],
                 self.extensions[SYSTEMS_EXTENSION]["data"],
                 set(self.exploration) | set(content.missions))
+        # R62.A uses the single R35 clock and canonical Campaign item IDs.
+        from .farming_life import EXTENSION as FARM_EXTENSION, validate_farming
+        if FARM_EXTENSION in self.extensions:
+            require(EXTENSION in self.extensions,
+                    "R62 farming requires the R35 living-world clock")
+            known_items = set(content.equipment)
+            if SYSTEMS_EXTENSION in self.extensions:
+                known_items.update(row["id"] for row in
+                                   self.extensions[SYSTEMS_EXTENSION]["data"]["resources"])
+            validate_farming(self.extensions[FARM_EXTENSION]["data"],
+                             set(self.exploration), known_items)
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes

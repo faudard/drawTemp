@@ -185,6 +185,30 @@ class Simulation:
         return self._apply("system_fulfill", quest_id,
                            expected_revision=expected_revision)
 
+    def farming_state(self, scene=None, *, expected_revision=None):
+        """Immutable R62 view using the same canonical R35 world clock."""
+        self._check_revision(expected_revision, "farming_state")
+        try:
+            return freeze(self._session.farming_state(scene))
+        except RuleError as exc:
+            raise SimulationError("invalid_action", "farming_state", str(exc)) from exc
+
+    def farming_plant(self, plot_id, crop_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_plant", plot_id, crop_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_harvest(self, plot_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_harvest", plot_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_feed(self, animal_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_feed", animal_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_collect(self, animal_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_collect", animal_id, receipt_id,
+                           expected_revision=expected_revision)
+
     def living_world_state(self, scene=None):
         """Opt-in detached world projection for Player/Qt; no state mutation."""
         if self._session._living_world is None:

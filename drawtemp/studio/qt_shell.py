@@ -496,6 +496,7 @@ class StudioWindow(QMainWindow):
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r65_composer", "R65 • Combat Composer action…", self.open_r65_composer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r62_farm", "Farm Studio R62 : cultures et élevage…", self.open_farm_studio)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
         self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
         self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
@@ -594,6 +595,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r65_composer"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r62_farm"])
         tools_menu.addAction(self.commands["r41_party"])
         tools_menu.addAction(self.commands["r53_composer"])
         tools_menu.addAction(self.commands["r41_encounter"])
@@ -845,6 +847,15 @@ class StudioWindow(QMainWindow):
         """R57 localization sidecar separate from the canonical R1 session."""
         from drawtemp.studio.r57_translation_qt import open_translation_studio
         open_translation_studio(self)
+
+    def open_farm_studio(self):
+        """R62.B.1 typed authoring, canonical R1 apply and undo/redo."""
+        from drawtemp.studio.farming_qt import FarmStudioDialog
+        revision = self.session.revision
+        dialog = FarmStudioDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
 
     def open_living_world(self):
         """R35 world schedules: use the one authoritative R1 editor history."""
