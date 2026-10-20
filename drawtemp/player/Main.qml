@@ -467,6 +467,20 @@ ApplicationWindow {
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
+                    Label {
+                        text: "Réplique " + (root.playerData.dialogue_line.index + 1) +
+                              " / " + root.playerData.dialogue_line.count
+                        visible: root.playerData.dialogue_line.count > 1
+                        color: root.muted
+                        font.pixelSize: 13 * root.textScale
+                    }
+                    Button {
+                        objectName: "r42NextDialogueLine"
+                        text: "Suite de la conversation →"
+                        visible: root.playerData.dialogue_line.count > 1 &&
+                                 !root.playerData.dialogue_line.complete
+                        onClicked: player.nextDialogueLine()
+                    }
                 }
             }
             ColumnLayout {
@@ -488,8 +502,11 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: root.playerData.choices.length === 0 ?
-                          "Explorez les lieux pour poursuivre le récit." : ""
+                    text: root.playerData.dialogue_line.count > 1 &&
+                          !root.playerData.dialogue_line.complete ?
+                          "Lisez les répliques avant de choisir." :
+                          (root.playerData.choices.length === 0 ?
+                           "Explorez les lieux pour poursuivre le récit." : "")
                     color: root.muted
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true

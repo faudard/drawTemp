@@ -149,7 +149,10 @@ class Simulation:
             raise
 
     def choices(self):
-        """Only currently permitted story choices; never expose rule internals."""
+        """Only currently permitted choices, including R42 line completion."""
+        line = self._session.narrative_line()
+        if line is not None and not line['complete']:
+            return freeze([])
         if self._session.tactical_story_pending:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
@@ -359,6 +362,16 @@ class Simulation:
     def acknowledge_scene_cinematic(self, clip_id, *, expected_revision=None):
         """Revision-checked acknowledgement with canonical transaction rollback."""
         return self._apply('acknowledge_scene_cinematic', clip_id,
+                           expected_revision=expected_revision)
+
+    def narrative_line(self, *, expected_revision=None):
+        """Detached persisted line projection; never exposes mutable Campaign."""
+        self._check_revision(expected_revision, 'narrative_line')
+        return freeze(self._session.narrative_line())
+
+    def advance_narrative_line(self, *, expected_revision=None):
+        """Revision-checked line progression with normal save/rollback."""
+        return self._apply('advance_narrative_line',
                            expected_revision=expected_revision)
 
     def choose_story_option(self, choice, *, expected_revision=None):

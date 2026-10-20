@@ -173,6 +173,38 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def narrative_state(self):
+        """Read-only R42 projection of typed flags from canonical Campaign."""
+        from .narrative_state_r42 import state_snapshot
+        return state_snapshot(self.project.story, self.progress)
+
+    def narrative_line(self):
+        """Read-only saved v2 dialogue cursor for Player, campaign or CT."""
+        if self.project.story.get('schema_version') != 2:
+            return None
+        scene = (self.tactical_scene() if self.tactical_story_pending
+                 else self.active_scene())
+        if scene is None:
+            return None
+        from .narrative_playback_r42 import current_line
+        return current_line(self.progress, scene)
+
+    def advance_narrative_line(self):
+        """Commit one presentation-only line step to the existing Campaign save."""
+        require(self.project.story.get('schema_version') == 2,
+                'Multi-line dialogue requires narrative v2')
+        scene = (self.tactical_scene() if self.tactical_story_pending
+                 else self.active_scene())
+        require(scene is not None, 'No dialogue to advance')
+        from .narrative_playback_r42 import advance_line
+        return advance_line(self.progress, scene)
+
+    def _require_narrative_line_complete(self):
+        if self.project.story.get('schema_version') == 2:
+            line = self.narrative_line()
+            require(line is not None and line['complete'],
+                    'Read all dialogue lines before choosing')
+
     def scene_profile(self, scene_id=None):
         """Read the canonical project profile without changing CT state."""
         if scene_id is not None:
@@ -993,6 +1025,7 @@ class GameSession:
         """Atomically apply canonical StoryBook choice and resume the Battle."""
         require(self.mode == "battle", "No standalone tactical dialogue")
         require(self.battle is not None, 'Missing tactical battle')
+        self._require_narrative_line_complete()
         previous = deepcopy((self.progress, self.battle,
                              self.tactical_story_pending,
                              self.tactical_story_queue, self.finalized))
@@ -1154,6 +1187,7 @@ class GameSession:
         return flow_inspect_campaign(self.progress, self.project.campaign_flow)
 
     def choose_story_option(self, choice_id):
+        self._require_narrative_line_complete()
         require(self.active_battle is None or self.active_battle.result is not None,
                 "Finish combat before choosing dialogue")
         stage = self.exploration_state()
@@ -1876,6 +1910,15 @@ class GameSession:
         else:
             require("advanced_ai" not in data,
                     "Unexpected R37 memory in legacy checkpoint")
+        if project.story.get('schema_version') == 2:
+            from .narrative_playback_r42 import validate_cursor
+            # The snapshot has already been restored and authenticated. A
+            # cursor outside the pending scene is not a valid resumable save.
+            pending = (session.tactical_scene() if session.tactical_story_pending
+                       else session.active_scene())
+            index = validate_cursor(session.progress, pending)
+            require(pending is not None or index == 0,
+                    'R42 save has an unbound dialogue cursor')
         return session
 
     @classmethod

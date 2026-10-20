@@ -414,6 +414,10 @@ def create_bridge(controller, renderer):
         def cinematicSeek(self, milliseconds):
             self.settings_update(self.controller.cinematic_seek, milliseconds)
 
+        @Slot()
+        def nextDialogueLine(self):
+            self.invoke(self.controller.next_dialogue_line)
+
         @Slot(str)
         def choose(self, choice):
             self.invoke(self.controller.choose, choice)
