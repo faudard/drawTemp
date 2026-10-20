@@ -154,6 +154,34 @@ class Simulation:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
 
+    def system_state(self, *, expected_revision=None):
+        """R55 opt-in immutable Player view; no alternate stock ownership."""
+        self._check_revision(expected_revision, "system_state")
+        if self._session._systems is None:
+            return None
+        return freeze(self._session.system_state())
+
+    def system_preview(self, ticks=1, *, expected_revision=None):
+        """Read-only forecast: it must not mutate the simulation revision."""
+        self._check_revision(expected_revision, "system_preview")
+        try:
+            return freeze(self._session.system_preview(ticks))
+        except RuleError as exc:
+            raise SimulationError("invalid_action", "system_preview", str(exc)) from exc
+
+    def system_advance(self, ticks=1, *, expected_revision=None):
+        return self._apply("system_advance", ticks, expected_revision=expected_revision)
+
+    def system_trade(self, merchant_id, action, quantity, transaction_id,
+                     *, expected_revision=None):
+        return self._apply("system_trade", merchant_id, action,
+                           quantity, transaction_id,
+                           expected_revision=expected_revision)
+
+    def system_fulfill(self, quest_id, *, expected_revision=None):
+        return self._apply("system_fulfill", quest_id,
+                           expected_revision=expected_revision)
+
     def living_world_state(self, scene=None):
         """Opt-in detached world projection for Player/Qt; no state mutation."""
         if self._session._living_world is None:
