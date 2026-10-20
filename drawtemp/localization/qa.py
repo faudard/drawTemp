@@ -83,6 +83,12 @@ def main(argv=None):
                         help="Write evidence file; never change game/catalog")
     args = parser.parse_args(argv)
     try:
+        # JSON evidence must never be allowed to overwrite either source,
+        # including aliases using ".." or an existing symlink.
+        if (args.json_out is not None and
+                args.json_out.resolve() in {
+                    args.project.resolve(), args.catalog.resolve()}):
+            raise ValueError("Evidence output path aliases game or catalog")
         project = json.loads(args.project.read_text(encoding="utf-8"))
         catalog = Catalog.load(args.catalog)
         report = audit_project(project, catalog)
@@ -92,9 +98,13 @@ def main(argv=None):
     output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
     print(output)
     if args.json_out is not None:
-        # Evidence-only export, not an approved localization source edit.
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(output + "\n", encoding="utf-8")
+        # Evidence-only export; errors must yield nonzero and not claim success.
+        try:
+            args.json_out.parent.mkdir(parents=True, exist_ok=True)
+            args.json_out.write_text(output + "\n", encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            print("R57 evidence write failed: " + str(exc), file=sys.stderr)
+            return 2
     return 0 if report["automated_pass"] else 1
 
 
