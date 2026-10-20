@@ -96,6 +96,8 @@ class WorldStreamState:
         self.scenes = {c["scene"]: c["id"] for c in self.spec["cells"]}
         self.initial = {e["id"]: e["initial"] for c in self.spec["cells"]
                         for e in c["entities"]}
+        self.entity_cells = {e["id"]: c["id"] for c in self.spec["cells"]
+                             for e in c["entities"]}
         self.history = [self.spec["start"]]
         self.events = []
         self.entities = dict(self.initial)
@@ -123,13 +125,14 @@ class WorldStreamState:
         """Compare-and-swap with persistent idempotency; no reward duplication."""
         require(all(_id(v) for v in (event_id, entity_id, before, after))
                 and before != after, "Invalid R54 world event")
-        event = {"id": event_id, "entity": entity_id,
+        event = {"id": event_id, "cell": self.current, "entity": entity_id,
                  "before": before, "after": after}
         for previous in self.events:
             if previous["id"] == event_id:
                 require(previous == event, "Conflicting R54 event replay")
                 return False
         require(entity_id in self.entities and
+                self.entity_cells[entity_id] == self.current and
                 self.entities[entity_id] == before,
                 "Unknown entity or stale R54 world change")
         require(len(self.events) < MAX_EVENTS, "R54 world event ledger full")
@@ -160,11 +163,13 @@ class WorldStreamState:
         values, seen = dict(self.initial), set()
         for event in events:
             require(type(event) is dict and set(event) ==
-                    {"id", "entity", "before", "after"},
+                    {"id", "cell", "entity", "before", "after"},
                     "Malformed R54 checkpoint event")
             ident, entity = event["id"], event["entity"]
             require(_id(ident) and ident not in seen and _id(entity)
-                    and entity in values and _id(event["before"])
+                    and entity in values and
+                    event["cell"] == self.entity_cells[entity] and
+                    event["cell"] in history and _id(event["before"])
                     and _id(event["after"]) and event["before"] != event["after"]
                     and values[entity] == event["before"],
                     "Invalid/duplicate/conflicting R54 world event")
