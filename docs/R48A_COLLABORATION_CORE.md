@@ -419,6 +419,7 @@ enregistrements sauvegardés/rechargés/rejoués doivent être équivalents.
 
 ```bash
 python -m unittest tests_standalone.test_drawtemp_r48c_vertical -v
+python -m unittest tests_standalone.test_drawtemp_r48c_processes -v
 python -m drawtemp.sdk.r48_vertical_gate
 ```
 
@@ -428,9 +429,17 @@ d'un seul des deux documents du jeu et imposent un choix explicite de
 avant la publication de l'archive. Les anciennes versions valides doivent
 rester inspectables.
 
-**C1 est seulement un gate logiciel simulé** : pas encore d'extinction
-brutale, d'export Player validé, de concurrence entre vrais processus,
-d'exécution CI attestée ni de revue visuelle ou screen reader certifiée.
+**C1 est un gate logiciel reproductible** : il simule des exceptions
+d'écriture, mais n'atteste ni export Player, ni extinction matérielle, ni
+exécution CI, ni revue onscreen/lecteur d'écran.
+
+**R48.C2 partiel :** `test_drawtemp_r48c_processes.py` démarre deux vrais
+processus Python indépendants avec `spawn`, les fait tenter de publier la
+même archive en create-only et exige un seul succès ; il simule aussi la
+mort d'un processus tenant le verrou et exige un refus de publication
+jusqu'à inspection et suppression manuelle du verrou par le propriétaire
+du test. Ces tests restent à exécuter réellement sur trois OS et ne
+simulent pas une panne matérielle.
 Aucune fusion sur master tant que ces garanties n'ont pas été contrôlées.
 
 ## Tranches restantes
@@ -439,5 +448,6 @@ Aucune fusion sur master tant que ces garanties n'ont pas été contrôlées.
   multi-processus et coupure matérielle, garanties transactionnelles renforcées.
 - **R48.B3** : validations NVDA/VoiceOver, commentaires avec identité
   attestée et UX onscreen ; éventuelles vues d'ensemble multi-révisions.
-- **R48.C2** : test deux processus/crash brutal, export Player reproductible,
-  replay approfondi, et gate d'intégration final Windows/macOS/Linux.
+- **R48.C2 final** : processus concurrents et crash de verrou codés en test
+  (validation CI manquante) ; reste le crash pendant chaque étape d'archive,
+  l'export Player reproductible et les gates Windows/macOS/Linux.
