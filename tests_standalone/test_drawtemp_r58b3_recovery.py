@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from drawtemp.assets.packs import (
-    install_pack, publish_pack, _read_archive,
+    ResourcePackError, install_pack, publish_pack, _read_archive,
 )
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.sdk.reference import reference_project
@@ -74,6 +74,16 @@ class PendingPackageUpgradeTests(unittest.TestCase):
         self.assertFalse(marker.exists())
         apply_package_upgrade(self.preview(), self.editor, self.root)
         self.assertEqual(self.editor.revision, 2)
+
+    def test_pending_marker_also_blocks_legacy_r24_installs(self):
+        self.begin()
+        source = make_source(self.root / "source-third",
+                             make_manifest("third-pack"))
+        pack = publish_pack(source, self.root / "third.rpack")
+        with self.assertRaises(ResourcePackError) as blocked:
+            install_pack(pack, self.editor, self.root)
+        self.assertEqual(blocked.exception.code, "recovery_required")
+        self.assertFalse((self.root / "assets/packs/third-pack").exists())
 
     def test_complete_uncommitted_files_remain_after_recovery_and_are_reused(self):
         token = self.begin()
