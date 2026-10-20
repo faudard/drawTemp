@@ -55,3 +55,69 @@ def perform_ui_intent(controller, intent):
         raise UiLayoutError("R51: tactical action unavailable")
     # Existing R12/R1 command is the sole mutation/replay/save owner.
     return controller.command("end")
+
+
+
+def menu_for_player(controller, width):
+    """Strict, static authored title menu with a guaranteed New Game path.
+
+    A title screen exists before GameSession does, so R51 v1 gameplay
+    bindings are *not* resolved using synthetic session state.
+    """
+    from copy import deepcopy
+
+    if type(width) is not int or not 1 <= width <= 16384:
+        raise UiLayoutError("R51: invalid menu viewport width")
+    catalog = catalog_from_project(controller.project)
+    matches = sorted(k for k, v in catalog["layouts"].items()
+                     if v["kind"] == "MENU")
+    if not matches or not controller.show_title:
+        return {"available": False, "error": ""}
+    layout = catalog["layouts"][matches[0]]
+
+    def inspect(node):
+        if "binding" in node or "max_binding" in node:
+            raise UiLayoutError("R51: title menus cannot use live GameSession bindings")
+        return [node["action"]] if node["type"] == "button" else [
+            action for child in node.get("children", []) for action in inspect(child)
+        ]
+
+    try:
+        intents = inspect(layout["root"])
+        # Never replace the existing title menu with an authored screen that
+        # cannot launch a new game, even if the schema itself is valid.
+        if "menu.new_game" not in intents:
+            raise UiLayoutError("R51: title menu must offer New Game")
+    except UiLayoutError as exc:
+        return {"available": False, "error": str(exc)}
+
+    bp = next(p for p in reversed(layout["breakpoints"])
+              if width >= p["min_width"])
+    permission = ["menu.new_game"]
+    save_available = controller.state()["save_manager"]["continue_available"]
+    if save_available:
+        permission.append("menu.continue")
+    permission.extend(("menu.options", "menu.quit"))
+    return {
+        "available": True, "error": "",
+        "projection": {
+            "id": matches[0], "kind": "MENU", "columns": bp["columns"],
+            "focus_order": deepcopy(layout["focus_order"]),
+            "root": deepcopy(layout["root"]),
+        },
+        # The Qt Quick component intersects this with authored button IDs.
+        "permitted_actions": [k for k in permission if k in intents],
+    }
+
+
+def perform_menu_intent(controller, intent):
+    """Use only existing R12 menu actions and recheck availability."""
+    menu = menu_for_player(controller, 900)
+    if not menu["available"] or intent not in menu["permitted_actions"]:
+        raise UiLayoutError("R51: title menu action unavailable")
+    if intent == "menu.new_game":
+        return controller.new_game()
+    if intent == "menu.continue":
+        return controller.continue_game()
+    # Settings and Quit remain local to Main.qml popup/window, never Core.
+    raise UiLayoutError("R51: use native Qt shell for non-gameplay menu action")
