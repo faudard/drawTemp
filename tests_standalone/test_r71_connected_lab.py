@@ -6,6 +6,7 @@ import unittest
 from sporebound.connected_lab_r71 import (
     ConnectedLabSession, decode_message, encode_message)
 from sporebound.model import RuleError
+from sporebound.fixed_clock import _digest
 
 
 OWNERS = {"hero_a": "alice", "hero_b": "bob"}
@@ -128,6 +129,12 @@ class ConnectedLabR71Tests(unittest.TestCase):
         variants = []
         corrupt = deepcopy(record)
         corrupt["journal"]["inputs"][0]["command"]["entity"] = "hero_b"
+        # Recompute both checksums to prove that replay also checks ownership,
+        # not merely that tampering changes the digest.
+        corrupt["journal"]["digest"] = _digest({k: v for k, v in
+            corrupt["journal"].items() if k != "digest"})
+        corrupt["digest"] = _digest({k: v for k, v in
+            corrupt.items() if k != "digest"})
         variants.append(corrupt)
         corrupt = deepcopy(record)
         corrupt["final_digest"] = "0" * 64
