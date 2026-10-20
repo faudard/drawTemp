@@ -486,6 +486,8 @@ class StudioWindow(QMainWindow):
         self._action("r49_references", "Vérifier les références du projet…",
                      self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
+        self._action("r74_dungeons", "R74 • Assistant de donjons vérifiés…",
+                     self.open_r74_dungeons)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
@@ -574,6 +576,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r49_metrics"])
         tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
+        tools_menu.addAction(self.commands["r74_dungeons"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r42_narrative"])
@@ -933,6 +936,14 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.r30_assist_qt import R30AssistDialog
         prior = self.session.revision
         R30AssistDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_r74_dungeons(self):
+        """R74.B opt-in dungeon graph review; same R1 history and save lifecycle."""
+        from drawtemp.studio.r74_assist_qt import R74DungeonAssistDialog
+        prior = self.session.revision
+        R74DungeonAssistDialog(self.session, parent=self).exec()
         if self.session.revision != prior:
             self.refresh()
 
