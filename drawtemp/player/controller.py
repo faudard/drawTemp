@@ -194,8 +194,48 @@ class PlayerController:
         snapshot = self._current()
         if snapshot.mode != "campaign" or snapshot.scene is not None:
             raise ValueError("Resolve the current encounter before travelling")
-        self.session.route_transition(link_id,
-                                      expected_revision=snapshot.revision)
+        if self.session.platform_state(expected_revision=snapshot.revision):
+            self.session.platform_travel(link_id,
+                                         expected_revision=snapshot.revision)
+        else:
+            self.session.route_transition(link_id,
+                                          expected_revision=snapshot.revision)
+        self.selected = [0, 0]
+        return self._changed()
+
+    def platform_step(self, move=0, jump=False, attack=False):
+        """One fixed R32 command; avoid sixty full autosave writes per second.
+
+        Render-only state is projected on demand; manual saves and every
+        60th committed frame still use the existing canonical PlayerSlotStore.
+        Boss victory/death checkpoints are also autosaved immediately.
+        """
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if not self.session.platform_state(expected_revision=snapshot.revision):
+            raise ValueError("No active R32 platform scene")
+        self.session.platform_step(move, jump, attack,
+                                   expected_revision=snapshot.revision)
+        self._pending_target = None
+        self.forecast = ""
+        self.message = ""
+        now = self.session.snapshot()
+        if (now.revision % 60 == 0 or
+                any(self.session.platform_state(
+                    expected_revision=now.revision)["state"]["boss"][status]
+                    for status in ("defeated", "player_defeated")
+                    if "boss" in self.session.platform_state(
+                        expected_revision=now.revision)["state"])):
+            self._checkpoint()
+        return self.state()
+
+    def platform_travel(self, link_id):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if not self.session.platform_state(expected_revision=snapshot.revision):
+            raise ValueError("No active R32 platform scene")
+        self.session.platform_travel(link_id,
+                                     expected_revision=snapshot.revision)
         self.selected = [0, 0]
         return self._changed()
 
@@ -633,6 +673,7 @@ class PlayerController:
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "routes": [],
+                "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
@@ -694,6 +735,10 @@ class PlayerController:
         # Preserve route buttons even when an exploration exit is completed.
         base["routes"] = thaw(self.session.route_options(
             expected_revision=snapshot.revision))
+        platform = self.session.platform_state(
+            expected_revision=snapshot.revision)
+        if platform is not None:
+            base["platform"] = {"enabled": True, **thaw(platform)}
         # Project-owned R34 recipe, GameSession-owned run/meta/journal.
         # This is a detached QML view, not an alternate runtime/registry.
         if "org.drawtemp.roguelite" in self.project.extensions:
@@ -760,6 +805,8 @@ class PlayerController:
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
             base["choices"] = thaw(self.session.choices())
+        elif base["platform"]["enabled"]:
+            base["screen"] = "platform"
         elif snapshot.exploration and not snapshot.exploration["completed"]:
             base["screen"] = "exploration"
         elif snapshot.battle:
