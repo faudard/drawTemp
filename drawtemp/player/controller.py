@@ -198,7 +198,7 @@ class PlayerController:
         self.session.system_advance(ticks, expected_revision=state.revision)
         return self._changed()
 
-    def system_trade(self, merchant_id, action, quantity, transaction_id):
+    def system_trade(self, merchant_id, action, quantity, transaction_id=None):
         """Player economy uses one revisioned GameSession transaction."""
         self._require_cinematic_completed()
         state = self._current()
@@ -206,6 +206,12 @@ class PlayerController:
             raise ValueError("R55 merchant requires active exploration")
         if self.session.system_state(expected_revision=state.revision) is None:
             raise ValueError("System economy is not configured")
+        if transaction_id is None:
+            # A monotonic, session-persisted journal index survives save/load
+            # unlike a GUI-only counter or random UI timestamp.
+            journal = self.session.system_state(
+                expected_revision=state.revision)["journal"]
+            transaction_id = "r55-player-" + str(len(journal))
         self.session.system_trade(
             merchant_id, action, quantity, transaction_id,
             expected_revision=state.revision)
