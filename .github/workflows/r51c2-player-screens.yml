@@ -1,0 +1,57 @@
+name: R51.C2 Player Dialogue and Inventory
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/ui_layout_r51.py'
+      - 'drawtemp/studio/r51_layout_draft.py'
+      - 'drawtemp/player/r51_screens.py'
+      - 'drawtemp/player/r51_hud.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'tests_standalone/test_r51c2_*.py'
+      - '.github/workflows/r51c2-player-screens.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/ui_layout_r51.py'
+      - 'drawtemp/player/r51_screens.py'
+      - 'drawtemp/player/r51_hud.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'tests_standalone/test_r51c2_*.py'
+
+permissions:
+  contents: read
+
+jobs:
+  headless-real-session:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: R51 schema and real Player narrative/tactical inventory
+        run: python -m unittest -v tests_standalone.test_r51a_ui_layout tests_standalone.test_r51b_layout_designer tests_standalone.test_r51b2_ui_navigation tests_standalone.test_r51c2_player_screens tests_standalone.test_r42_narrative_player
+  qt-quick-software-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      DRAWTEMP_R51_QT_GATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: Verify R51 renderer for authored dialogue and inventory
+        run: python -m unittest -v tests_standalone.test_r51b_qt tests_standalone.test_r51c2_qt
