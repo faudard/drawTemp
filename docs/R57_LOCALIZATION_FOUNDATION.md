@@ -23,6 +23,7 @@ Stable keys are initially seeded from the canonical project snapshot:
 - project.title / project.subtitle;
 - campaign.<id>.name and .description;
 - story.<scene_id>.title, .speaker and .text;
+- story.<scene_id>.line.<line_id>.speaker and .text (R42 Narrative v2);
 - story.<scene_id>.choice.<choice_id>.label.
 
 Existing project text is never replaced or automatically migrated in-place;
@@ -68,9 +69,19 @@ and retained .invalid evidence before replacing corrupt input.
   fixed text/background palette pairs with WCAG 2.x luminance/contrast maths.
   It deliberately cannot assess changing images, translucency, actual font
   sizes or dynamic/third-party visual widgets.
-- A Qt QTest keyboard smoke exercises Translation Studio search and selection;
-  a Player Qt bridge test checks persistence without any gameplay revision
-  change. The GitHub CI matrix runs these and legacy R12 preference checks.
+- A Qt QTest keyboard smoke exercises Translation Studio search and selection.
+  Ctrl+F, Ctrl+L, Ctrl+E target the search, key list and translation editor,
+  with Ctrl+S for saving. Translation Studio takes an immutable snapshot of
+  the saved AuthoringSession, rejecting later edits instead of overwriting
+  translations. The Player now exposes F10 for Options, initial focus on
+  language and focus restoration on close; Tab/Shift+Tab use native controls.
+- Canonical R42 Narrative v2 line IDs now own distinct stable keys. The
+  currently saved line id selects the matching localized subtitle (speaker
+  and text), preserving the actual dialogue cursor/choice eligibility,
+  both before and after a genuine Player checkpoint/reload.
+- A Player Qt bridge test checks persistence without any gameplay revision
+  change. The GitHub CI matrix includes R12 preferences, R42 checkpoint
+  progression and Python syntax preflights alongside R57.
 
 A physical gamepad driver, complete controller-only traversal, native assistive
 technologies (NVDA/Orca/VoiceOver), actual visual contrast/focus review and
@@ -81,7 +92,8 @@ R57 gate remains NO-GO.
 
 ## Manual validation
 
-    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences -v
+    python -m compileall -q drawtemp/localization drawtemp/player/r57_accessibility.py drawtemp/quality/r57_a11y.py drawtemp/studio/r57_translation_qt.py
+    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences tests_standalone.test_r42_narrative_player -v
     QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m unittest tests_standalone.test_drawtemp5_r57 tests_standalone.test_drawtemp5_r57c -v
     QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --reference
 
