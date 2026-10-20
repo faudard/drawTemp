@@ -96,9 +96,9 @@ class SystemDesignerDialog(QDialog):
         self.session = session
         snap = session.snapshot().to_dict()
         self.source_revision = snap["revision"]
-        self.scenes = sorted(
-            {row["id"] for row in snap["content"]["missions"]}
-            | set(snap["project"].get("exploration", {})))
+        # A merchant must be in exploration; CT mission scenes are not
+        # tradable and are rejected by the canonical GameProject validator.
+        self.scenes = sorted(snap["project"].get("exploration", {}))
         envelope = snap["project"].get("extensions", {}).get(EXTENSION)
         self.document = deepcopy(envelope["data"]) if envelope else {
             "version": 1, "resources": [], "producers": [],
