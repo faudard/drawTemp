@@ -116,6 +116,8 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        from .logic_campaign_bridge import validate_bridge
+        validate_bridge(self, content)
         # R38.2: optional authored prefab instance provenance, validated on load.
         # Legacy projects without this extension retain byte-compatible manifests.
         from .prefab_variants import NAMESPACE as PREFAB_NS, validate_prefab_extensions

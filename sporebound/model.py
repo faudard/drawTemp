@@ -226,6 +226,12 @@ class Content:
                 missions[m.id] = m
             result = cls(skills, missions, data.get("jobs", {}), data.get("equipment", {}),
                          data.get("tactic_unlocks", []), data.get("archetypes", {}))
+            if rules is None:
+                from .logic_variables import has_logic_variables
+                from .logic_vertical_objective import has_slice_objective
+                if has_logic_variables(data) or has_slice_objective(data):
+                    from .tactical_rpg3 import authored_rules_for_document
+                    rules = authored_rules_for_document(data)
             result.validate(rules=rules)
             return result
         except (KeyError, TypeError, AttributeError) as exc:
@@ -250,6 +256,13 @@ class Content:
 
     def validate(self, *, rules=None) -> None:
         from .rules import default_rules
+        if rules is None:
+            from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
+            raw = self.to_dict()
+            if has_logic_variables(raw) or has_slice_objective(raw):
+                from .tactical_rpg3 import authored_rules_for_document
+                rules = authored_rules_for_document(raw)
         rules = rules if rules is not None else default_rules()
         def integer(value, low, high, label):
             require(type(value) is int and low <= value <= high, f"{label}: expected integer {low}..{high}")
@@ -288,6 +301,9 @@ class Content:
             integer(m.target_ticks, 1, 100000, "target_ticks")
             integer(m.reward, 0, 1000000, "reward")
             objective = rules.objectives.get(m.objective)
+            from .logic_vertical_objective import OBJECTIVE as R31H_OBJECTIVE, validate_slice_mission
+            if m.objective == R31H_OBJECTIVE:
+                validate_slice_mission(m)
             require(not objective.needs_goal or bool(m.goal), "Objective needs goal cells")
             require(not objective.needs_relic or m.relic is not None, "Objective needs a relic")
             if m.relic is not None:

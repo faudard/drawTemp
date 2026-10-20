@@ -75,9 +75,13 @@ class GameSession:
     def __init__(self, content, project, campaign_id, *, seed=1, rules=None):
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw) or has_slice_objective(raw)
+                     else default_rules())
         self.rules = rules
         content.validate(rules=self.rules)
         project.validate(content)
@@ -973,6 +977,10 @@ class GameSession:
         updated = settle_campaign_flow(updated, self.project.campaign_flow,
                                       battle.mission.id, battle.result,
                                       content=self.content)
+        # Author-declared mapping; source is the authenticated Battle journal.
+        # This runs after the existing rewards and inside execute() rollback.
+        from .logic_campaign_bridge import apply_bridge
+        updated = apply_bridge(updated, self.project, battle)
         self.progress = updated
 
     def _settle(self):
@@ -1218,9 +1226,13 @@ class GameSession:
                                          if k != "digest"}), "Game session checksum mismatch")
         if rules is None:
             from .event_pages import has_pages
+            from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
-            rules = authored_rules_for_document(raw) if has_pages(raw) else default_rules()
+            rules = (authored_rules_for_document(raw)
+                     if has_pages(raw) or has_logic_variables(raw) or has_slice_objective(raw)
+                     else default_rules())
         current_content = digest(content.to_dict())
         current_project = gameplay_project_digest(project)
         current_rules = rules.manifest()

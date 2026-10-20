@@ -1,7 +1,7 @@
-"""R31.A/C versioned visual authoring compiled into native R9 Mission.triggers.
+"""R31.A–E versioned visual authoring compiled into native R9 Mission.triggers.
 
-Schema v1 remains the original strict linear format; schema v2 adds one typed
-IF/ELSE branch with mutually cancelling R9 triggers, never a second runtime.
+Schema v1 retains linear flows; v2 provides typed IF/ELSE; v3 adds bounded
+linear delays and journal-backed event flags. No second gameplay runtime.
 """
 from __future__ import annotations
 
@@ -68,6 +68,9 @@ def _validate_params(kind, params):
         elif action == "despawn":
             _exact(params, {"kind", "unit"}, "despawn action")
             _bounded_text(params["unit"], "unit", 64)
+        elif action in ("logic_set", "logic_add"):
+            from sporebound.logic_variables import validate_set, validate_add
+            (validate_set if action == "logic_set" else validate_add)(None, params)
         elif action == "hazard":
             _exact(params, {"kind", "pos", "amount"}, "hazard action")
             pos = params["pos"]
@@ -136,8 +139,8 @@ def validate_graph(graph):
     """Validate a detached JSON-compatible R31.1 authoring document."""
     _exact(graph, {"schema_version", "id", "mission_id", "entry",
                    "nodes", "edges"}, "graph")
-    if type(graph["schema_version"]) is not int or graph["schema_version"] not in (1, 2):
-        _fail("unsupported_schema", "Only visual graph schemas 1 and 2 are supported")
+    if type(graph["schema_version"]) is not int or graph["schema_version"] not in (1, 2, 3, 4):
+        _fail("unsupported_schema", "Only visual graph schemas 1..4 are supported")
     _id(graph["id"], "graph id")
     _id(graph["mission_id"], "mission id")
     _id(graph["entry"], "entry id")
@@ -145,9 +148,12 @@ def validate_graph(graph):
         _fail("invalid_shape", "nodes and edges must be arrays")
     if graph["schema_version"] == 1:
         _ordered_nodes(graph)
-    else:
+    elif graph["schema_version"] == 2:
         from drawtemp.sdk.logic_branches import validate_branch_graph
         validate_branch_graph(graph)
+    else:
+        from drawtemp.sdk.logic_sequence import ordered_sequence
+        ordered_sequence(graph)
     return deepcopy(graph)
 
 
@@ -181,8 +187,11 @@ def compile_r9_triggers(graph):
     graph = validate_graph(graph)
     if graph["schema_version"] == 1:
         return [compile_r9_trigger(graph)]
-    from drawtemp.sdk.logic_branches import compile_branch_triggers
-    return compile_branch_triggers(graph)
+    if graph["schema_version"] == 2:
+        from drawtemp.sdk.logic_branches import compile_branch_triggers
+        return compile_branch_triggers(graph)
+    from drawtemp.sdk.logic_sequence import compile_sequence_triggers
+    return compile_sequence_triggers(graph)
 
 
 def _stored_graphs(project):
