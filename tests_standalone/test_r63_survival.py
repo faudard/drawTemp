@@ -153,6 +153,26 @@ class R63SurvivalTests(unittest.TestCase):
         restored.restore(fast.snapshot())
         self.assertEqual(restored.snapshot(), fast.snapshot())
 
+    def test_authored_map_placement_is_bounded_and_reach_checked(self):
+        from sporebound.game_session import GameSession
+        from tests_standalone.test_r25_scene_router import scene_fixture
+        content, project = scene_fixture()
+        spec = survival_spec()
+        spec["nodes"][0]["pos"] = [2, 1]  # blocked
+        project.extensions[EXTENSION] = {
+            "schema_version": 1, "data": spec, "references": []}
+        with self.assertRaises(RuleError):
+            project.validate(content)
+        spec["nodes"][0]["pos"] = [3, 3]  # valid, far away
+        project.validate(content)
+        session = GameSession.new(content, project, "main")
+        session.progress.inventory["axe"] = 1
+        before = session.recording()
+        with self.assertRaises(RuleError):
+            session.survival_gather("forest", "far")
+        self.assertEqual(session.recording(), before)
+        self.assertEqual(session.survival_state()["stock"]["forest"], 3)
+
     def test_crafting_cycles_are_rejected(self):
         spec = survival_spec()
         spec["recipes"].append({
