@@ -185,6 +185,23 @@ class Simulation:
         return self._apply("system_fulfill", quest_id,
                            expected_revision=expected_revision)
 
+    def relationship_state(self, npc=None, *, expected_revision=None):
+        """R62.B.2 immutable social projection; no extra inventory owner."""
+        self._check_revision(expected_revision, "relationship_state")
+        try:
+            return freeze(self._session.relationship_state(npc))
+        except RuleError as exc:
+            raise SimulationError("invalid_action", "relationship_state", str(exc)) from exc
+
+    def relationship_talk(self, npc_id, receipt_id, *, expected_revision=None):
+        return self._apply("relationship_talk", npc_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def relationship_gift(self, npc_id, item_id, receipt_id,
+                          *, expected_revision=None):
+        return self._apply("relationship_gift", npc_id, item_id, receipt_id,
+                           expected_revision=expected_revision)
+
     def farming_state(self, scene=None, *, expected_revision=None):
         """Immutable R62 view using the same canonical R35 world clock."""
         self._check_revision(expected_revision, "farming_state")
