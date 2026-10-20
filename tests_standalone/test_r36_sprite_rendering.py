@@ -74,6 +74,9 @@ class R36SpriteResolverTests(unittest.TestCase):
                 "version": 1, "sprites": {
                     "s_idle": {
                         "pivot": [3, 13], "footprint": [1, 1],
+                        "direction": "south", "pose": "idle",
+                        "license": "CC0-1.0",
+                        "source_sha256": "0" * 64,
                     },
                 },
             })
