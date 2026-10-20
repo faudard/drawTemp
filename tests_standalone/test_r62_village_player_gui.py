@@ -62,7 +62,7 @@ class R62VillagePlayerQtTests(unittest.TestCase):
                 controller.session._session.progress.inventory["epee_de_jacques"] = 2
                 bridge.stateChanged.emit()
                 self.app.processEvents()
-                self.assertIn("r62Plant-herb_crop", controls())
+                self.assertIn("r62Plant-field-herb_crop", controls())
                 bridge.farmPlant("field", "herb_crop")
                 bridge.farmWaitDay(1)
                 self.assertTrue(controller.state()["village"]["plots"][0]
