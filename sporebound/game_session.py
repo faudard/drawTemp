@@ -315,7 +315,8 @@ class GameSession:
                 and not self.progress.story_pending
                 and not self.tactical_story_pending,
                 "R45 delivery requires active exploration")
-        return self._living_world.deliver_daily_quest(quest_id, self.progress)
+        return self._living_world.deliver_daily_quest(
+            quest_id, self.progress, self.route_scene)
 
     def living_world_timeline(self, *, scene=None, limit=512):
         """Read-only R35 authoring diagnostics, never advances simulation."""

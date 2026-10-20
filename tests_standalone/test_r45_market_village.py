@@ -100,13 +100,15 @@ class R45VillageWeekTests(unittest.TestCase):
             corrupt.extensions[EXTENSION]["data"]["starting_gold"] = bad_value
             with self.subTest(value=bad_value), self.assertRaises(RuleError):
                 corrupt.validate(self.content)
-        for broken in ("item", "count", "half"):
+        for broken in ("item", "count", "half", "scene"):
             corrupt = deepcopy(self.project)
             quest = corrupt.extensions[EXTENSION]["data"]["daily_quests"][0]
             if broken == "item":
                 quest["delivery_item"] = "not_a_known_item"
             elif broken == "count":
                 quest["delivery_quantity"] = 0
+            elif broken == "scene":
+                quest["delivery_scene"] = "unknown_scene"
             else:
                 del quest["delivery_item"]
             with self.subTest(broken=broken), self.assertRaises(RuleError):
@@ -120,6 +122,20 @@ class R45VillageWeekTests(unittest.TestCase):
         self.assertEqual(GameSession.from_recording(
             legacy.recording(), old_content, old_project).recording(),
             legacy.recording())
+
+    def test_delivery_cannot_be_claimed_from_remote_scene(self):
+        s = GameSession.new(self.content, self.project, "main")
+        s.living_world_trade("village_shop", "herb", "buy", 2, "herbs_remote")
+        s.living_world_craft("brew_elixir", 1, "craft_remote")
+        s.route_transition("to_outskirts")
+        saved = s.recording()
+        with self.assertRaises(RuleError):
+            s.living_world_deliver_daily_quest("guild_delivery")
+        self.assertEqual(s.recording(), saved)
+        self.assertFalse(s.living_world_state(scene="outskirts")[
+            "daily_quests"][0]["delivery_open"])
+        s.route_transition("to_market")
+        self.assertTrue(s.living_world_deliver_daily_quest("guild_delivery"))
 
     def test_forged_delivery_receipt_or_gold_mismatch_cannot_skip_digest(self):
         s = GameSession.new(self.content, self.project, "main")

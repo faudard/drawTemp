@@ -102,7 +102,7 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
         common = {"id", "faction", "min_reputation", "start_minute",
                   "end_minute", "completion_flag", "reward_gold",
                   "reputation_delta"}
-        delivery = {"delivery_item", "delivery_quantity"}
+        delivery = {"delivery_item", "delivery_quantity", "delivery_scene"}
         require(type(quest) is dict and
                 (set(quest) == common or set(quest) == common | delivery),
                 "Malformed daily quest")
@@ -127,6 +127,7 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
                          for item in shop.get("items", []))
             require(_identifier(quest["delivery_item"])
                     and quest["delivery_item"] in known
+                    and quest["delivery_scene"] in scene_ids
                     and type(quest["delivery_quantity"]) is int
                     and 1 <= quest["delivery_quantity"] <= 99,
                     "R45 delivery requires a known item and bounded quantity")
@@ -326,7 +327,7 @@ class LivingWorld:
         self.claimed[quest_id] = self.day
         return True
 
-    def deliver_daily_quest(self, quest_id, progress):
+    def deliver_daily_quest(self, quest_id, progress, scene):
         """R45.C: one daily delivery, consumed and rewarded atomically.
 
         No independent item ledger: Campaign.inventory/gold and the existing
@@ -337,6 +338,8 @@ class LivingWorld:
                 "Daily quest has no R45 item delivery requirement")
         if self.claimed.get(quest_id) == self.day:
             return False
+        require(scene == quest["delivery_scene"],
+                "R45 delivery requires the authored delivery scene")
         item = quest["delivery_item"]
         count = quest["delivery_quantity"]
         available = progress.inventory.get(item, 0)
@@ -396,8 +399,10 @@ class LivingWorld:
                  "ready": self.quest_ready(q["id"], story_flags),
                  **({"delivery_item": q["delivery_item"],
                      "delivery_quantity": q["delivery_quantity"],
+                     "delivery_scene": q["delivery_scene"],
                      "delivery_open": (
-                         q["start_minute"] <= self.minute < q["end_minute"]
+                         (scene is None or scene == q["delivery_scene"])
+                         and q["start_minute"] <= self.minute < q["end_minute"]
                          and self.reputation[q["faction"]] >= q["min_reputation"])}
                     if "delivery_item" in q else {})}
                 for q in self.spec["daily_quests"]]

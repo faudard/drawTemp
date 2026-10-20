@@ -43,10 +43,11 @@ de calendrier atteint `world.day == 7`, à 08:00.
   est **optionnel**, entier `0..100000`. Sans ce champ, le moteur
   conserve le capital initial historique de 0.
 - Les quêtes R35 historiques conservent leur schéma. **Option opt-in R45** :
-  la paire stricte `delivery_item` et `delivery_quantity` (`1..99`),
+  le triplet strict `delivery_item`, `delivery_quantity` (`1..99`) et
+  `delivery_scene`,
   toujours référencée au catalogue R8 ou au stock R35, active une
   livraison d'objet. Une livraison idempotente vérifie simultanément
-  fenêtre horaire, réputation, quantité possédée, limites d'or/réputation
+  scène de livraison, fenêtre horaire, réputation, quantité possédée, limites d'or/réputation
   et état du jour, puis consomme l'objet, paie et marque la quête
   **en un commit atomique** dans Campaign + ledger R35 existants.
 - Les achats et fabrications passent par `Simulation._apply` et par

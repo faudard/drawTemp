@@ -102,6 +102,7 @@ def village_project():
                 "completion_flag": "guild_delivered_on_day",
                 "reward_gold": 20, "reputation_delta": 1,
                 "delivery_item": "elixir", "delivery_quantity": 1,
+                "delivery_scene": "arrival",
             }],
         }}
     project.validate(content)
