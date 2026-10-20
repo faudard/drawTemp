@@ -277,6 +277,8 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-62 — Ferme et village social.
 
+**Suivi d'implémentation :** [R62.A — Farming Life headless/SDK](R62_A_FARMING_LIFE.md), proposé dans la [PR #423](https://github.com/faudard/drawTemp/pull/423). Le gate R62.A n'est pas certifié ; R62.B/C et la qualification CI/Player restent ouverts.
+
 ## R63 — Survival & Crafting (10.3→11.0)
 
 **Objectif :** Permettre une aventure de survie équilibrable sans modifier le Core CT.
