@@ -857,6 +857,13 @@ class PlayerController:
             energy = survival["needs"]["energy"]
             hunger = survival["needs"]["hunger"]
             can_work = hunger > 0
+            position = base["exploration"].get("position")
+            def within_reach(row):
+                return ("pos" not in row or
+                        (type(position) in (list, tuple)
+                         and len(position) == 2
+                         and abs(position[0] - row["pos"][0])
+                             + abs(position[1] - row["pos"][1]) <= 1))
             def has_items(items):
                 return all(inventory.get(item, 0) >= quantity
                            for item, quantity in items.items())
@@ -874,7 +881,8 @@ class PlayerController:
                     {"id": row["id"], "item": row["item"],
                      "pos": row.get("pos"), "remaining": survival["stock"][row["id"]],
                      "cold": row["cold"], "tool": row["tool"],
-                     "available": (can_work and energy >= row["energy_cost"]
+                     "available": (within_reach(row) and can_work
+                         and energy >= row["energy_cost"]
                          and survival["stock"][row["id"]] >= row["yield"]
                          and (row["tool"] is None or
                               (inventory.get(row["tool"], 0) > 0 and
@@ -888,7 +896,7 @@ class PlayerController:
                     for row in authored["recipes"]],
                 "shelters": [
                     {"id": row["id"], "pos": row.get("pos"),
-                     "available": has_items(row["fuel"])}
+                     "available": within_reach(row) and has_items(row["fuel"])}
                     for row in authored["shelters"]
                     if row["scene"] == scene_id],
                 "foods": [
