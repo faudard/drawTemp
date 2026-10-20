@@ -163,6 +163,48 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             self.assertEqual(title["world_atlas"]["visited_regions"], [])
             self.assertEqual(title["world_atlas"]["reachability"]["regions"], [])
 
+    def test_completed_region_is_not_a_softlock_for_r44(self):
+        # The canonical exploration exit can be used before the relic; R44
+        # must still permit walking back, claiming it, crossing, and returning.
+        with TemporaryDirectory() as tmp:
+            controller = PlayerController(self.content, self.project, "main", Path(tmp))
+            controller.new_game()
+            for dx, dy in ((1, 0), (1, 0), (0, 1)):
+                controller.explore_move(dx, dy)
+            controller.explore_interact("exit")
+            self.assertTrue(controller.state()["exploration"]["completed"])
+            self.assertEqual(controller.state()["screen"], "exploration")
+            with self.assertRaises(SimulationError):
+                controller.world_transition("to_grove")
+            for dx, dy in ((-1, 0), (0, -1)):
+                controller.explore_move(dx, dy)
+            controller.world_interact("relic")
+            for dx, dy in ((1, 0), (0, 1)):
+                controller.explore_move(dx, dy)
+            controller.world_transition("to_grove")
+            self.assertEqual(controller.state()["world_atlas"]["scene"], "grove")
+            for dx, dy in ((1, 0), (1, 0), (0, 1)):
+                controller.explore_move(dx, dy)
+            controller.world_transition("back_valley")
+            state = controller.state()
+            self.assertEqual(state["screen"], "exploration")
+            self.assertTrue(state["exploration"]["completed"])
+            self.assertTrue(state["world_atlas"]["objects"][0]["active"])
+            controller.explore_move(1, 0)
+            self.assertEqual(controller.state()["exploration"]["position"], [2, 1])
+
+    def test_legacy_r25_completed_scene_remains_closed(self):
+        from tests_standalone.test_r25_scene_router import scene_fixture
+        content, project = scene_fixture()
+        with TemporaryDirectory() as tmp:
+            player = PlayerController(content, project, "main", Path(tmp))
+            player.new_game()
+            player.explore_move(1, 0)
+            player.explore_interact("exit")
+            self.assertEqual(player.state()["screen"], "campaign")
+            with self.assertRaises(ValueError):
+                player.explore_move(0, 1)
+
     def test_old_project_has_no_world_atlas(self):
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()

@@ -245,7 +245,7 @@ class Simulation:
                 "source": list(portal["source"]), "unlocked": unlocked,
                 "in_reach": sum(abs(a-b) for a, b in zip(
                     position, portal["source"])) <= 1,
-                "available": unlocked and not stage["completed"],
+                "available": unlocked,
                 "has_condition": "when" in link,
             })
         return freeze({

@@ -278,15 +278,18 @@ class GameSession:
         require(type(activated) is bool, "R44: invalid persistent object flag")
         # Resolve position/proximity even for a repeated action.
         stage = self.route_state()
-        require(not stage["completed"] and
-                sum(abs(a - b) for a, b in zip(stage["position"], point["pos"])) <= 1,
+        require(sum(abs(a - b) for a, b in zip(stage["position"], point["pos"])) <= 1,
                 "R44: move closer to activate the object")
         if activated:
             return {"id": object_id, "world_flag": flag,
                     "already_activated": True, "finished": False}
         previous = deepcopy(self.progress)
         try:
-            result = self.route_interact(object_id)
+            # This object is already verified as a non-exit authored hotspot.
+            # Completed atlas regions remain explorable on return; legacy R25
+            # interactions still reject completed scenes by default.
+            result = self.exploration.interact(
+                self.progress, self.route_scene, object_id, allow_completed=True)
             self.progress.story_flags[flag] = True
             return {**result, "world_flag": flag, "already_activated": False}
         except Exception:
@@ -317,7 +320,9 @@ class GameSession:
                 and not self.progress.story_pending
                 and self._rt_journal is None,
                 "Resolve encounter or free movement before cardinal movement")
-        return self.exploration.move(self.progress, self.route_scene, dx, dy)
+        return self.exploration.move(
+            self.progress, self.route_scene, dx, dy,
+            allow_completed=self._world_graph is not None)
 
     def route_realtime_state(self):
         """Detached subcell position for Player/Studio; no Qt dependency."""

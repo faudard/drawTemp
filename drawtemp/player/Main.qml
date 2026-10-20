@@ -875,7 +875,8 @@ ApplicationWindow {
                                 objectName: r44Object ? "r44Object-" + modelData.id :
                                                        "r14Explore-" + modelData.id
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
-                                enabled: !root.inputLocked && !modelData.visited
+                                enabled: !root.inputLocked && !modelData.visited &&
+                                         (!root.playerData.exploration.completed || r44Object)
                                 onClicked: {
                                     if (r44Object) player.worldInteract(modelData.id)
                                     else player.exploreInteract(modelData.id)

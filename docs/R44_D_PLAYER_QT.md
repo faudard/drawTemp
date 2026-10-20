@@ -53,3 +53,7 @@ pas une preuve de qualification GPU tri-OS, mais constitue le gate GUI reproduct
 ### Protection des interactions d'objets
 
 Un objet déclaré `npc` ou sans point d'interaction exploratoire reste visible en tant que métadonnée, mais n'apparaît pas dans `object_ids` — la liste des commandes activables du Player. Les champs de progression R44 sont aussi initialisés à une valeur vide sûre sur l'écran titre, avant la création d'une session.
+
+## R44.G — Retour dans une région déjà terminée
+
+La sortie d'exploration héritée peut marquer une région `completed`. Pour un projet avec `drawtemp.worldgraph`, le Player garde alors l'écran d'exploration et la carte R3 active, autorise les déplacements cardinaux et les interactions d'objets R44, et permet les transitions R25 aux portails. Une région revisitée ne devient plus un cul-de-sac après utilisation du hotspot `exit`. `Exploration.move` et `Exploration.interact` reçoivent un argument opt-in `allow_completed=False`; la sémantique des projets R25/R12 sans WorldGraph reste inchangée. La scène enregistre toujours son statut `completed` dans le même checkpoint canonique.

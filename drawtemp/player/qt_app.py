@@ -75,7 +75,9 @@ def scene_for_player(controller):
         if snapshot.battle is not None:
             mission_id = snapshot.battle["mission_id"]
             return scene_from_mission(controller.content.missions[mission_id], snapshot)
-        if snapshot.exploration is not None and not snapshot.exploration["completed"]:
+        if snapshot.exploration is not None and (
+                not snapshot.exploration["completed"] or
+                controller.session.world_atlas_state()["enabled"]):
             world = controller.session.living_world_state(
                 scene=snapshot.exploration["scene_id"])
             return scene_from_exploration(

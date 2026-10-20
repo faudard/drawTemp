@@ -183,7 +183,9 @@ class PlayerController:
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
-        if not state.exploration or state.exploration["completed"]:
+        world = thaw(self.session.world_atlas_state())
+        if not state.exploration or (state.exploration["completed"] and
+                                     not world["enabled"]):
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
@@ -192,7 +194,7 @@ class PlayerController:
         """R44 persistent object activation through the R1 GameSession owner."""
         self._require_cinematic_completed()
         state = self._current()
-        if not state.exploration or state.exploration["completed"]:
+        if not state.exploration:
             raise ValueError("R44: no active exploration scene")
         world = thaw(self.session.world_atlas_state())
         if not world["enabled"] or object_id not in world["object_ids"]:
@@ -726,10 +728,12 @@ class PlayerController:
                           not battle.get("result")),
             }
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
-                               snapshot.exploration["completed"]):
+                               (snapshot.exploration["completed"] and
+                                not base["world_atlas"]["enabled"])):
             base["screen"] = "dialogue"
             base["choices"] = thaw(self.session.choices())
-        elif snapshot.exploration and not snapshot.exploration["completed"]:
+        elif snapshot.exploration and (not snapshot.exploration["completed"] or
+                                       base["world_atlas"]["enabled"]):
             base["screen"] = "exploration"
         elif snapshot.battle:
             base["screen"] = "result" if snapshot.battle["result"] else "battle"
