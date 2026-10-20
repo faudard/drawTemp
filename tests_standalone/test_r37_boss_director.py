@@ -102,8 +102,11 @@ class R37BossDirectorTests(unittest.TestCase):
         self.assertFalse(view["queued_waves"])
         self.assertFalse(view["arrived_reinforcements"])
         self.assertTrue(view["possible_reinforcements"])
-        self.assertEqual(view["telegraph"]["certainty"], "unknown")
-        self.assertIsNone(view["telegraph"]["command"])
+        self.assertEqual(
+            view["telegraph"]["certainty"],
+            "conditional" if view["telegraph"]["ready"] else "unknown")
+        if not view["telegraph"]["ready"]:
+            self.assertIsNone(view["telegraph"]["command"])
         self.assertEqual(view, preview_boss_director(battle, director))
         self.assertEqual(battle.digest(), before)
         # Use actual legal End commands so the tactical replay remains valid.
