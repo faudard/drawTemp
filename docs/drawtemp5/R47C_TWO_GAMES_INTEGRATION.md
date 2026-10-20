@@ -59,6 +59,34 @@ autorité de confiance automatique. Couverture :
 `tests_standalone/test_drawtemp_r47d_versions.py`, tests Qt du
 gestionnaire et matrice tri-OS R47.C.
 
+## R47.E — Intégrité réévaluée à chaque autorisation et changement de projet
+
+**Contrôle à l'instant d'utilisation** : `ModRegistry.verify_runtime(mod_id)`
+et le validateur privé `_verify_live` relisent les fichiers ZIP R30,
+contrôlent leur identité/leur version/leur SHA-256 et inspectent récursivement
+les dépendances installées. Une autorisation donnée au moment de l'installation
+ne suffit jamais à contourner cette vérification : `enable`,
+`preview_extension`, `apply_extension`, `audit_project` et les nouvelles
+installations dépendantes la déclenchent.
+
+Un fichier retiré, remplacé, non régulier ou altéré mène à un diagnostic
+`resource_changed`. Une dépendance manquante, incompatible ou cyclique est
+refusée. Les ressources **ne sont ni exécutées, ni automatiquement réparées, ni
+réapprouvées juridiquement**. Restaurer exactement les octets du pack d'origine
+permet un nouveau contrôle ; cela n'octroie pas de permission.
+
+Le gestionnaire Qt propose « **Vérifier l’intégrité** », une vérification
+manuelle sans mutation du GameProject. Il reste utile de conserver les mêmes
+archives R30 tant que le mod en dépend ; l'inventaire d'assets externe peut
+par ailleurs varier indépendamment de la version du manifeste.
+
+Les tests `tests_standalone/test_drawtemp_r47e_live_integrity.py`
+exercent l'altération **entre installation et consentement**, l'altération
+**après consentement avant preview/apply**, les dépendances altérées, le refus
+de nouvelle installation dépendante et le retour à l'archive originale.
+Un test Qt offscreen vérifie l'affichage du succès et du refus.
+Tout cela reste à faire exécuter réellement par les runners Actions.
+
 ## Commandes et matrice de couverture
 
 Sur Python 3.12 :
@@ -68,6 +96,7 @@ python -m pip install .
 python -m unittest tests_standalone.test_drawtemp_r47c_two_games -v
 python -m unittest tests_standalone.test_drawtemp_r47a_modding -v
 python -m unittest tests_standalone.test_drawtemp_r47d_versions -v
+python -m unittest tests_standalone.test_drawtemp_r47e_live_integrity -v
 ~~~
 
 La CI `.github/workflows/drawtemp-r47c-two-games.yml` prévoit Windows, macOS et Ubuntu, et relance également les contrats R30 et R15, ainsi que la baseline tactique R1. Une validation Python/JSON headless ne vaut **pas** exécution sur machine utilisateur finale, sur GPU physique ou en Qt onscreen.
