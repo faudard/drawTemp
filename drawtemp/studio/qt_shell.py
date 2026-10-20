@@ -466,6 +466,8 @@ class StudioWindow(QMainWindow):
         self._action("palette", "Palette de commandes…", self.open_palette)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
+        self._action("r48_history", "Historique et revue collaborative R48…",
+                     self.open_project_history)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r49_references", "Vérifier les références du projet…",
@@ -538,6 +540,7 @@ class StudioWindow(QMainWindow):
         vcs_menu = tools_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
+        vcs_menu.addAction(self.commands["r48_history"])
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
         tools_menu.addAction(self.commands["r49_metrics"])
@@ -644,6 +647,15 @@ class StudioWindow(QMainWindow):
         dialog = R30CreatorDialog(self.session, content_path=self.content_path, parent=self)
         dialog.exec()
         if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_project_history(self):
+        """R48.B review shares the authoritative Studio session and Undo history."""
+        from drawtemp.studio.r48_history_qt import ProjectHistoryDialog
+        revision = self.session.revision
+        dialog = ProjectHistoryDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
             self.refresh()
 
     def open_living_world(self):
