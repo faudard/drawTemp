@@ -239,6 +239,27 @@ class ReferenceJourneyTests(unittest.TestCase):
                 checkpoint_slot.load().recording(), game.content, game.project)
             self.assertEqual(len(checkpoint_game.progress.story_history), 2)
 
+    def test_tampered_player_slot_fails_without_switching_live_state(self):
+        import json
+        with TemporaryDirectory() as folder:
+            path, _ = author(folder)
+            game = player(folder, path)
+            game.new_game()
+            game.choose("enter")
+            game.start_mission(MISSION)
+            game.save(1)
+            before = game.session.recording()
+            file = Path(folder) / "saves" / "slot_1.json"
+            save = json.loads(file.read_text(encoding="utf-8"))
+            self.assertEqual(save["kind"], "game_session")
+            save["digest"] = "0" * 64
+            file.write_text(json.dumps(save), encoding="utf-8")
+            with self.assertRaises(Exception):
+                game.load(1)
+            self.assertEqual(game.session.recording(), before)
+            self.assertEqual(json.loads(file.read_text())["digest"], "0" * 64)
+            self.assertEqual(game._store(1).inspect().primary, "invalid")
+
     def test_invalid_quest_objective_cannot_lose_its_chest_contract(self):
         from sporebound.model import Content, RuleError
         with TemporaryDirectory() as folder:
