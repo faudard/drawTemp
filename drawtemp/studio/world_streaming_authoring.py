@@ -169,6 +169,14 @@ def inspect_streaming(document, project, *, focus=None, zoom=1.0,
         cell = cells[ident]
         stage = project["exploration"][cell["scene"]]
         tiles = stage["width"] * stage["height"]
+        # Tiny deterministic headless tile projection, never an image asset.
+        blocked = {tuple(pos) for pos in stage.get("blocked", [])}
+        preview_width = min(stage["width"], 8)
+        preview_height = min(stage["height"], 4)
+        tile_preview = [
+            "".join("#" if (col, line) in blocked else "."
+                    for col in range(preview_width))
+            for line in range(preview_height)]
         distance = distances[ident]
         # Pure presentation tiers, no claim of renderer/GPU LOD selection.
         lod = ("detail" if zoom >= 1.0 and distance == 0 or
@@ -179,6 +187,8 @@ def inspect_streaming(document, project, *, focus=None, zoom=1.0,
             "neighbors": list(cell["neighbors"]), "entities": len(cell["entities"]),
             "distance": distance, "lod": lod,
             "position": list(positions[ident]),
+            "map_size": [stage["width"], stage["height"]],
+            "tile_preview": tile_preview,
             "estimated_bytes": tiles * 16 + len(stage.get("blocked", [])) * 16,
         })
     links = sorted([{"from": row["id"], "to": neighbor}
