@@ -274,6 +274,46 @@ class PlayerController:
         self.session.roguelite_restart(expected_revision=snapshot.revision)
         return self._changed()
 
+    def system_wait(self, ticks=1):
+        """Explicit Player economy advance on the current exploration scene."""
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 economy can advance only during exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        self.session.system_advance(ticks, expected_revision=state.revision)
+        return self._changed()
+
+    def system_trade(self, merchant_id, action, quantity, transaction_id=None):
+        """Player economy uses one revisioned GameSession transaction."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 merchant requires active exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        if transaction_id is None:
+            # A monotonic, session-persisted journal index survives save/load
+            # unlike a GUI-only counter or random UI timestamp.
+            journal = self.session.system_state(
+                expected_revision=state.revision)["journal"]
+            transaction_id = "r55-player-" + str(len(journal))
+        self.session.system_trade(
+            merchant_id, action, quantity, transaction_id,
+            expected_revision=state.revision)
+        return self._changed()
+
+    def system_fulfill(self, quest_id):
+        """Deliver a quest through the campaign inventory, once."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 quest delivery requires active exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        self.session.system_fulfill(quest_id, expected_revision=state.revision)
+        return self._changed()
+
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
         state = self._current()
@@ -684,7 +724,7 @@ class PlayerController:
                 "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
-                "living_world": None, "cinematic": {}, "revision": 0,
+                "living_world": None, "systems": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.campaign_id.endswith("_journey"):
@@ -739,6 +779,31 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        system_snapshot = self.session.system_state(
+            expected_revision=snapshot.revision)
+        if system_snapshot is not None:
+            # Only the current resource/capacity projection goes to Qt/QML.
+            # Never copy the authoritative command journal into a render frame.
+            economy = thaw(system_snapshot)
+            current = base["exploration"].get("scene_id")
+            system_spec = self.project.extensions[
+                "org.drawtemp.systems"]["data"]
+            base["systems"] = {
+                "enabled": True, "tick": economy["tick"],
+                "stocks": economy["stocks"],
+                "merchants": [
+                    {"id": row["id"], "resource": row["resource"],
+                     "buy_price": row["buy_price"],
+                     "sell_price": row["sell_price"]}
+                    for row in system_spec["merchants"] if row["scene"] == current
+                ],
+                "quests": [
+                    {"id": row["id"], "resource": row["resource"],
+                     "quantity": row["quantity"],
+                     "fulfilled": progress["story_flags"].get(row["flag"]) is True}
+                    for row in system_spec["quests"]
+                ],
+            }
         # Optional read-only R25 routes, never a second Player-owned cursor.
         # Preserve route buttons even when an exploration exit is completed.
         base["routes"] = thaw(self.session.route_options(

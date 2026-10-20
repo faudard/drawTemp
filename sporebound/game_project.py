@@ -202,6 +202,12 @@ class GameProject:
                 set(self.exploration) | set(content.missions),
                 exploration=self.exploration,
                 item_ids=set(content.equipment))
+        # R55: typed production graphs are opt-in and fail closed at load.
+        from .system_design import EXTENSION as SYSTEMS_EXTENSION, validate_systems
+        if SYSTEMS_EXTENSION in self.extensions:
+            validate_systems(
+                self.extensions[SYSTEMS_EXTENSION]["data"],
+                set(self.exploration))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes

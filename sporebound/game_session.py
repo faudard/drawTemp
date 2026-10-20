@@ -118,6 +118,13 @@ class GameSession:
         self._cinematic_pro = (
             CinematicProRuntime(self.project)
             if CINEMATIC_PRO_EXTENSION in self.project.extensions else None)
+        # R55: canonical GameSession-owned economy, opt-in for authored projects.
+        from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
+        system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
+        self._systems = (
+            SystemEconomy(system_spec["data"],
+                          set(self.project.exploration) | set(self.content.missions))
+            if system_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -232,6 +239,41 @@ class GameSession:
 
     def cinematic_pro_skip(self):
         return self._cinematic_pro_action().skip(self.progress)
+
+    def system_state(self):
+        """Read a detached snapshot of the R55 resource economy."""
+        require(self._systems is not None, "R55 systems not configured")
+        return self._systems.snapshot()
+
+    def system_preview(self, ticks=1):
+        require(self._systems is not None, "R55 systems not configured")
+        return self._systems.preview(ticks)
+
+    def system_advance(self, ticks=1):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 economy requires campaign mode without pending dialogue")
+        return self._systems.advance(ticks)
+
+    def system_trade(self, merchant_id, action, quantity, transaction_id):
+        """Transfer resources with canonical Campaign inventory and currency."""
+        require(self._systems is not None and self.mode == "campaign"
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 trading requires routed exploration without dialogue")
+        return self._systems.trade(
+            self.progress, self.route_scene, merchant_id, action,
+            quantity, transaction_id)
+
+    def system_fulfill(self, quest_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 quest delivery requires active campaign without dialogue")
+        return self._systems.fulfill(self.progress, quest_id)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -348,6 +390,11 @@ class GameSession:
                 "Invalid free movement input")
         if self._living_world is not None:
             self._living_world.preflight(1)
+        # Preview the canonical systems tick before mutating Campaign position
+        # or movement replay. A rejected economy budget leaves both unchanged.
+        staged_system = deepcopy(self._systems) if self._systems is not None else None
+        if staged_system is not None:
+            staged_system.advance(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -377,6 +424,8 @@ class GameSession:
             origin, snapshot["position"], journal)
         if self._living_world is not None:
             self._living_world.advance(1)
+        if staged_system is not None:
+            self._systems = staged_system
         return self.route_realtime_state()
 
     def _platform_definition(self):
@@ -450,9 +499,13 @@ class GameSession:
 
     def route_platform_step(self, move=0, jump=False, interact=False, attack=False):
         """Exactly one fixed step; rewards and door flags belong to Campaign."""
-        runtime = self._active_platform()
+        # R55: stage a fixed-tick platform step with the economy.
+        runtime = deepcopy(self._active_platform())
         if self._living_world is not None:
             self._living_world.preflight(1)
+        staged_system = deepcopy(self._systems) if self._systems is not None else None
+        if staged_system is not None:
+            staged_system.advance(1)
         command = {"tick": runtime.tick + 1, "move": move,
                    "jump": jump, "interact": interact}
         if "boss" in runtime.scene:
@@ -471,6 +524,9 @@ class GameSession:
                 self.progress.story_flags[_key(self.route_scene, "boss_defeated")] = True
         if self._living_world is not None:
             self._living_world.advance(1)
+        self._platform = runtime
+        if staged_system is not None:
+            self._systems = staged_system
         return {"state": runtime.snapshot(), "events": events}
 
     def route_platform_travel(self, link_id):
@@ -1119,6 +1175,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._systems is not None:
+            data["systems"] = self._systems.snapshot()
         if self._stream_world is not None:
             data["world_stream"] = self._stream_world.recording()
         if self._cinematic_pro is not None:
@@ -1150,7 +1208,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1181,6 +1239,11 @@ class GameSession:
         else:
             require("living_world" not in data,
                     "Unexpected living-world state in legacy checkpoint")
+        if session._systems is not None:
+            require("systems" in data, "R55 configured economy checkpoint missing")
+            session._systems.restore(data["systems"])
+        else:
+            require("systems" not in data, "Unexpected R55 economy in legacy save")
         if session._stream_world is not None:
             require("world_stream" in data, "R54 world checkpoint is missing")
             session._stream_world.restore(data["world_stream"])
@@ -1198,6 +1261,11 @@ class GameSession:
             require("roguelite" not in data,
                     "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        if session._systems is not None:
+            require(all(session.progress.story_flags.get(
+                session._systems.quests[quest_id]["flag"]) is True
+                for quest_id in session._systems.fulfilled),
+                "R55 quest receipt requires the persisted campaign story flag")
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
         if session._cinematic_pro is not None:

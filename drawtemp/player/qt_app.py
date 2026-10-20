@@ -510,6 +510,18 @@ def create_bridge(controller, renderer):
         def worldWait(self, ticks):
             self.invoke(self.controller.world_wait, ticks)
 
+        @Slot(int)
+        def systemWait(self, ticks):
+            self.invoke(self.controller.system_wait, ticks)
+
+        @Slot(str, str, int)
+        def systemTrade(self, merchant_id, action, quantity):
+            self.invoke(self.controller.system_trade, merchant_id, action, quantity)
+
+        @Slot(str)
+        def systemFulfill(self, quest_id):
+            self.invoke(self.controller.system_fulfill, quest_id)
+
         @Slot(str)
         def exploreInteract(self, target):
             self.invoke(self.controller.explore_interact, target)

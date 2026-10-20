@@ -486,6 +486,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
@@ -565,6 +566,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
         tools_menu.addAction(self.commands["r45_economy"])
@@ -715,6 +717,15 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.world_streaming_qt import WorldStreamingDialog
         revision = self.session.revision
         dialog = WorldStreamingDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_system_designer(self):
+        """R55: native graph editor using the one canonical Studio transaction."""
+        from drawtemp.studio.system_design_qt import SystemDesignerDialog
+        revision = self.session.revision
+        dialog = SystemDesignerDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
