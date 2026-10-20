@@ -889,6 +889,9 @@ class GameSession:
         roster = {unit.id for mission in self.content.missions.values()
                   for unit in mission.units if unit.team == "player"}
         require(uid in roster, "Unknown playable hero")
+        if self._classic_party is not None:
+            require(uid in self._classic_party.members,
+                    "Cannot equip an unrecruited RPG party member")
 
     def equip_hero(self, uid, item_id):
         """Delegate inventory/slot/ownership rules to the existing Campaign."""
