@@ -58,7 +58,8 @@ Item {
             }
             Rectangle {
                 anchors.fill: parent
-                visible: projected.actor
+                visible: projected.actor && !(actorImage.status === Image.Ready
+                                               && !!row.imageUrl)
                 radius: width / 2
                 color: row.alive ? (row.team === "player" ? "#f1ca75" : "#d06561")
                                  : "#685558"
@@ -83,6 +84,31 @@ Item {
                     color: "#fff4cf"
                     font.pixelSize: Math.max(8, 10 * projected.unit)
                 }
+            }
+            // R36.C1: the exact same R4/R3 PNG atlas crop contract used by
+            // IsoViewport. The animation frame comes from committed ticks.
+            // Keep the old silhouette when art is missing or decoder fails.
+            Image {
+                id: actorImage
+                readonly property bool hasSprite: projected.actor && !!row.imageUrl
+                readonly property real spriteScale: Math.min(
+                    1.5, 64 / Math.max(1, row.frameWidth || 0, row.frameHeight || 0))
+                visible: hasSprite && status === Image.Ready
+                source: hasSprite ? row.imageUrl : ""
+                sourceClipRect: hasSprite
+                    ? Qt.rect(row.atlasX, row.atlasY,
+                              row.frameWidth, row.frameHeight)
+                    : Qt.rect(0, 0, 0, 0)
+                width: hasSprite ? row.frameWidth * projected.unit * spriteScale : 0
+                height: hasSprite ? row.frameHeight * projected.unit * spriteScale : 0
+                x: projected.width / 2 - (row.pivotX || 0)
+                     * projected.unit * spriteScale
+                y: projected.height / 2 - (row.pivotY || 0)
+                     * projected.unit * spriteScale
+                fillMode: Image.Stretch
+                smooth: false
+                asynchronous: false
+                cache: true
             }
             Rectangle {
                 anchors.fill: parent
