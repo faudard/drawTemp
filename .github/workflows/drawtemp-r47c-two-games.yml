@@ -13,6 +13,8 @@ on:
       - 'drawtemp/player/qt_app.py'
       - 'examples/mods/**'
       - 'docs/drawtemp5/R47C_TWO_GAMES_INTEGRATION.md'
+      - 'docs/drawtemp5/R47F_PLAYER_MOD_PREFLIGHT.md'
+      - 'drawtemp/sdk/__init__.py'
       - '.github/workflows/drawtemp-r47c-two-games.yml'
   push:
     branches: [master]
