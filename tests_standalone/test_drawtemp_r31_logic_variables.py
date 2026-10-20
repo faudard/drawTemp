@@ -200,6 +200,39 @@ class TypedVariableTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             Battle(content, MISSION, seed=11, battle_id="overflow-guard")
 
+    def test_runtime_reassignment_refuses_boolean_integer_type_drift(self):
+        from sporebound.logic_variables import set_variable
+        session = new_session()
+        bool_graph().apply(session)
+        content = Content.from_dict(session.snapshot().to_dict()["content"])
+        battle = Battle(content, MISSION, seed=3, battle_id="r31-no-type-drift")
+        initial = deepcopy(battle.events)
+        with self.assertRaises(RuleError):
+            set_variable(battle, {"kind": "logic_set", "name": "r31_gate_open",
+                                  "value": 1})
+        self.assertEqual(battle.events, initial)
+        self.assertEqual(variables_from_journal(battle),
+                         {"r31_gate_open": True})
+
+    def test_write_budget_rejects_before_adding_unreplayable_event(self):
+        from sporebound.logic_variables import (MAX_JOURNAL_WRITES,
+                                               set_variable)
+        session = new_session()
+        bool_graph().apply(session)
+        content = Content.from_dict(session.snapshot().to_dict()["content"])
+        battle = Battle(content, MISSION, seed=4, battle_id="r31-variable-budget")
+        # Construct the precise boundary for this unit test; the end-to-end
+        # tests below use only canonical Player/Simulation commands.
+        battle.events = [
+            {"tick": 0, "kind": "logic_variable",
+             "name": "r31_gate_open", "value": True}
+            for _ in range(MAX_JOURNAL_WRITES)]
+        previous_count = len(battle.events)
+        with self.assertRaises(RuleError):
+            set_variable(battle, {"kind": "logic_set",
+                                  "name": "r31_gate_open", "value": True})
+        self.assertEqual(len(battle.events), previous_count)
+
     def test_revision_stale_breaks_debug_after_undo(self):
         session = new_session()
         bool_graph().apply(session)
