@@ -1622,10 +1622,13 @@ class StudioWindow(QMainWindow):
 
     def new_project_template(self):
         from drawtemp.export.templates import TEMPLATES
-        kind, accepted = QInputDialog.getItem(
-            self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
+        labels = [("R41 • RPG classique — Le relais du village"
+                   if key == "classic_rpg" else key) for key in TEMPLATES]
+        selected, accepted = QInputDialog.getItem(
+            self, "Nouveau projet", "Modèle", labels, 0, False)
         if not accepted:
             return
+        kind = selected if selected in TEMPLATES else TEMPLATES[labels.index(selected)]
         parent = QFileDialog.getExistingDirectory(
             self, "Dossier parent du projet")
         if not parent:
