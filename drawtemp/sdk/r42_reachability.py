@@ -99,9 +99,31 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
             transitions += 1
             pending.append((clone, (*path, {'scene': scene_id,
                                            'choice': choice['id']})))
-    dead_scenes = sorted(set(scenes) - seen_scenes)
+    # Scenes owned by a Battle trigger or an authenticated mission outcome
+    # are NOT reachable from the campaign-entry-only search. Keep them separate
+    # rather than calling them dead or falsely claiming verified coverage.
+    external_roots = {
+        *project.story.get('after_mission', {}).values(),
+        *project.story.get('during_tactical_event', {}).values(),
+        *project.story.get('after_strategic_event', {}).values(),
+    }
+    external_scenes = set()
+    pending_external = list(external_roots)
+    while pending_external:
+        sid = pending_external.pop()
+        if sid in external_scenes:
+            continue
+        external_scenes.add(sid)
+        pending_external.extend(
+            choice['next_scene'] for choice in scenes[sid]['choices']
+            if 'next_scene' in choice)
+    entry_unreached = set(scenes) - seen_scenes
+    dead_scenes = sorted(entry_unreached - external_scenes)
+    deferred_scenes = sorted(entry_unreached & external_scenes)
     dead_choices = []
     for scene_id, choice_id in sorted(authored - seen_choices):
+        if scene_id in external_scenes:
+            continue  # Requires an independently evidenced trigger or victory.
         choice = next(c for c in scenes[scene_id]['choices']
                       if c['id'] == choice_id)
         dead_choices.append({
@@ -134,6 +156,8 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
         'reachable_choices': [{'scene': s, 'choice': c}
                               for s, c in sorted(seen_choices)],
         'dead_scenes': dead_scenes, 'dead_choices': dead_choices,
+        'external_trigger_scenes_unverified': deferred_scenes,
+        'external_trigger_roots': sorted(external_roots),
         'missing_endings': missing_endings,
         'reused_scenes': reused_scenes,
         'required_reused_scenes': min_reused_scenes,
