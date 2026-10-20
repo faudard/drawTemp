@@ -18,13 +18,13 @@ def farm_spec():
             {"id": "field", "scene": "arrival", "soil": "loam"},
         ],
         "crops": [
-            {"id": "herb_crop", "seed_item": "herb", "yield_item": "elixir",
+            {"id": "herb_crop", "seed_item": "epee_de_jacques", "yield_item": "cape_de_route",
              "yield_quantity": 2, "grow_days": 1,
              "soils": ["loam"], "seasons": ["spring"]},
         ],
         "animals": [
-            {"id": "hen", "scene": "arrival", "feed_item": "herb",
-             "yield_item": "elixir", "yield_quantity": 1, "interval_days": 1},
+            {"id": "hen", "scene": "arrival", "feed_item": "epee_de_jacques",
+             "yield_item": "cape_de_route", "yield_quantity": 1, "interval_days": 1},
         ],
     }
 
@@ -90,11 +90,11 @@ class R62FarmingLifeTests(unittest.TestCase):
     def test_plant_harvest_animal_and_reload_never_duplicate(self):
         content, project = fixture()
         s = GameSession.new(content, project, "main", seed=62)
-        s.progress.inventory["herb"] = 3
+        s.progress.inventory["epee_de_jacques"] = 3
         initial = s.recording()
         self.assertEqual(s.farming_state()["day"], 0)
         self.assertTrue(s.farming_plant("field", "herb_crop", "sow-1"))
-        self.assertEqual(s.progress.inventory["herb"], 2)
+        self.assertEqual(s.progress.inventory["epee_de_jacques"], 2)
         self.assertFalse(s.farming_plant("field", "herb_crop", "sow-1"))
         with self.assertRaises(RuleError):
             s.farming_harvest("field", "early")
@@ -105,10 +105,10 @@ class R62FarmingLifeTests(unittest.TestCase):
         self.assertEqual(s.farming_state()["day"], 1)
         self.assertTrue(s.farming_state()["plots"]["field"]["ready"])
         self.assertTrue(s.farming_harvest("field", "harvest-1"))
-        self.assertEqual(s.progress.inventory["elixir"], 2)
+        self.assertEqual(s.progress.inventory["cape_de_route"], 2)
         self.assertFalse(s.farming_harvest("field", "harvest-1"))
         self.assertTrue(s.farming_collect("hen", "collect-1"))
-        self.assertEqual(s.progress.inventory["elixir"], 3)
+        self.assertEqual(s.progress.inventory["cape_de_route"], 3)
         with self.assertRaises(RuleError):
             s.farming_collect("hen", "collect-twice")
         recorded = s.recording()
@@ -131,24 +131,24 @@ class R62FarmingLifeTests(unittest.TestCase):
             "schema_version": 1, "references": [],
             "data": {
                 "version": 1,
-                "resources": [{"id": "elixir", "initial": 0, "capacity": 10}],
+                "resources": [{"id": "cape_de_route", "initial": 0, "capacity": 10}],
                 "producers": [],
-                "merchants": [{"id": "trader", "resource": "elixir",
+                "merchants": [{"id": "trader", "resource": "cape_de_route",
                                "scene": "arrival", "buy_price": 8, "sell_price": 4}],
                 "quests": [],
             },
         }
         project.validate(content)
         session = GameSession.new(content, project, "main", seed=62)
-        session.progress.inventory["herb"] = 1
+        session.progress.inventory["epee_de_jacques"] = 1
         session.progress.gold = 0
         self.assertTrue(session.farming_plant("field", "herb_crop", "seed-sale"))
         next_day(session)
         self.assertTrue(session.farming_harvest("field", "harvest-sale"))
-        self.assertEqual(session.progress.inventory["elixir"], 2)
+        self.assertEqual(session.progress.inventory["cape_de_route"], 2)
         self.assertTrue(session.system_trade("trader", "sell", 1, "sale-r62"))
-        self.assertEqual(session.progress.inventory["elixir"], 1)
-        self.assertEqual(session.system_state()["stocks"]["elixir"], 1)
+        self.assertEqual(session.progress.inventory["cape_de_route"], 1)
+        self.assertEqual(session.system_state()["stocks"]["cape_de_route"], 1)
         self.assertEqual(session.progress.gold, 4)
         restored = GameSession.from_recording(session.recording(), content, project)
         self.assertFalse(restored.system_trade("trader", "sell", 1, "sale-r62"))
@@ -169,7 +169,7 @@ class R62FarmingLifeTests(unittest.TestCase):
             with self.assertRaises(RuleError):
                 call()
             self.assertEqual(s.recording(), checkpoint)
-        s.progress.inventory["herb"] = 2
+        s.progress.inventory["epee_de_jacques"] = 2
         s.farming_plant("field", "herb_crop", "sow")
         next_day(s)
         s.farming_harvest("field", "harvest")
@@ -193,7 +193,7 @@ class R62FarmingLifeTests(unittest.TestCase):
     def test_sdk_revision_and_legacy_save_shape(self):
         content, project = fixture()
         s = GameSession.new(content, project, "main")
-        s.progress.inventory["herb"] = 1
+        s.progress.inventory["epee_de_jacques"] = 1
         sdk = Simulation(s)
         view = sdk.farming_state()
         self.assertEqual(view["season"], "spring")
