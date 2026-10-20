@@ -129,6 +129,12 @@ class GameSession:
             SystemEconomy(system_spec["data"],
                           set(self.project.exploration) | set(self.content.missions))
             if system_spec is not None else None)
+        # R63: GameSession owns the optional survival journal and needs.
+        from .survival import EXTENSION as SURVIVAL_EXTENSION, SurvivalRuntime
+        survival_spec = self.project.extensions.get(SURVIVAL_EXTENSION)
+        self._survival = (
+            SurvivalRuntime(survival_spec["data"], set(self.project.exploration))
+            if survival_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -278,6 +284,43 @@ class GameSession:
                 and not self.tactical_story_pending,
                 "R55 quest delivery requires active campaign without dialogue")
         return self._systems.fulfill(self.progress, quest_id)
+
+    def survival_state(self):
+        """R63 detached survival projection; Campaign owns item balances."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.snapshot()
+
+    def _survival_preflight(self):
+        require(self._survival is not None and self.mode == "campaign"
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Survival actions require routed exploration without dialogue")
+
+    def survival_advance(self, ticks=1):
+        self._survival_preflight()
+        return self._survival.advance(ticks)
+
+    def survival_gather(self, node_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.gather(
+            self.progress, self.route_scene, node_id, transaction_id)
+
+    def survival_craft(self, recipe_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.craft(
+            self.progress, self.route_scene, recipe_id, transaction_id)
+
+    def survival_rest(self, shelter_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.rest(
+            self.progress, self.route_scene, shelter_id, transaction_id)
+
+    def survival_eat(self, food_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.eat(
+            self.progress, self.route_scene, food_id, transaction_id)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -1185,6 +1228,8 @@ class GameSession:
             data["living_world"] = self._living_world.snapshot()
         if self._systems is not None:
             data["systems"] = self._systems.snapshot()
+        if self._survival is not None:
+            data["survival"] = self._survival.snapshot()
         if self._stream_world is not None:
             data["world_stream"] = self._stream_world.recording()
         if self._cinematic_pro is not None:
@@ -1216,7 +1261,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "systems", "survival", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1256,6 +1301,11 @@ class GameSession:
             session._systems.restore(data["systems"])
         else:
             require("systems" not in data, "Unexpected R55 economy in legacy save")
+        if session._survival is not None:
+            require("survival" in data, "R63 configured survival checkpoint missing")
+            session._survival.restore(data["survival"])
+        else:
+            require("survival" not in data, "Unexpected R63 state in legacy save")
         if session._stream_world is not None:
             require("world_stream" in data, "R54 world checkpoint is missing")
             session._stream_world.restore(data["world_stream"])
