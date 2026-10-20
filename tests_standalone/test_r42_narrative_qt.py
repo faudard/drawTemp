@@ -66,6 +66,25 @@ class NarrativeQtR42Tests(unittest.TestCase):
         self.dialog.debug_reset()
         self.assertIsNone(self.dialog.debugger)
 
+    def test_vs42_template_audit_is_read_only_and_undoable(self):
+        before = self.session.snapshot().to_dict()
+        self.dialog.workbench.apply(
+            self.dialog.workbench.preview_captain_slice())
+        self.dialog.refresh()
+        template = self.session.snapshot().to_dict()
+        self.assertEqual(template['project']['title'],
+                         'La loyauté du capitaine')
+        report = self.dialog._audit_campaign('main')
+        self.assertTrue(report['passed'])
+        self.assertEqual(set(report['endings']), {'alliance', 'accord', 'exile'})
+        self.assertIn('fins_et_chemins', self.dialog.debug_output.toPlainText())
+        self.assertEqual(self.session.snapshot().to_dict(), template)
+        self.dialog.undo()
+        self.assertEqual(self.session.snapshot().to_dict()['content'],
+                         before['content'])
+        self.assertEqual(self.session.snapshot().to_dict()['project'],
+                         before['project'])
+
     def test_source_usage_and_undo_refresh(self):
         self.dialog.preview_migration()
         self.dialog.apply_preview()
