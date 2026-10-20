@@ -4,6 +4,12 @@ on:
   push:
     paths:
       - "drawtemp/assets/optimization_audit.py"
+      - "drawtemp/assets/optimizer.py"
+      - "drawtemp/studio/r76_optimizer_qt.py"
+      - "drawtemp/studio/qt_shell.py"
+      - "tests_standalone/test_r76b_optimizer.py"
+      - "tests_standalone/test_r76b_optimizer_qt.py"
+      - "docs/R76B_OPTIMIZER_STUDIO.md"
       - "tests_standalone/test_r76_asset_audit.py"
       - "docs/R76A_ASSET_BUILD_AUDIT.md"
       - ".github/workflows/r76-asset-audit.yml"
@@ -33,5 +39,23 @@ jobs:
         run: python -m pip install -e .
       - name: Run R76.A tests
         run: python -m unittest -v tests_standalone.test_r76_asset_audit
+      - name: R76.A and R76.B1 — headless contracts
+        run: python -m unittest -v tests_standalone.test_r76_asset_audit tests_standalone.test_r76b_optimizer
       - name: Regression — canonical assets
         run: python -m unittest -v tests_standalone.test_assets
+
+  qt-offscreen:
+    name: R76.B1 Qt offscreen (Ubuntu, Python 3.12)
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install editor Qt dependencies
+        run: python -m pip install -e ".[qt6]"
+      - name: Qt optimizer dialogue smoke
+        run: python -m unittest -v tests_standalone.test_r76b_optimizer_qt
