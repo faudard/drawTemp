@@ -1,0 +1,40 @@
+name: R67 multiplayer feasibility lab (non-production)
+
+on:
+  pull_request:
+    paths:
+      - "drawtemp/sdk/r67_network_feasibility.py"
+      - "tests_standalone/test_r67_network_feasibility.py"
+      - "scripts/r67_network_spike.py"
+      - "docs/ADR_R67_MULTIPLAYER_FEASIBILITY.md"
+      - ".github/workflows/r67-network-feasibility.yml"
+  push:
+    paths:
+      - "drawtemp/sdk/r67_network_feasibility.py"
+      - "tests_standalone/test_r67_network_feasibility.py"
+      - "scripts/r67_network_spike.py"
+      - ".github/workflows/r67-network-feasibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-spike:
+    name: Python ${{ matrix.python-version }} / research only
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Validate the isolated deterministic R67 feasibility lab
+        run: python -m unittest discover -s tests_standalone -p 'test_r67_network_feasibility.py' -v
+      - name: Reproduce the laboratory report (not a production GO)
+        run: |
+          python scripts/r67_network_spike.py --seed 67 --ticks 240 --loss-percent 8 > r67-report.json
+          python -c "import json; r=json.load(open('r67-report.json')); assert r['simulation_only'] and r['replay_verified'] and not r['production_multiplayer_ready'] and r['decision']=='REDUCE'"
