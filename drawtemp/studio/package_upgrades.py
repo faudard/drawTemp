@@ -369,12 +369,19 @@ def apply_package_upgrade(preview, editor, project_root):
         # No documents are saved; the preexisting on-disk project stays valid.
         transition = editor.apply(preview._edit)
     except BaseException:
-        if created_dir is not None:
-            _cleanup(created_dir, created_files)
-        if marker_sha is not None:
-            # If the cleanup or filesystem acknowledgement fails, retain the
-            # journal and force explicit review rather than hiding uncertainty.
-            clear_upgrade_journal(root, expected_sha256=marker_sha)
+        # Editor.apply is the single document transaction. If an exception
+        # occurred AFTER the editor advanced, deleting the newly written
+        # resources would corrupt that live project. Preserve bytes and the
+        # journal for explicit recovery rather than guessing rollback safety.
+        editor_unchanged = (
+            editor.revision == preview.source_revision and
+            _snapshot_digest(editor.snapshot().to_dict()) == preview.source_digest
+        )
+        if editor_unchanged:
+            if created_dir is not None:
+                _cleanup(created_dir, created_files)
+            if marker_sha is not None:
+                clear_upgrade_journal(root, expected_sha256=marker_sha)
         raise
     if marker_sha is not None:
         # If this final unlink fails, the edit has succeeded but the persistent
