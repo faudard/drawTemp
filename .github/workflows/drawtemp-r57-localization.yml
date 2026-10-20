@@ -8,6 +8,10 @@ on:
       - 'drawtemp/studio/qt_shell.py'
       - 'drawtemp/player/qt_app.py'
       - 'drawtemp/player/Main.qml'
+      - 'drawtemp/player/controller.py'
+      - 'drawtemp/player/r57_accessibility.py'
+      - 'drawtemp/quality/r57_a11y.py'
+      - 'tests_standalone/test_drawtemp5_r57c.py'
       - 'tests_standalone/test_drawtemp5_r57.py'
       - '.github/workflows/drawtemp-r57-localization.yml'
   workflow_dispatch:
@@ -30,7 +34,7 @@ jobs:
       - name: Install headless SDK
         run: python -m pip install -e .
       - name: R57 headless tests
-        run: python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests -v
+        run: python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences -v
 
   localization-qt:
     runs-on: ${{ matrix.os }}
@@ -52,4 +56,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python -m unittest tests_standalone.test_drawtemp5_r57 tests_standalone.test_drawtemp5_r18d -v
+        run: python -m unittest tests_standalone.test_drawtemp5_r57 tests_standalone.test_drawtemp5_r57c tests_standalone.test_drawtemp5_r18d -v
+      - name: R57 Player QML smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.player.qt_app --smoke --reference
