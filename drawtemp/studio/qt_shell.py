@@ -482,6 +482,8 @@ class StudioWindow(QMainWindow):
         self._action("r78_team_reviews", "R78 • Revues et tâches d’équipe locales…",
                      self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r76_bench", "R76.C • Benchmarks et preuves de bundle…",
+                     self.open_r76_bench)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r77_lab", "R77 • Exploration Lab (R26)…", self.open_exploration_lab)
         self._action("r49_references", "Vérifier les références du projet…",
@@ -580,6 +582,7 @@ class StudioWindow(QMainWindow):
         vcs_menu.addAction(self.commands["r78_team_reviews"])
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["r76_bench"])
         tools_menu.addAction(self.commands["r49_metrics"])
         tools_menu.addAction(self.commands["r77_lab"])
         tools_menu.addAction(self.commands["r49_references"])
@@ -990,6 +993,11 @@ class StudioWindow(QMainWindow):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
         R30ScaleDashboard(self).exec()
+
+    def open_r76_bench(self):
+        """R76.C read-only benchmark dashboard; never blocks GUI with probes."""
+        from drawtemp.studio.r76_bench_qt import R76BenchmarkDialog
+        R76BenchmarkDialog(self).exec()
 
     def open_assist_generation(self):
         """R30.G deterministic, optional Content v1 assistant; shared session."""
