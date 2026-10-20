@@ -1,0 +1,57 @@
+name: R43.B3 Native CT Targeting R3
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/ability_targeting_r43.py'
+      - 'drawtemp/studio/ability_targeting_r43_qt.py'
+      - 'drawtemp/studio/ability_designer_r43_qt.py'
+      - 'tests_standalone/test_drawtemp_r43b3_native_target.py'
+      - 'tests_standalone/test_drawtemp_r43b3_target_qt.py'
+      - '.github/workflows/r43b3-native-targeting.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/ability_targeting_r43.py'
+      - 'drawtemp/studio/ability_targeting_r43_qt.py'
+      - 'drawtemp/studio/ability_designer_r43_qt.py'
+      - 'tests_standalone/test_drawtemp_r43b3_native_target.py'
+      - 'tests_standalone/test_drawtemp_r43b3_target_qt.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ct-targets:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: R43 contracts, AST, native targets and R3 viewport parity
+        run: python -m unittest tests_standalone.test_drawtemp_r43_ability_contracts tests_standalone.test_drawtemp_r43b_ability_draft tests_standalone.test_drawtemp_r43b2_formula_graph tests_standalone.test_drawtemp_r43b3_native_target tests_standalone.test_drawtemp5_r3 -v
+      - name: Battle non-regression
+        run: python -m unittest tests_standalone.test_combat31 tests_standalone.test_jeanne_combat31 -v
+
+  ct-targets-qt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[qt6]'
+      - name: Qt native R3 viewport and diagnostics
+        run: python -m unittest tests_standalone.test_drawtemp_r43b3_target_qt -v
