@@ -57,16 +57,22 @@ class ModManagerDialog(QDialog):
         self.enable_button = QPushButton("Autoriser / activer")
         self.disable_button = QPushButton("Désactiver")
         self.version_button = QPushButton("Changer de version…")
+        self.verify_button = QPushButton("Vérifier l’intégrité")
         self.apply_button = QPushButton("Prévisualiser / appliquer")
         self.remove_button = QPushButton("Retirer")
-        for button in (self.install_button, self.enable_button, self.disable_button,
-                       self.version_button, self.apply_button, self.remove_button):
+        for button in (self.install_button, self.version_button,
+                       self.verify_button, self.remove_button):
             actions.addWidget(button)
         root.addLayout(actions)
+        authorization_actions = QHBoxLayout()
+        for button in (self.enable_button, self.disable_button, self.apply_button):
+            authorization_actions.addWidget(button)
+        root.addLayout(authorization_actions)
         self.install_button.clicked.connect(self._import_clicked)
         self.enable_button.clicked.connect(self._enable_clicked)
         self.disable_button.clicked.connect(self._disable_clicked)
         self.version_button.clicked.connect(self._replace_clicked)
+        self.verify_button.clicked.connect(self._verify_clicked)
         self.apply_button.clicked.connect(self._apply_clicked)
         self.remove_button.clicked.connect(self._remove_clicked)
 
@@ -110,7 +116,7 @@ class ModManagerDialog(QDialog):
         mod_id = self._selected()
         active = mod_id is not None
         for button in (self.enable_button, self.disable_button, self.version_button,
-                       self.apply_button, self.remove_button):
+                       self.verify_button, self.apply_button, self.remove_button):
             button.setEnabled(active)
         if not active:
             self.details.setPlainText("Aucun module installé.")
@@ -123,7 +129,8 @@ class ModManagerDialog(QDialog):
             "SHA-256 du manifeste : {}\n\n"
             "Permissions requises : {}\nPermissions accordées : {}\n"
             "Permissions non accordées : {}\n\n"
-            "Dépendances : {}\nPacks vérifiés à l'installation : {}\n\n"
+            "Dépendances : {}\nPacks déclarés : {}\n"
+            "Intégrité des packs : contrôle explicite et avant chaque usage\n\n"
             "Licence déclarée : {}\nOrigine : {}\nPreuve déclarée : {}\n"
             "Redistribution déclarée : {}\nDroits légalement validés : NON\n"
             "Exécution de code : NON\n"
@@ -198,6 +205,21 @@ class ModManagerDialog(QDialog):
                 mapping[resource["id"]] = Path(file_path)
             self.install_descriptor(manifest, mapping)
         except (ModError, OSError, ValueError) as exc:
+            self._error(exc)
+
+    def _verify_clicked(self):
+        """Explicitly rehash the selected module and dependency closure."""
+        mod_id = self._selected()
+        if mod_id is None:
+            return
+        try:
+            result = self.registry.verify_runtime(mod_id)
+            if result["integrity_verified"]:
+                self.notice.setText(
+                    "Intégrité des packs et dépendances vérifiée pour {}. "
+                    "Droits de redistribution NON certifiés."
+                    .format(mod_id))
+        except ModError as exc:
             self._error(exc)
 
     def _enable_clicked(self):
