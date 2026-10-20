@@ -489,6 +489,8 @@ class StudioWindow(QMainWindow):
         self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
+        self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
         self._action("r44_atlas", "R44 • World Atlas 2.0…", self.open_world_atlas)
         self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
         self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
@@ -576,6 +578,8 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r41_party"])
+        tools_menu.addAction(self.commands["r41_encounter"])
         tools_menu.addAction(self.commands["r44_atlas"])
         tools_menu.addAction(self.commands["r37_ai"])
         tools_menu.addAction(self.commands["r37_sensor"])
@@ -814,6 +818,26 @@ class StudioWindow(QMainWindow):
         prior = self.session.revision
         WorldAtlasDialog(self.session, parent=self).exec()
         if self.session.revision != prior:
+            self.refresh()
+
+    def open_party_studio(self):
+        """R41.B uses the same canonical authoring history as every workspace."""
+        from drawtemp.studio.party_qt import PartyStudioDialog
+        revision = self.session.revision
+        dialog = PartyStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_encounter_studio(self):
+        """R41.B2 shares the original R1 transactional Studio state."""
+        from drawtemp.studio.encounter_qt import EncounterStudioDialog
+        revision = self.session.revision
+        dialog = EncounterStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
             self.refresh()
 
     def open_logic_graph(self):
@@ -2084,10 +2108,13 @@ class StudioWindow(QMainWindow):
         if self._r49_playtest.active:
             return False
         from drawtemp.export.templates import TEMPLATES
-        kind, accepted = QInputDialog.getItem(
-            self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
+        labels = [("R41 • RPG classique — Le relais du village"
+                   if key == "classic_rpg" else key) for key in TEMPLATES]
+        selected, accepted = QInputDialog.getItem(
+            self, "Nouveau projet", "Modèle", labels, 0, False)
         if not accepted:
             return
+        kind = selected if selected in TEMPLATES else TEMPLATES[labels.index(selected)]
         parent = QFileDialog.getExistingDirectory(
             self, "Dossier parent du projet")
         if not parent:

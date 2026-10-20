@@ -97,6 +97,14 @@ def scene_for_player(controller):
         if snapshot.battle is not None:
             mission_id = snapshot.battle["mission_id"]
             return scene_from_mission(controller.content.missions[mission_id], snapshot)
+        # While the RPG menu overlays the game, retain the SAME R3 world scene.
+        # No duplicated viewport, portal cursor or renderer state is introduced.
+        if snapshot.mode == "rpg":
+            routed = controller.session.rpg_route_state(
+                expected_revision=snapshot.revision)
+            if routed is not None:
+                return scene_from_exploration(thaw(routed),
+                                              revision=snapshot.revision)
         if snapshot.exploration is not None and (
                 not snapshot.exploration["completed"] or
                 controller.session.world_atlas_state()["enabled"]):
@@ -358,6 +366,35 @@ def create_bridge(controller, renderer):
         @Slot(float)
         def setTextScale(self, value):
             self.settings_update(self.controller.set_display, "text_scale", value)
+
+        @Slot(str)
+        def travelRoute(self, link_id):
+            self.invoke(self.controller.travel_route, link_id)
+
+        @Slot(str)
+        def recruitPartyMember(self, hero_id):
+            self.invoke(self.controller.recruit_party_member, hero_id)
+
+        @Slot()
+        def claimRpgQuest(self):
+            self.invoke(self.controller.claim_rpg_quest)
+
+        @Slot(str)
+        def togglePartyMember(self, hero_id):
+            """R41.B1: same canonical Simulation transaction as headless Player."""
+            self.invoke(self.controller.toggle_party_member, hero_id)
+
+        @Slot(str)
+        def startRpgEncounter(self, encounter_id):
+            self.invoke(self.controller.start_rpg_encounter, encounter_id)
+
+        @Slot(str, str, str)
+        def rpgAction(self, kind, target, skill):
+            self.invoke(self.controller.rpg_action, kind, target, skill)
+
+        @Slot()
+        def finishRpgEncounter(self):
+            self.invoke(self.controller.finish_rpg_encounter)
 
         @Slot()
         def newGame(self):

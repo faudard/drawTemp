@@ -196,6 +196,71 @@ class Simulation:
         return self._apply("living_world_advance", ticks,
                            expected_revision=expected_revision)
 
+    def party_state(self, *, expected_revision=None):
+        """R41 read-only projection; no second roster or inventory owner."""
+        self._check_revision(expected_revision, "party_state")
+        if self._session._classic_party is None:
+            return None
+        return freeze(self._session.party_state())
+
+    def party_recruit(self, hero_id, *, expected_revision=None):
+        """R41 session-owned transactional recruitment with revision guard."""
+        return self._apply("party_recruit", hero_id,
+                           expected_revision=expected_revision)
+
+    def party_set_active(self, hero_ids, *, expected_revision=None):
+        """R41 active/reserve change; Campaign.heroes and CT are untouched."""
+        return self._apply("party_set_active", hero_ids,
+                           expected_revision=expected_revision)
+
+    def rpg_quest_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_quest_state")
+        state = self._session.rpg_quest_state()
+        return freeze(state) if state is not None else None
+
+    def rpg_claim_quest(self, *, expected_revision=None):
+        return self._apply("rpg_claim_quest", expected_revision=expected_revision)
+
+    def rpg_available(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_available")
+        return freeze(self._session.rpg_available())
+
+    def rpg_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_state")
+        if self._session.mode != "rpg":
+            return None
+        return freeze(self._session.rpg_state())
+
+    def route_destinations(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "route_destinations")
+        return freeze(self._session.route_destinations())
+
+    def route_transition(self, link_id, *, expected_revision=None):
+        return self._apply("route_transition", link_id,
+                           expected_revision=expected_revision)
+
+    def rpg_route_state(self, *, expected_revision=None):
+        """Read the canonical route scene during combat for shared R3 rendering.
+
+        R41's battle UI never invents an independent map or world cursor.
+        """
+        self._check_revision(expected_revision, "rpg_route_state")
+        session = self._session
+        if session.mode != "rpg" or not session.scene_router.enabled:
+            return None
+        return freeze(session.route_state())
+
+    def rpg_start(self, encounter_id, *, expected_revision=None):
+        return self._apply("rpg_start", encounter_id,
+                           expected_revision=expected_revision)
+
+    def rpg_action(self, action, *, expected_revision=None):
+        return self._apply("rpg_action", action,
+                           expected_revision=expected_revision)
+
+    def rpg_finish(self, *, expected_revision=None):
+        return self._apply("rpg_finish", expected_revision=expected_revision)
+
     def roguelite_state(self, *, expected_revision=None):
         """Read-only deterministic R34 run view (not an alternate save schema)."""
         self._check_revision(expected_revision, 'roguelite_state')

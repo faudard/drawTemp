@@ -12,10 +12,13 @@ SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
     "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
-    "massive-simulation.v1", "semantic-vcs.v1", "ai-decision.v1", "ai-session.v1", "ai-behavior-tree.v1", "modding-declarative.v1", "modding-preflight.v1",
+    "massive-simulation.v1", "semantic-vcs.v1", "classic-party.v1", "rpg-turn-order.v1", "rpg-encounter.v1", "ai-decision.v1", "ai-session.v1", "ai-behavior-tree.v1", "modding-declarative.v1", "modding-preflight.v1",
 })
 
 _PUBLIC = {
+    "rpg_turn_order": "classic_party",
+    "validate_encounters": "classic_party",
+    "validate_classic_party": "classic_party",
     "validate_behavior_tree": "behavior_tree",
     "evaluate_behavior_tree": "behavior_tree",
     "BehaviorTreeDebugger": "behavior_tree",
