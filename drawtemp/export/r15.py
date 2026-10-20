@@ -127,6 +127,15 @@ def preflight(content_path, *, require_licenses=False):
               "rights_attestations_checked": False}
     try:
         content, project = validate_pair(_json(source), _json(game))
+        from drawtemp.quality.r51_ui import ui_export_audit
+        ui = ui_export_audit(project)
+        if ui["present"]:
+            result["ui"] = ui
+            result["errors"].extend(ui["errors"])
+            result["warnings"].extend(ui["warnings"])
+        # An authored UI is a distributable Player surface, never a license
+        # bypass via the legacy preview-export path.
+        strict_rights = require_licenses or ui["present"]
         registry = AssetRegistry(project.get("assets") or None)
         result["missions"] = [m["id"] for m in content["missions"]]
         result["errors"].extend(
@@ -159,8 +168,8 @@ def preflight(content_path, *, require_licenses=False):
                 continue
             result["assets"].append(relative)
         if result["assets"]:
-            _check_asset_rights(source.parent, result, require_licenses)
-        elif require_licenses:
+            _check_asset_rights(source.parent, result, strict_rights)
+        elif strict_rights:
             # Empty projects have no third-party material to license.
             result["rights_attestations_checked"] = True
     except (ValueError, OSError, TypeError, KeyError) as exc:
@@ -246,7 +255,8 @@ def export_game(content_path, runtime_dir, destination, *,
         # between preflight and copy must not bypass the rights SHA binding.
         staged = preflight(game / source.name, require_licenses=require_licenses)
         if (not staged["passed"] or staged["assets"] != report["assets"] or
-                staged["rights_evidence"] != report["rights_evidence"]):
+                staged["rights_evidence"] != report["rights_evidence"] or
+                staged.get("ui") != report.get("ui")):
             raise ExportError("Staged content or asset rights changed during export: " +
                               "; ".join(staged["errors"]))
         files = [
@@ -265,6 +275,12 @@ def export_game(content_path, runtime_dir, destination, *,
             "rights_evidence": ["game/" + name for name in report["rights_evidence"]],
             "release_candidate": bool(release),
         }
+        if report.get("ui") is not None:
+            ui = report["ui"]
+            manifest["ui"] = {
+                "schema": 1, "sha256": ui["sha256"],
+                "screens": ui["screens"], "strict_asset_rights": True,
+            }
         (stage / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8")
@@ -366,4 +382,12 @@ def verify_bundle(path, *, require_release=False):
     project = content[:-5] + ".game.json"
     if project.casefold() not in listed:
         raise ExportError("Bundle lacks the indexed GameProject companion")
+    # UI-authoring bundles must attest to the exact typed screen catalog.
+    # Existing legacy R15 bundles have no R51 manifest key and stay valid.
+    try:
+        authored = _json(safe_asset_path(root, project))
+        from drawtemp.quality.r51_ui import assert_ui_bundle_identity
+        assert_ui_bundle_identity(authored, manifest.get("ui"))
+    except (ValueError, TypeError, KeyError, OSError, json.JSONDecodeError) as exc:
+        raise ExportError("Invalid R51 authored UI parity: " + str(exc)) from exc
     return manifest
