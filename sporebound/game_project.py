@@ -208,6 +208,9 @@ class GameProject:
         validate_game_modes(self.game_modes, content, self)
         from .scene_router import validate_scene_routes
         validate_scene_routes(self.scene_routes, content, self)
+        from .world_streaming import EXTENSION as STREAM_EXTENSION, validate_world_streaming
+        if STREAM_EXTENSION in self.extensions:
+            validate_world_streaming(self.extensions[STREAM_EXTENSION]["data"], self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:
