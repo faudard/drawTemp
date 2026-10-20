@@ -34,7 +34,7 @@ La CI dédiée demande Python 3.12 et PySide6 Qt offscreen sur Linux, macOS et W
 
 ## NO-GO / R53.B2 et R53.C
 
-- Composer sous forme visuelle drag/drop des cases, explication d'éligibilité de chaque duo, rôles/liens d'équipe, animation et feedback combo dans le Player.
+- Composer sous forme visuelle drag/drop des cases, explication d'éligibilité de chaque duo, rôles/liens d'équipe et animation/feedback détaillé dans le Player. **B2 partiel :** le Player QML montre l'action combo `C`, un sélecteur filtré des capacités RPG utilisables et les partenaires en récupération, sans moteur supplémentaire. Test headless `tests_standalone.test_r53_player_combo` (commande Simulation, sauvegarde/reprise, compat R41); un rendu QML onscreen et les annonces de feedback accessibles restent à certifier.
 - QTest de navigation clavier exhaustive, écrans HC/RTL et automation multi-plateformes.
 - R53.C: scène exploration → leader switch → combat CT/RPG → retour PV/inventaire/loot, sauvegarde au milieu des transitions, deux seeds.
 - Fusion effective des dépendances R41/R43/R51 sur le même graph Git de consolidation, résolution des conflits de PR #400, et jobs CI exécutés.
