@@ -99,6 +99,7 @@ class GameSession:
         self._rt_journal = None
         self._platform = None  # R32 opt-in side-view adapter, never CT.
         self._action = None  # R50.B opt-in R26 rules, recorded inside GameSession.
+        self._action_settlements = []  # Verifiable one-shot Campaign credits.
         # R34.C is opt-in, versioned and owned by this GameSession.
         from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
         run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
@@ -326,6 +327,10 @@ class GameSession:
                 and self._rt_journal is None and self._platform is None,
                 "R26 combat requires a routed, idle action exploration scene")
         scene = authored_action_scene(self.project, self.route_scene)
+        from .action_settlement import settlement_keys
+        done, _ = settlement_keys(self.route_scene)
+        require(self.progress.story_flags.get(done) is not True,
+                "R26 combat already settled; reward replay is one-shot")
         return (self._action.snapshot() if self._action is not None else
                 ActionRuntime(scene).snapshot())
 
@@ -347,6 +352,56 @@ class GameSession:
         events = runtime.step(command)
         self._action = runtime
         return {"state": runtime.snapshot(), "events": events}
+
+    def route_action_settle(self, link_id):
+        """Settle a genuine R26 victory and cross an R25 route atomically."""
+        from .action_settlement import (
+            MAX_SETTLEMENTS, settlement_keys, victory_coins,
+        )
+        require(self._action is not None and self.mode == "campaign" and
+                len(self._action_settlements) < MAX_SETTLEMENTS,
+                "No active R26 combat or settlement capacity exhausted")
+        source = self.route_scene
+        done, coin_flag = settlement_keys(source)
+        require(done not in self.progress.story_flags and
+                coin_flag not in self.progress.story_flags,
+                "R26 combat rewards have already been paid")
+        coins = victory_coins(self._action)
+        require(self.progress.gold + coins <= 1000000000,
+                "R26 reward exceeds the campaign gold budget")
+        route = self.scene_router.destination(source, link_id, self.progress)
+        require(route["source"] == source, "R26 exit must start in action scene")
+        record = {
+            "version": 1, "scene": source, "link": link_id,
+            "route_index": len(self.route_history),
+            "coin": coins, "runtime": self._action.recording(),
+        }
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.progress.gold += coins
+            self.progress.story_flags[done] = True
+            self.progress.story_flags[coin_flag] = coins
+            self._action_settlements.append(record)
+            self._action = None
+            moved = self.route_transition(link_id)
+            return {"route": moved, "coins_awarded": coins,
+                    "campaign_gold": self.progress.gold,
+                    "settled_scene": source}
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
+            raise
 
     def _platform_definition(self):
         """Resolve geometry only for a routed free-movement authored scene."""
@@ -414,6 +469,13 @@ class GameSession:
                 "Resolve encounter, action combat or dialogue before changing scenes")
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
+        from .action_scene_adapter import EXTENSION as ACTION_EXTENSION
+        from .action_settlement import settlement_keys
+        if self.route_scene in self.project.extensions.get(
+                ACTION_EXTENSION, {}).get("data", {}).get("scenes", {}):
+            done, _ = settlement_keys(self.route_scene)
+            require(self.progress.story_flags.get(done) is True,
+                    "Complete and settle action combat before exiting its scene")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
@@ -1004,6 +1066,13 @@ class GameSession:
             self._platform_definition()
             data["scene_platform"] = {"version": 1, "scene": self.route_scene,
                                       "physics": self._platform.recording()}
+        from .action_settlement import validate_settlements
+        validate_settlements(
+            self._action_settlements, project=self.project,
+            route_history=self.route_history, progress=self.progress,
+            current_action=self._action)
+        if self._action_settlements:
+            data["scene_action_history"] = deepcopy(self._action_settlements)
         if self._action is not None:
             require(self.scene_router.enabled and self.mode == "campaign"
                     and self._rt_journal is None and self._platform is None,
@@ -1054,7 +1123,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "scene_action", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1316,6 +1385,15 @@ class GameSession:
             session._platform = platform
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
+        from .action_settlement import validate_settlements
+        history = data.get("scene_action_history", [])
+        require("scene_action_history" not in data or
+                (type(history) is list and bool(history)),
+                "Empty or malformed R26 settlement evidence")
+        validate_settlements(
+            history, project=project, route_history=session.route_history,
+            progress=session.progress, current_action=session._action)
+        session._action_settlements = deepcopy(history)
         session.world_state()
         return session
 
