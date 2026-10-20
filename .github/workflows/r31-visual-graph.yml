@@ -1,4 +1,4 @@
-name: DrawTemp R31.ABCDEFG Visual Logic Studio
+name: DrawTemp R31.ABCDEFGH Visual Logic Studio
 on:
   pull_request:
     paths:
@@ -7,6 +7,8 @@ on:
       - 'drawtemp/sdk/logic_sequence.py'
       - 'sporebound/logic_variables.py'
       - 'sporebound/logic_campaign_bridge.py'
+      - 'sporebound/logic_vertical_objective.py'
+      - 'drawtemp/studio/logic_vertical_slice.py'
       - 'sporebound/game_project.py'
       - 'drawtemp/sdk/logic_campaign.py'
       - 'sporebound/tactical_rpg3.py'
@@ -24,6 +26,7 @@ on:
       - 'tests_standalone/test_drawtemp_r31_logic_sequence.py'
       - 'tests_standalone/test_drawtemp_r31_logic_variables.py'
       - 'tests_standalone/test_drawtemp_r31_logic_campaign.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_vertical_slice.py'
       - 'tests_standalone/test_drawtemp_r31_logic_qt.py'
       - 'docs/drawtemp5/R31A_VISUAL_GRAPH_ADR.md'
       - 'docs/drawtemp5/R31B_LOGIC_STUDIO.md'
@@ -32,6 +35,7 @@ on:
       - 'docs/drawtemp5/R31E_NATIVE_WAITS_FLAGS.md'
       - 'docs/drawtemp5/R31F_TYPED_BATTLE_VARIABLES.md'
       - 'docs/drawtemp5/R31G_CAMPAIGN_BRIDGE.md'
+      - 'docs/drawtemp5/R31H_PLAYER_VERTICAL_SLICE.md'
       - '.github/workflows/r31-visual-graph.yml'
   push:
     branches: [master]
@@ -74,9 +78,11 @@ jobs:
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_variables -v
       - name: R31.G campaign bridge, authentic victory/defeat and verified checkpoint
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_campaign -v
+      - name: R31.H Studio-to-Player journey and authenticated save/replay
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_vertical_slice -v
 
   studio-qt:
-    name: R31.BCDEFG Qt offscreen / ${{ matrix.os }}
+    name: R31.BCDEFGH Qt offscreen / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
