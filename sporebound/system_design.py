@@ -136,7 +136,12 @@ class SystemEconomy:
         self.transaction_ids = set()
         self.fulfilled = set()
 
-    def _room(self):
+    def _room(self, *, advance=False):
+        # Keep successive movement ticks in one canonical contiguous receipt.
+        # Without compaction, 512 frames (~8.5 seconds at 60 Hz) would
+        # exhaust the journal and effectively freeze a normal Player.
+        if advance and self.journal and self.journal[-1]["kind"] == "advance":
+            return
         require(len(self.journal) < MAX_COMMANDS, "R55 command journal is full")
 
     def _advance_core(self, ticks):
@@ -159,9 +164,12 @@ class SystemEconomy:
         self.tick += ticks
 
     def advance(self, ticks=1):
-        self._room()
+        self._room(advance=True)
         self._advance_core(ticks)
-        self.journal.append({"kind": "advance", "ticks": ticks})
+        if self.journal and self.journal[-1]["kind"] == "advance":
+            self.journal[-1]["ticks"] += ticks
+        else:
+            self.journal.append({"kind": "advance", "ticks": ticks})
         return self.snapshot()
 
     def _trade_stock(self, merchant, action, quantity):
@@ -257,7 +265,14 @@ class SystemEconomy:
             if kind == "advance":
                 require(set(command) == {"kind", "ticks"},
                         "Malformed R55 tick receipt")
-                replay.advance(command["ticks"])
+                ticks = command["ticks"]
+                require(_integer(ticks, 1, MAX_TICKS)
+                        and replay.tick + ticks <= MAX_TICKS,
+                        "Invalid or oversized R55 tick receipt")
+                while ticks:
+                    step = min(MAX_ADVANCE, ticks)
+                    replay.advance(step)
+                    ticks -= step
             elif kind == "trade":
                 require(set(command) ==
                         {"kind", "id", "merchant", "action", "quantity",
