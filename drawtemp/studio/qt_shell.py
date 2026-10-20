@@ -434,6 +434,7 @@ class StudioWindow(QMainWindow):
         self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
         self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
         self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
+        self._action("r37_boss", "Boss & AI Director R37.E…", self.open_ai_bosses)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -489,6 +490,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_ai"])
         tools_menu.addAction(self.commands["r37_sensor"])
         tools_menu.addAction(self.commands["r37_squad"])
+        tools_menu.addAction(self.commands["r37_boss"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -593,6 +595,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.living_world_qt import LivingWorldDialog
         revision = self.session.revision
         dialog = LivingWorldDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_ai_bosses(self):
+        """R37.E boss phase presentation over existing Content R8 triggers."""
+        from drawtemp.studio.ai_boss_qt import BossDirectorDialog
+        revision = self.session.revision
+        dialog = BossDirectorDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
