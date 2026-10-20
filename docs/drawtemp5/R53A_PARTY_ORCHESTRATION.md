@@ -49,7 +49,7 @@ Dedicated GitHub workflow requests Python 3.12 on Ubuntu, Windows and macOS. **N
 
 R53.A2 delivered partially for **RPG_TURN only**: native two/four-hero offensive skills, validated MP, helper turn recovery, replay/restore and legacy R41 compatibility. **Still NO-GO** for CT and ACTION_REALTIME execution, defensive/healing combos, per-tick pause across action scenes, R43 merged integration and real Player UI.
 R53.B1 ajoute un Party Composer Qt transactionnel, des valeurs de départ par campagne et des combos fondés sur Content ; des tests headless et Qt offscreen sont ajoutés (non certifiés). R53.B2 est partiel : le Player QML dispose du sélecteur des combos RPG jouables, du raccourci C et du feedback de récupération, testés en headless ; restent le placement visuel, les rôles et liens, les tests onscreen/a11y sur trois OS et le parcours hybride complet.
-R53.C: hybrid exploration→tactical→exploration with canonical HP/inventory/rewards, three companions, two combat modes, two seeds and crash-save/reload.
+R53.C1 est un prototype auteur réel: trois compagnons et deux moteurs `RPG_TURN` / `TACTICAL_CT`, portail SceneRouter, save/reload entre les phases, inventaire et récompenses via Campaign, tests à deux seeds. **R53.C2 reste NO-GO**: les PV/PM ne traversent pas encore les deux moteurs via un contrat persistant, les validations Qt et les tests CI n'ont pas encore été certifiés.
 Other dependencies: R41, R43, R51 and R50 gates still need proof on `master`.
 
 ## R53.A2 — executable native RPG_TURN combo example
@@ -75,3 +75,7 @@ The optional `skills` mapping makes an authored combination executable **only** 
 ## R53.B1 — Party Composer transactionnel
 
 Voir [R53B Party Composer](R53B_PARTY_COMPOSER.md) pour le contrat auteur, l'interface Qt, les actions R1 et les limites de validation.
+
+## R53.C1 — hybride RPG + CT
+
+Nouveau modèle Creator `hybrid_r53` et référence technique [R53C Hybrid Vertical Slice](R53C_HYBRID_SLICE.md). L'API `GameSession.party_hybrid_state` est une projection read-only de la phase, des partenaires, des gains et des ressources du moteur actif, sans faux transfert de PV. `Simulation.party_hybrid_state` et `PlayerController.state().r53_hybrid` partagent cette lecture avec le Player.
