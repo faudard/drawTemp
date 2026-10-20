@@ -42,7 +42,7 @@ def validate_settlement(spec, system_spec, scenes):
         require(type(building) is dict and set(building) ==
                 {"id", "zone", "producer", "workers", "cost", "built"}
                 and _id(building["id"]) and building["id"] not in seen
-                and building["zone"] in zones
+                and _id(building["zone"]) and building["zone"] in zones
                 and _id(building["producer"])
                 and building["producer"] in producers
                 and building["producer"] not in referenced
@@ -73,7 +73,7 @@ def validate_settlement(spec, system_spec, scenes):
     for need in spec["needs"]:
         require(type(need) is dict and set(need) ==
                 {"resource", "quantity", "interval"}
-                and need["resource"] in resources
+                and _id(need["resource"]) and need["resource"] in resources
                 and need["resource"] not in needs
                 and _integer(need["quantity"], 1, 1000)
                 and _integer(need["interval"], 1, 256),
