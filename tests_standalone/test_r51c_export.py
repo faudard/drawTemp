@@ -127,7 +127,9 @@ class R51CExportTests(unittest.TestCase):
         self.write_ui({"unsupported": new_layout("DIALOGUE")})
         strict = preflight(self.content)
         self.assertFalse(strict["passed"])
-        self.assertTrue(strict["rights_attestations_checked"])
+        self.assertFalse(strict["rights_attestations_checked"])
+        self.assertTrue(any("Studio-preview only" in msg
+                            for msg in strict["errors"]))
 
     def test_unimplemented_actions_and_title_bindings_block_export(self):
         layout = new_layout("MENU")
