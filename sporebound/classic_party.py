@@ -34,7 +34,8 @@ def validate_classic_party(data, *, content, project):
     are errors, not migrations. Legacy projects do not need this extension.
     """
     require(type(data) is dict and {"version", "campaigns"} <= set(data)
-            and set(data) <= {"version", "campaigns", "encounters", "quest"}
+            and set(data) <= {"version", "campaigns", "encounters", "quest",
+                               "starting_inventory"}
             and type(data["version"]) is int and data["version"] == VERSION,
             "Unsupported R41 party schema")
     campaigns = data["campaigns"]
@@ -66,6 +67,15 @@ def validate_classic_party(data, *, content, project):
                 and set(active) <= set(initial) <= set(recruitable)
                 and set(recruitable) <= players,
                 "Invalid active/initial/recruitable hero references")
+    if "starting_inventory" in data:
+        supply = data["starting_inventory"]
+        require(type(supply) is dict and len(supply) <= 20
+                and all(type(item) is str
+                        and (item in content.equipment
+                             or item in {"potion", "ether", "phoenix"})
+                        and type(quantity) is int and 1 <= quantity <= 20
+                        for item, quantity in supply.items()),
+                "Invalid R41 canonical Campaign starting equipment/items")
     if "encounters" in data:
         from .classic_encounter import validate_encounters
         validate_encounters(data["encounters"], content=content, project=project)
