@@ -162,3 +162,26 @@ def make_captain_slice():
     }
     project.validate(content)
     return content, project
+
+
+def save_captain_template(content_path):
+    """Write a new pair of validated editor documents; refuse overwrite.
+
+    This exports editable Content/GameProject files, NOT a certified Player
+    executable. Use the canonical two-document Studio transaction store.
+    """
+    from drawtemp.sdk.authoring import AuthoringSession
+    content, project = make_captain_slice()
+    return AuthoringSession.new(content, project).save_as(content_path)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Export a new editable VS-42 Content/GameProject pair.')
+    parser.add_argument('--content-path', required=True,
+                        help='New JSON file; sibling .game.json is also created')
+    args = parser.parse_args()
+    paths = save_captain_template(args.content_path)
+    for path in paths:
+        print(path)
