@@ -1761,6 +1761,21 @@ ApplicationWindow {
                         font.bold: true
                         font.letterSpacing: 1
                     }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Langue et pseudo-localisation"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            objectName: "r57-player-language"
+                            Accessible.name: "Langue du Player"
+                            model: ["Français", "English", "Pseudo accents", "Pseudo RTL"]
+                            currentIndex: ["fr", "en", "qps-ploc", "qps-plocm"].indexOf(root.playerData.language)
+                            onActivated: player.selectLanguage(["fr", "en", "qps-ploc", "qps-plocm"][currentIndex])
+                        }
+                    }
                     Label { text: "Taille des textes"; color: root.ivory }
                     Slider {
                         id: scaleSlider
