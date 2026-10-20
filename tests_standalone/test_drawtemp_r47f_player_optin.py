@@ -67,6 +67,20 @@ class PlayerModPreflightTests(unittest.TestCase):
                 save_dir=self.root / "saves")
         self.assertFalse((self.root / "saves").exists())
 
+    def test_symlinked_content_is_rejected_before_controller_creation(self):
+        directory, registry, docs, archives, pins = self.build_game("tactical")
+        link = self.root / "alias.json"
+        try:
+            link.symlink_to(directory / "game.json")
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlink creation not permitted on this runner")
+        with self.assertRaisesRegex(ValueError, "symlinked Content"):
+            build_controller(
+                content_path=link, mod_registry=registry,
+                expected_mod_pins=pins,
+                managed_mod_namespaces=[doc["namespace"] for doc in docs],
+                save_dir=self.root / "saves")
+
     def test_incomplete_gate_configuration_refused(self):
         directory, registry, docs, archives, pins = self.build_game("tactical")
         with self.assertRaisesRegex(ValueError, "provided together"):
