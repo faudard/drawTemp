@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import sys
 
+from drawtemp.core import GameSession
 from drawtemp.quality.r56_scenarios import (
     SHA40, canonical, build_scenario, run_scenario, validate_scenario,
     _no_duplicate_keys,
@@ -157,6 +158,99 @@ def inspect_case(result, case, step):
         "reproduced_through_step": bool(traces),
         "description": ("Initial authoritative checkpoint" if step == 0 else
                         "Command step; fixed game tick only for tick operations"),
+    }
+
+
+def replay_to_step(case, content, project, *, revision, step, report=None):
+    """Reproduce the exact command prefix using the canonical GameSession.
+
+    This is an on-demand, bounded state observation of selected invariants,
+    NOT a state-changing Studio or Player command. A failing invariant is
+    reported with its actual observed value, not silently marked as passed.
+    """
+    item = validate_case(case)
+    doc = item["scenario"]
+    if type(step) is not int or not 0 <= step <= len(doc["steps"]):
+        raise ValueError("Requested step out of bounds")
+    if revision != doc["revision"] or type(revision) is not str:
+        raise ValueError("Revision drift before replay")
+    expected_trace = {}
+    if report is not None:
+        if (type(report) is not dict or
+                report.get("scenario") != doc["id"] or
+                report.get("scenario_sha256") != sha256(canonical(doc)).hexdigest()):
+            raise ValueError("Report does not match replayed scenario")
+        trace = report.get("trace")
+        if type(trace) is not list or len(trace) > 257:
+            raise ValueError("Invalid trace for on-demand replay")
+        for row in trace:
+            if (type(row) is not dict or type(row.get("step")) is not int or
+                    not 0 <= row["step"] <= len(doc["steps"]) or
+                    type(row.get("digest")) is not str or
+                    row["step"] in expected_trace):
+                raise ValueError("Invalid or duplicate replay trace index")
+            expected_trace[row["step"]] = row["digest"]
+
+    session = GameSession.new(content, project, doc["campaign"], seed=doc["seed"])
+    state = session.recording()
+    if (state["content_digest"] != doc["content_digest"] or
+            state["project_digest"] != doc["project_digest"]):
+        raise ValueError("Content or GameProject drift before replay")
+    if 0 in expected_trace and expected_trace[0] != state["digest"]:
+        raise ValueError("Initial checkpoint diverged")
+    error = None
+    for index, command in enumerate(doc["steps"][:step], 1):
+        try:
+            getattr(session, command["operation"])(*deepcopy(command["args"]))
+            state = session.recording()
+            if index in expected_trace and state["digest"] != expected_trace[index]:
+                raise ValueError("Checkpoint diverged at step " + str(index))
+            # The preceding prefix must restore exactly before proceeding.
+            if index < step:
+                session = GameSession.from_recording(
+                    deepcopy(state), content, project)
+                if session.recording() != state:
+                    raise ValueError("Checkpoint restoration diverged")
+        except Exception as exc:
+            error = {"step": index, "type": type(exc).__name__,
+                     "message": str(exc)[:500]}
+            break
+
+    observations = []
+    if error is None and step:
+        for check in doc["steps"][step - 1]["expect"]:
+            actual = state
+            present = True
+            for key in check["path"]:
+                if type(actual) is not dict or key not in actual:
+                    present = False
+                    break
+                actual = actual[key]
+            observation = {
+                "path": deepcopy(check["path"]),
+                "expected": deepcopy(check["equals"]),
+                "present": present,
+                "matches": present and type(actual) is type(check["equals"])
+                           and actual == check["equals"],
+            }
+            if present:
+                encoded = canonical(actual)
+                if len(encoded) <= 4096:
+                    observation["actual"] = deepcopy(actual)
+                else:
+                    observation["actual_sha256"] = sha256(encoded).hexdigest()
+                    observation["actual_truncated"] = True
+            observations.append(observation)
+    return {
+        "kind": "drawtemp-r56b-replay-point", "schema": 1,
+        "scenario": doc["id"], "revision": revision, "step": step,
+        "status": ("runtime-failed" if error else "invariant-failed"
+                   if any(not row["matches"] for row in observations)
+                   else "reproduced"),
+        "mode": state["mode"], "digest": state["digest"],
+        "observations": observations, "error": error,
+        "release_certified": False,
+        "revision_independently_attested": False,
     }
 
 
