@@ -200,6 +200,14 @@ class Simulation:
             return None
         return freeze(self._session.rpg_state())
 
+    def route_destinations(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "route_destinations")
+        return freeze(self._session.route_destinations())
+
+    def route_transition(self, link_id, *, expected_revision=None):
+        return self._apply("route_transition", link_id,
+                           expected_revision=expected_revision)
+
     def rpg_route_state(self, *, expected_revision=None):
         """Read the canonical route scene during combat for shared R3 rendering.
 
