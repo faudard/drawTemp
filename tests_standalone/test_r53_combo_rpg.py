@@ -62,6 +62,28 @@ class R53ComboRpgTests(unittest.TestCase):
         self.assertEqual(result["combo_skip"], [])
         self.assertEqual(session._rpg_encounter.commands[0]["kind"], "combo")
 
+    def test_finisher_still_charges_all_heroes_after_first_skill_ko(self):
+        content, project = combo_fixture(extra_enemy=False)
+        # Ensure the first native skill defeats this tiny opponent: helpers
+        # must still pay their costs without an invalid hit on a KO target.
+        for mission in content.missions.values():
+            for unit in mission.units:
+                if unit.id == "renaud_mentor":
+                    unit.hp = unit.max_hp = 6
+        project.validate(content)
+        session = GameSession.new(content, project, "main", seed=8)
+        session.rpg_start("sparring")
+        before = {row["id"]: row for row in session.rpg_state()["actors"]}
+        result = session.rpg_action({
+            "kind": "combo", "actor": "jeanne",
+            "target": "renaud_mentor", "combo": "combined_strike"})
+        self.assertEqual(result["result"], "victory")
+        after = {row["id"]: row for row in result["actors"]}
+        self.assertEqual(after["jeanne"]["mp"], before["jeanne"]["mp"] - 2)
+        self.assertEqual(after["etienne"]["mp"], before["etienne"]["mp"] - 1)
+        self.assertEqual(GameSession.from_recording(
+            session.recording(), content, project).recording(), session.recording())
+
     def test_save_mid_encounter_roundtrip_and_once_only_settlement(self):
         content, project = combo_fixture()
         session = GameSession.new(content, project, "main", seed=42)
