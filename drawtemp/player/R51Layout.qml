@@ -7,6 +7,7 @@ Item {
     id: canvas
     property var projection: ({})
     property bool allowActions: false
+    property var permittedActions: []
     signal intent(string action)
     implicitWidth: 340
     implicitHeight: 210
@@ -29,6 +30,7 @@ Item {
             }
             responsiveColumns: Math.max(1, Number(canvas.projection.columns || 1))
             allowActions: canvas.allowActions
+            permittedActions: canvas.permittedActions
             onIntent: function(action) { canvas.intent(action) }
         }
     }
