@@ -73,9 +73,12 @@ class NativeTargetingQtTests(unittest.TestCase):
     def test_parent_ability_designer_ct_mode_gate(self):
         window = AbilityDesignerDialog(self.session)
         try:
+            self.assertTrue(window.preview_changes())
+            self.assertTrue(window.apply_button.isEnabled())
             with patch.object(NativeTargetingDialog, "exec", return_value=0):
                 self.assertTrue(window.open_native_target(),
                                 window.report.toPlainText())
+            self.assertFalse(window.apply_button.isEnabled())
             self.assertEqual(self.session.revision, 0)
             window.draft.document["effects"][0]["formula"] = {
                 "op": "stat", "name": "attack"}
