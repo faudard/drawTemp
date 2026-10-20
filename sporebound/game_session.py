@@ -382,17 +382,27 @@ class GameSession:
         """Detached state projection for Player/Studio; no frame-clock input."""
         return self._active_platform().snapshot()
 
-    def route_platform_step(self, move=0, jump=False, interact=False):
+    def route_platform_step(self, move=0, jump=False, interact=False, attack=False):
         """Exactly one fixed step; rewards and door flags belong to Campaign."""
         runtime = self._active_platform()
         if self._living_world is not None:
             self._living_world.preflight(1)
-        events = runtime.step({"tick": runtime.tick + 1, "move": move,
-                               "jump": jump, "interact": interact})
+        command = {"tick": runtime.tick + 1, "move": move,
+                   "jump": jump, "interact": interact}
+        if "boss" in runtime.scene:
+            command["attack"] = attack
+        else:
+            require(type(attack) is bool and not attack,
+                    "Attack requires an authored R40 platform boss")
+        events = runtime.step(command)
         for event in events:
             if event["kind"] == "door_open":
                 self.progress.story_flags[self._platform_flag(event["collider"])] = True
         self._metroidvania_collect(events)
+        for event in events:
+            if event["kind"] == "boss_defeated":
+                from .exploration import _key
+                self.progress.story_flags[_key(self.route_scene, "boss_defeated")] = True
         if self._living_world is not None:
             self._living_world.advance(1)
         return {"state": runtime.snapshot(), "events": events}
@@ -1298,6 +1308,12 @@ class GameSession:
                                                       expected_scene=authored)
             require(platform.max_air_jumps <= session._metroidvania_air_jumps(),
                     "R32 air jumps are not authorized by earned R33 abilities")
+            if "boss" in authored:
+                from .exploration import _key
+                won = session.progress.story_flags.get(
+                    _key(session.route_scene, "boss_defeated")) is True
+                require(won == platform.boss.snapshot()["defeated"],
+                        "R40 boss replay disagrees with canonical campaign victory")
             authored_openable = {row["opens"] for row in authored["colliders"]
                                  if "opens" in row}
             saved_opened = {ident for ident in authored_openable
