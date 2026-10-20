@@ -204,6 +204,19 @@ class PlayerController:
         self.session.party_set_active(selected, expected_revision=state.revision)
         return self._changed()
 
+    def recruit_party_member(self, hero_id):
+        """Add a recruitable hero through GameSession, never a UI-only roster."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Recruitment requires idle exploration")
+        self.session.party_recruit(hero_id, expected_revision=state.revision)
+        return self._changed()
+
+    def claim_rpg_quest(self):
+        state = self._current()
+        self.session.rpg_claim_quest(expected_revision=state.revision)
+        return self._changed()
+
     def start_rpg_encounter(self, encounter_id):
         """Enter an explicitly authored RPG encounter from the campaign menu."""
         state = self._current()
@@ -652,7 +665,7 @@ class PlayerController:
                 "gear": {"equipped": {}, "inventory": []},
                 "party": {"enabled": False, "heroes": [], "active": [],
                           "capacity": 0},
-                "rpg_available": [], "rpg": {}}
+                "rpg_available": [], "rpg": {}, "rpg_quest": {}}
         if self.campaign_id.endswith("_journey"):
             campaign = self.project.campaign(self.campaign_id)
             if campaign is not None:
@@ -665,6 +678,8 @@ class PlayerController:
         base["missions"] = list(snapshot.missions)
         base["rpg_available"] = list(self.session.rpg_available(
             expected_revision=snapshot.revision))
+        quest = self.session.rpg_quest_state(expected_revision=snapshot.revision)
+        base["rpg_quest"] = thaw(quest) if quest is not None else {}
         if snapshot.mode == "rpg":
             base["rpg"] = thaw(self.session.rpg_state(
                 expected_revision=snapshot.revision))
@@ -709,6 +724,13 @@ class PlayerController:
             base["party"] = {
                 "enabled": True, "active": list(party["active"]),
                 "capacity": config["max_active"],
+                "recruitable": [
+                    {"id": uid, "name": next(
+                        (unit.name for mission in self.content.missions.values()
+                         for unit in mission.units
+                         if unit.id == uid and unit.team == "player"), uid)}
+                    for uid in config["recruitable"] if uid not in party["members"]
+                ],
                 "heroes": [{
                     "id": uid,
                     "name": uid,
