@@ -156,6 +156,26 @@ def create_bridge(controller, renderer, *, profiling=False):
             self._resync()
             self._publish()
 
+        @Slot()
+        def settle(self):
+            """R50.B only: commit action victory and real CT start."""
+            try:
+                self.controller.settle()
+            except Exception as exc:
+                self.controller.message = "Victoire non validée : " + str(exc)
+            self._resync()
+            self._publish()
+
+        @Slot()
+        def returnFromCt(self):
+            """R50.B only: abandon CT with no tactical loot and return."""
+            try:
+                self.controller.return_from_ct()
+            except Exception as exc:
+                self.controller.message = "Retour CT refusé : " + str(exc)
+            self._resync()
+            self._publish()
+
     return ActionBridge(controller)
 
 

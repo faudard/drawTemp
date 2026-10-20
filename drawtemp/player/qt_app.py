@@ -711,6 +711,11 @@ def main(argv=None):
             raise ValueError("Experimental action preview is not a certified native bundle")
         from drawtemp.player.action_app import main as action_main
         return action_main([arg for arg in argv if arg != "--action-demo"])
+    if "--r50b-action" in argv:
+        if getattr(sys, "frozen", False):
+            raise ValueError("R50.B graphical Player has no certified native bundle")
+        from drawtemp.player.r50b_action_app import main as r50b_main
+        return r50b_main([arg for arg in argv if arg != "--r50b-action"])
     parser = argparse.ArgumentParser(description="DrawTemp 5 — Qt Quick Player (R12)")
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",

@@ -130,6 +130,8 @@ class GameSession:
         self._rt_position = None
         self._rt_journal = None
         self._platform = None  # R32 opt-in side-view adapter, never CT.
+        self._action = None  # R50.B opt-in R26 rules, recorded inside GameSession.
+        self._action_settlements = []  # Verifiable one-shot Campaign credits.
         # R34.C is opt-in, versioned and owned by this GameSession.
         from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
         run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
@@ -1101,7 +1103,8 @@ class GameSession:
         """
         from .fixed_clock import FixedTickJournal
         from .fixed_realtime import FreeMovement
-        require(self._platform is None, "Cannot mix R25 and R32 physics movement")
+        require(self._platform is None and self._action is None,
+                "Cannot mix R25 and R26/R32 movement")
         current = self.route_realtime_state()
         require(type(dx) is int and type(dy) is int
                 and dx in (-1, 0, 1) and dy in (-1, 0, 1),
@@ -1146,6 +1149,93 @@ class GameSession:
             self._systems = staged_system
         return self.route_realtime_state()
 
+    def route_action_state(self):
+        """Read an R26 combat snapshot for the active routed action scene."""
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration
+                and self._rt_journal is None and self._platform is None,
+                "R26 combat requires a routed, idle action exploration scene")
+        scene = authored_action_scene(self.project, self.route_scene)
+        from .action_settlement import settlement_keys
+        done, _ = settlement_keys(self.route_scene)
+        require(self.progress.story_flags.get(done) is not True,
+                "R26 combat already settled; reward replay is one-shot")
+        return (self._action.snapshot() if self._action is not None else
+                ActionRuntime(scene).snapshot())
+
+    def route_action_step(self, command):
+        """Run exactly one deterministic R26 tick, committed by PlayerController.
+
+        The action journal is an opt-in field of canonical GameSession, not
+        a separate save slot. Invalid commands never mutate this session.
+        """
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        self.route_action_state()
+        scene = authored_action_scene(self.project, self.route_scene)
+        runtime = self._action
+        if runtime is None:
+            runtime = ActionRuntime(scene)
+        else:
+            require(runtime.scene == scene, "Action scene changed during gameplay")
+        events = runtime.step(command)
+        self._action = runtime
+        return {"state": runtime.snapshot(), "events": events}
+
+    def route_action_settle(self, link_id):
+        """Settle a genuine R26 victory and cross an R25 route atomically."""
+        from .action_settlement import (
+            MAX_SETTLEMENTS, settlement_keys, victory_coins,
+        )
+        require(self._action is not None and self.mode == "campaign" and
+                len(self._action_settlements) < MAX_SETTLEMENTS,
+                "No active R26 combat or settlement capacity exhausted")
+        source = self.route_scene
+        done, coin_flag = settlement_keys(source)
+        require(done not in self.progress.story_flags and
+                coin_flag not in self.progress.story_flags,
+                "R26 combat rewards have already been paid")
+        coins = victory_coins(self._action)
+        require(self.progress.gold + coins <= 1000000000,
+                "R26 reward exceeds the campaign gold budget")
+        route = self.scene_router.destination(source, link_id, self.progress)
+        require(route["source"] == source, "R26 exit must start in action scene")
+        record = {
+            "version": 1, "scene": source, "link": link_id,
+            "route_index": len(self.route_history),
+            "coin": coins, "runtime": self._action.recording(),
+        }
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.progress.gold += coins
+            self.progress.story_flags[done] = True
+            self.progress.story_flags[coin_flag] = coins
+            self._action_settlements.append(record)
+            self._action = None
+            moved = self.route_transition(link_id)
+            return {"route": moved, "coins_awarded": coins,
+                    "campaign_gold": self.progress.gold,
+                    "settled_scene": source}
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
+            raise
+
     def _platform_definition(self):
         """Resolve geometry only for a routed free-movement authored scene."""
         from .physics_scenes import EXTENSION
@@ -1154,7 +1244,8 @@ class GameSession:
                 and not self.tactical_story_pending
                 and self.route_scene in self.project.exploration
                 and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME"
-                and self._rt_journal is None,
+                and self._rt_journal is None
+                and self._action is None,
                 "Physics requires an active routed free-movement scene")
         extension = self.project.extensions.get(EXTENSION, {})
         authored = extension.get("data", {}).get("scenes", {}).get(self.route_scene)
@@ -1259,10 +1350,18 @@ class GameSession:
         from .scene_router import MAX_HISTORY
         require(self.scene_router.enabled and self.mode == "campaign"
                 and not self.progress.story_pending
-                and not self.tactical_story_pending,
-                "Resolve encounter or dialogue before changing scenes")
+                and not self.tactical_story_pending
+                and self._action is None,
+                "Resolve encounter, action combat or dialogue before changing scenes")
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
+        from .action_scene_adapter import EXTENSION as ACTION_EXTENSION
+        from .action_settlement import settlement_keys
+        if self.route_scene in self.project.extensions.get(
+                ACTION_EXTENSION, {}).get("data", {}).get("scenes", {}):
+            done, _ = settlement_keys(self.route_scene)
+            require(self.progress.story_flags.get(done) is True,
+                    "Complete and settle action combat before exiting its scene")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
         # R33 ability-gated route requirements are explicit project data.
         # For authored physical gates, enforce actual R32 overlap too;
@@ -1328,6 +1427,42 @@ class GameSession:
              self.tactical_story_queue, self._rt_origin,
              self._rt_position, self._rt_journal, self._platform,
              self._stream_world) = before
+            raise
+
+    def route_abandon_ct(self, link_id):
+        """Explicitly abandon an R25-routed CT battle and return atomically.
+
+        Abandoned battles pay no tactical reward. Both the battle removal
+        and route navigation are rolled back on a rejected or failed exit.
+        The Player facade persists the resulting GameSession once.
+        """
+        require(self.scene_router.enabled and self.mode == "battle"
+                and self.route_scene in self.content.missions
+                and not self.tactical_story_pending,
+                "Only a routed, active CT encounter can be abandoned")
+        # Validate destination before the mutation, including narrative gates.
+        route = self.scene_router.destination(
+            self.route_scene, link_id, self.progress)
+        require(route["destination"] in self.project.exploration,
+                "CT abandonment must return to authored exploration")
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.abandon_encounter()
+            return self.route_transition(link_id)
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
             raise
 
     def _tactical_story_progress(self):
@@ -1891,6 +2026,25 @@ class GameSession:
             self._platform_definition()
             data["scene_platform"] = {"version": 1, "scene": self.route_scene,
                                       "physics": self._platform.recording()}
+        from .action_settlement import validate_settlements
+        validate_settlements(
+            self._action_settlements, project=self.project,
+            route_history=self.route_history, progress=self.progress,
+            current_action=self._action)
+        if self._action_settlements:
+            data["scene_action_history"] = deepcopy(self._action_settlements)
+        if self._action is not None:
+            require(self.scene_router.enabled and self.mode == "campaign"
+                    and self._rt_journal is None and self._platform is None,
+                    "Action checkpoint requires routed campaign without other simulators")
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            scene = authored_action_scene(self.project, self.route_scene)
+            ActionRuntime.from_recording(self._action.recording(),
+                                         expected_scene=scene)
+            data["scene_action"] = {
+                "version": 1, "scene": self.route_scene,
+                "runtime": self._action.recording()}
         if self._rt_journal is not None:
             require(self.scene_router.enabled and self.mode == "campaign"
                     and self.route_scene in self.project.exploration,
@@ -1947,7 +2101,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -2256,6 +2410,25 @@ class GameSession:
                 _key(session.route_scene, "boss_defeated")) is True
             require(not claimed or "scene_platform" in data,
                     "R40 boss victory requires an authenticated R32 replay")
+        if "scene_action" in data:
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            action_saved = data["scene_action"]
+            require(type(action_saved) is dict and
+                    set(action_saved) == {"version", "scene", "runtime"}
+                    and type(action_saved["version"]) is int
+                    and action_saved["version"] == 1
+                    and action_saved["scene"] == session.route_scene
+                    and mode == "campaign" and session.scene_router.enabled
+                    and session._rt_journal is None
+                    and "scene_platform" not in data
+                    and session.route_scene in project.exploration,
+                    "Invalid R26 action checkpoint identity or mode")
+            scene = authored_action_scene(project, session.route_scene)
+            session._action = ActionRuntime.from_recording(
+                action_saved["runtime"], expected_scene=scene)
+            require(session._action.tick > 0,
+                    "Action checkpoint must contain at least one accepted tick")
         if "scene_platform" in data:
             from .platform_physics import PlatformPhysics
             saved = data["scene_platform"]
@@ -2297,6 +2470,15 @@ class GameSession:
                     "R54 world history diverged from R25 route journal")
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
+        from .action_settlement import validate_settlements
+        history = data.get("scene_action_history", [])
+        require("scene_action_history" not in data or
+                (type(history) is list and bool(history)),
+                "Empty or malformed R26 settlement evidence")
+        validate_settlements(
+            history, project=project, route_history=session.route_history,
+            progress=session.progress, current_action=session._action)
+        session._action_settlements = deepcopy(history)
         session.world_state()
         # Reconstruct each snapshot from its write ledger after the canonical
         # combat / realtime clocks have been verified and loaded.
