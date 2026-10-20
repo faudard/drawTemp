@@ -98,6 +98,30 @@ class CampaignBridgeTests(unittest.TestCase):
         session.apply(remove_export(session, "r31_supplies"))
         self.assertNotIn(EXTENSION, session.snapshot().to_dict()["project"]["extensions"])
 
+    def test_reference_catalog_sorted_unique_and_bad_binding_rejected(self):
+        bindings = [
+            {"mission": "beta", "source": "r31_b", "target": "r31_b_flag",
+             "result": "both"},
+            {"mission": "alpha", "source": "r31_a", "target": "r31_a_flag",
+             "result": "victory"},
+            {"mission": "beta", "source": "r31_c", "target": "r31_c_flag",
+             "result": "defeat"},
+        ]
+        project = GameProject(extensions={
+            EXTENSION: {
+                "schema_version": 1,
+                "data": {"bindings": bindings},
+                "references": [
+                    {"kind": "mission", "id": "alpha"},
+                    {"kind": "mission", "id": "beta"},
+                ],
+            },
+        })
+        self.assertEqual(bridge_bindings(project), bindings)
+        project.extensions[EXTENSION]["data"]["bindings"].append(None)
+        with self.assertRaises(RuleError):
+            bridge_bindings(project)
+
     def test_validation_rejects_unknown_and_malformed_bindings(self):
         session, content, project = fixture()
         original = project.to_dict()

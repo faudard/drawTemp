@@ -38,9 +38,11 @@ def bridge_bindings(project):
     refs = spec["references"]
     require(type(refs) is list and
             refs == [{"kind": "mission", "id": mission}
-                     for mission in sorted({row["mission"] for row in bindings}
-                                           if type(row) is dict and
-                                           type(row.get("mission")) is str)],
+                     for mission in sorted({
+                         row["mission"] for row in bindings
+                         if type(row) is dict and
+                         type(row.get("mission")) is str
+                     })],
             "R31.G references must match binding missions")
     used = set()
     for row in bindings:
