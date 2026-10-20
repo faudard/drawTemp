@@ -133,7 +133,8 @@ class GameSession:
         from .survival import EXTENSION as SURVIVAL_EXTENSION, SurvivalRuntime
         survival_spec = self.project.extensions.get(SURVIVAL_EXTENSION)
         self._survival = (
-            SurvivalRuntime(survival_spec["data"], set(self.project.exploration))
+            SurvivalRuntime(survival_spec["data"], set(self.project.exploration),
+                            exploration=self.project.exploration)
             if survival_spec is not None else None)
         self.battle = None
         self.fronts = None
