@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R38.2: optional authored prefab instance provenance, validated on load.
+        # Legacy projects without this extension retain byte-compatible manifests.
+        from .prefab_variants import NAMESPACE as PREFAB_NS, validate_prefab_extensions
+        if PREFAB_NS in self.extensions:
+            validate_prefab_extensions(self.extensions[PREFAB_NS], content)
         # R51.A: opt-in UI layouts share the canonical GameProject extension.
         # Validation runs at load/authoring time; legacy manifests are untouched.
         from .ui_layout_r51 import NAMESPACE as UI_NAMESPACE, validate_ui_catalog

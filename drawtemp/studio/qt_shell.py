@@ -58,6 +58,7 @@ log = logging.getLogger(__name__)
 DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
+    "global_search": "Ctrl+Shift+F",
     "focus_resources": "Ctrl+1",
     "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+Shift+N",
     "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
@@ -466,6 +467,12 @@ class StudioWindow(QMainWindow):
         self._action("undo", "Annuler", self.undo)
         self._action("redo", "Rétablir", self.redo)
         self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("global_search", "R38 • Recherche globale et utilisations…",
+                     self.open_global_search)
+        self._action("r38_prefabs", "R38 • Prefabs et variantes héritées…",
+                     self.open_prefab_variants)
+        self._action("r38_refactor", "R38 • Renommer les références typées…",
+                     self.open_refactor)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
@@ -552,6 +559,9 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["global_search"])
+        tools_menu.addAction(self.commands["r38_prefabs"])
+        tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -648,6 +658,27 @@ class StudioWindow(QMainWindow):
 
     def open_palette(self):
         CommandPalette(self).exec()
+
+    def open_global_search(self):
+        """R38 index rebuilt from the current R1 revision; inspection only."""
+        from drawtemp.studio.r38_search_qt import GlobalSearchDialog
+        GlobalSearchDialog(self).exec()
+
+    def open_prefab_variants(self):
+        """R38.2 existing R6 prefab variants; all writes use the R1 session."""
+        from drawtemp.studio.r38_prefabs_qt import PrefabVariantsDialog
+        prior = self.session.revision
+        PrefabVariantsDialog(self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_refactor(self, identity=None):
+        """R38.3 explicit mission-scoped reference rename with Undo/Redo."""
+        from drawtemp.studio.r38_refactor_qt import RefactorDialog
+        prior = self.session.revision
+        RefactorDialog(self, initial=identity).exec()
+        if self.session.revision != prior:
+            self.refresh()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
@@ -818,6 +849,13 @@ class StudioWindow(QMainWindow):
                        lambda: self.reference_filter.setCurrentIndex(1))
         menu.addAction("Références utilisées",
                        lambda: self.reference_filter.setCurrentIndex(2))
+        identity = index.data(Qt.UserRole)
+        if identity:
+            key = tuple(identity.split("|", 2))
+            if key[0] in ("objects", "actors") and key in self._resource_by_key:
+                menu.addSeparator()
+                menu.addAction("Renommer l'ID et ses références (R38.3)…",
+                               lambda identity=key: self.open_refactor(identity))
         menu.exec(self.resource_view.viewport().mapToGlobal(point))
 
     @measure_studio("studio.refresh")
