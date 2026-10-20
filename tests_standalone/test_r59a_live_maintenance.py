@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from drawtemp.export.live_maintenance import (
     release_descriptor, validate_release_descriptor, plan_update,
-    snapshot_saves, verify_save_snapshot, restore_saves,
+    snapshot_saves, verify_save_snapshot, restore_saves, _relative,
 )
 from drawtemp.export.r15 import ExportError
 
@@ -170,13 +170,12 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_nonportable_save_paths_fail_closed(self):
-        for basename in ("CON.json", "trailing.", "colon:name.json"):
-            candidate = self.saves / basename
-            candidate.write_bytes(b"save")
+        # Avoid creating Windows-reserved filenames on Windows CI runners.
+        for basename in ("CON.json", "trailing.", "colon:name.json", "../escape",
+                         "folder\\\\danger.json", "folder//double.json"):
             with self.subTest(basename=basename), self.assertRaisesRegex(
                     ExportError, "Unsafe"):
-                snapshot_saves(self.saves, self.root / ("snapshot-" + str(len(basename))))
-            candidate.unlink()
+                _relative(basename)
 
 
 if __name__ == "__main__":
