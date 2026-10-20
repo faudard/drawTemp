@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "quest-mod",
+  "version": "1.0.0",
+  "namespace": "org.example.quest",
+  "requires": {
+    "min_api": "1.0.0",
+    "max_api": "2.0.0",
+    "features": [
+      "modding-declarative.v1",
+      "project-extensions.v1"
+    ]
+  },
+  "permissions": [
+    "project.extensions.write"
+  ],
+  "dependencies": [],
+  "resources": [],
+  "extension": {
+    "data": {
+      "entry": "quest-1"
+    },
+    "references": []
+  },
+  "rights": {
+    "license": "MIT",
+    "origin": "original authored sample",
+    "evidence": "author assertion (not independently approved)",
+    "redistributable": true
+  }
+}

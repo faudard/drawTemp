@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "id": "combat-tactics-r47",
+  "version": "1.0.0",
+  "namespace": "org.example.r47.combat",
+  "requires": {
+    "min_api": "1.0.0",
+    "max_api": "2.0.0",
+    "features": [
+      "modding-declarative.v1",
+      "project-extensions.v1"
+    ]
+  },
+  "permissions": [
+    "project.extensions.write"
+  ],
+  "dependencies": [],
+  "resources": [],
+  "extension": {
+    "data": {
+      "family": "combat-notes",
+      "encounter_label": "Village defence",
+      "suggested_roles": [
+        "defender",
+        "ranged",
+        "support"
+      ],
+      "notes": "Authoring metadata only; the combat Core does not execute this descriptor."
+    },
+    "references": []
+  },
+  "rights": {
+    "license": "CC0-1.0",
+    "origin": "DrawTemp original R47 fixture",
+    "evidence": "Test-only original metadata; no third-party assets",
+    "redistributable": true
+  }
+}
