@@ -112,6 +112,13 @@ class GameSession:
                         set(self.project.exploration) | set(self.content.missions),
                         exploration=self.project.exploration)
             if spec is not None else None)
+        # R55: canonical GameSession-owned economy, opt-in for authored projects.
+        from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
+        system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
+        self._systems = (
+            SystemEconomy(system_spec["data"],
+                          set(self.project.exploration) | set(self.content.missions))
+            if system_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -179,6 +186,41 @@ class GameSession:
 
     def roguelite_checkpoint(self):
         return self._roguelite_action("checkpoint")
+
+    def system_state(self):
+        """Read a detached snapshot of the R55 resource economy."""
+        require(self._systems is not None, "R55 systems not configured")
+        return self._systems.snapshot()
+
+    def system_preview(self, ticks=1):
+        require(self._systems is not None, "R55 systems not configured")
+        return self._systems.preview(ticks)
+
+    def system_advance(self, ticks=1):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 economy requires campaign mode without pending dialogue")
+        return self._systems.advance(ticks)
+
+    def system_trade(self, merchant_id, action, quantity, transaction_id):
+        """Transfer resources with canonical Campaign inventory and currency."""
+        require(self._systems is not None and self.mode == "campaign"
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 trading requires routed exploration without dialogue")
+        return self._systems.trade(
+            self.progress, self.route_scene, merchant_id, action,
+            quantity, transaction_id)
+
+    def system_fulfill(self, quest_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R55 quest delivery requires active campaign without dialogue")
+        return self._systems.fulfill(self.progress, quest_id)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -978,6 +1020,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._systems is not None:
+            data["systems"] = self._systems.snapshot()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1005,7 +1049,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1036,6 +1080,11 @@ class GameSession:
         else:
             require("living_world" not in data,
                     "Unexpected living-world state in legacy checkpoint")
+        if session._systems is not None:
+            require("systems" in data, "R55 configured economy checkpoint missing")
+            session._systems.restore(data["systems"])
+        else:
+            require("systems" not in data, "Unexpected R55 economy in legacy save")
         if session._roguelite is not None:
             require("roguelite" in data,
                     "R34 configured project checkpoint is missing its run state")
@@ -1047,6 +1096,11 @@ class GameSession:
             require("roguelite" not in data,
                     "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        if session._systems is not None:
+            require(all(session.progress.story_flags.get(
+                session._systems.quests[quest_id]["flag"]) is True
+                for quest_id in session._systems.fulfilled),
+                "R55 quest receipt requires the persisted campaign story flag")
         verify_flow_save(session.progress, project.campaign_flow)
         session.story.initialize(session.progress, session.campaign_id)
         require(set(session.progress.unlocked + session.progress.completed)
