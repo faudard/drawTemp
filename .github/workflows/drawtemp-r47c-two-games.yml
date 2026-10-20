@@ -8,6 +8,9 @@ on:
       - 'tests_standalone/test_drawtemp_r47c_two_games.py'
       - 'tests_standalone/test_drawtemp_r47d_versions.py'
       - 'tests_standalone/test_drawtemp_r47e_live_integrity.py'
+      - 'tests_standalone/test_drawtemp_r47f_project_preflight.py'
+      - 'drawtemp/sdk/mod_preflight.py'
+      - 'drawtemp/player/qt_app.py'
       - 'examples/mods/**'
       - 'docs/drawtemp5/R47C_TWO_GAMES_INTEGRATION.md'
       - '.github/workflows/drawtemp-r47c-two-games.yml'
@@ -44,6 +47,7 @@ jobs:
           tests_standalone.test_drawtemp_r47c_two_games
           tests_standalone.test_drawtemp_r47d_versions
           tests_standalone.test_drawtemp_r47e_live_integrity
+          tests_standalone.test_drawtemp_r47f_project_preflight
           tests_standalone.test_drawtemp_r47a_modding
           tests_standalone.test_drawtemp_r30_creator
           tests_standalone.test_drawtemp5_r15_creator
