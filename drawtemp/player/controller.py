@@ -194,7 +194,9 @@ class PlayerController:
         state = self._current()
         if self.session.platform_state(expected_revision=state.revision) is not None:
             raise ValueError("Physical scenes require R32 platform controls")
-        if not state.exploration or state.exploration["completed"]:
+        world = thaw(self.session.world_atlas_state())
+        if not state.exploration or (state.exploration["completed"] and
+                                     not world["enabled"]):
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
@@ -322,6 +324,36 @@ class PlayerController:
             raise ValueError("System economy is not configured")
         self.session.system_fulfill(quest_id, expected_revision=state.revision)
         return self._changed()
+
+    def world_interact(self, object_id):
+        """R44 persistent object activation through the R1 GameSession owner."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration:
+            raise ValueError("R44: no active exploration scene")
+        world = thaw(self.session.world_atlas_state())
+        if not world["enabled"] or object_id not in world["object_ids"]:
+            raise ValueError("R44: unknown World Atlas object")
+        point = next((p for p in state.exploration["interactions"]
+                      if p["id"] == object_id), None)
+        self.session.world_interact(object_id, expected_revision=state.revision)
+        self.message = ((point["title"] + " — " + point["text"])
+                        if point is not None else "Objet du monde activé")
+        return self._changed(keep_message=True)
+
+    def world_transition(self, route_id):
+        """R44 hotspot-aware travel, authorized by SceneRouter in GameSession."""
+        self._require_cinematic_completed()
+        state = self._current()
+        world = thaw(self.session.world_atlas_state())
+        route = next((entry for entry in world["portals"]
+                      if entry["id"] == route_id), None)
+        if not world["enabled"] or route is None:
+            raise ValueError("R44: unknown World Atlas passage")
+        self.session.world_transition(route_id, expected_revision=state.revision)
+        self.selected = [0, 0]
+        self.message = "Arrivée : " + route["title"]
+        return self._changed(keep_message=True)
 
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
@@ -729,6 +761,11 @@ class PlayerController:
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "dialogue_line": {}, "exploration": {},
+                "world_atlas": {"enabled": False, "scene": "", "region": "",
+                                "region_title": "", "portals": [], "objects": [],
+                                "object_ids": [], "reachability": {
+                                    "scenes": [], "regions": [], "blocked_routes": []},
+                                "region_total": 0, "visited_regions": []},
                 "routes": [],
                 "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
@@ -796,6 +833,7 @@ class PlayerController:
             base["scene"]["speaker"] = presentation["speaker"]
             base["scene"]["text"] = presentation["text"]
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        base["world_atlas"] = thaw(self.session.world_atlas_state())
         system_snapshot = self.session.system_state(
             expected_revision=snapshot.revision)
         if system_snapshot is not None:
@@ -892,14 +930,16 @@ class PlayerController:
                           not battle.get("result")),
             }
         if snapshot.scene and (snapshot.battle or not snapshot.exploration or
-                               snapshot.exploration["completed"]):
+                               (snapshot.exploration["completed"] and
+                                not base["world_atlas"]["enabled"])):
             base["screen"] = "dialogue"
             base["choices"] = (
                 thaw(self.session.choices())
                 if not presentation or presentation["complete"] else [])
         elif base["platform"]["enabled"]:
             base["screen"] = "platform"
-        elif snapshot.exploration and not snapshot.exploration["completed"]:
+        elif snapshot.exploration and (not snapshot.exploration["completed"] or
+                                       base["world_atlas"]["enabled"]):
             base["screen"] = "exploration"
         elif snapshot.battle:
             base["screen"] = "result" if snapshot.battle["result"] else "battle"

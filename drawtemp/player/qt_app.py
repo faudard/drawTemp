@@ -97,7 +97,9 @@ def scene_for_player(controller):
         if snapshot.battle is not None:
             mission_id = snapshot.battle["mission_id"]
             return scene_from_mission(controller.content.missions[mission_id], snapshot)
-        if snapshot.exploration is not None and not snapshot.exploration["completed"]:
+        if snapshot.exploration is not None and (
+                not snapshot.exploration["completed"] or
+                controller.session.world_atlas_state()["enabled"]):
             world = controller.session.living_world_state(
                 scene=snapshot.exploration["scene_id"])
             return scene_from_exploration(
@@ -546,6 +548,14 @@ def create_bridge(controller, renderer):
         def exploreInteract(self, target):
             self.invoke(self.controller.explore_interact, target)
 
+        @Slot(str)
+        def worldInteract(self, object_id):
+            self.invoke(self.controller.world_interact, object_id)
+
+        @Slot(str)
+        def worldTransition(self, route_id):
+            self.invoke(self.controller.world_transition, route_id)
+
         @Slot(str, str)
         def exploreActor(self, actor, action):
             self.invoke(self.controller.explore_actor, actor, action)
@@ -678,7 +688,15 @@ def main(argv=None):
                         help="R14 Qt input journey: title, story, battle, F5, menu, reload")
     parser.add_argument("--gui-target-journey", action="store_true",
                         help="R18 Qt GUI journey: select, request, cancel, confirm, resume")
+    parser.add_argument("--gui-world-journey", action="store_true",
+                        help="R44 five-valley Qt input/save/reload journey on an authored pair")
     args = parser.parse_args(argv)
+    if args.gui_world_journey and (
+            args.reference or args.smoke or args.content is None or
+            args.save_dir is None or args.gui_journey or args.gui_target_journey):
+        parser.error(
+            "--gui-world-journey requires --content and isolated --save-dir, "
+            "without --reference/--smoke/other journeys")
     if len(args.actor_pack) > 32:
         parser.error("Too many actor packs (maximum 32)")
     actor_packs = {}
@@ -771,7 +789,126 @@ def main(argv=None):
     if not engine.rootObjects():
         print("R12 Player QML root failed to load", file=sys.stderr)
         return 1
-    if args.gui_journey or args.gui_target_journey:
+    if args.gui_world_journey:
+        # Exercise production QML buttons, actual R1 gameplay and R17 save slots.
+        # This is a native GUI gate; it cannot be replaced by a headless mock.
+        from PySide6.QtCore import QPointF, Qt
+        from PySide6.QtTest import QTest
+        from examples.r44_five_valleys import VALLEYS
+        from sporebound.world_graph44 import EXTENSION
+
+        spec = controller.project.extensions.get(EXTENSION)
+        if (spec is None or
+                len(spec["data"].get("regions", [])) != len(VALLEYS) or
+                {row["id"] for row in spec["data"]["regions"]} !=
+                {item[0] for item in VALLEYS}):
+            parser.error("--gui-world-journey needs the R44 five-valley project")
+
+        def world_journey():
+            try:
+                window = engine.rootObjects()[0]
+                window.setWidth(1440)
+                window.setHeight(1100)
+                window.requestActivate()
+                QTest.qWait(120)
+
+                def children(item):
+                    if item is None:
+                        return
+                    yield item
+                    for child in item.childItems():
+                        yield from children(child)
+
+                def click(name):
+                    for attempt in range(12):
+                        QTest.qWait(45)
+                        item = next((node for node in children(
+                            window.property("contentItem"))
+                            if node.objectName() == name), None)
+                        if item is not None and item.isVisible() and item.isEnabled():
+                            # Gameplay controls live in a long ScrollView.
+                            # Scroll the real Flickable into view, not a mock click.
+                            scroll = next((node for node in children(
+                                window.property("contentItem"))
+                                if node.objectName() == "r44GameplayScroll"), None)
+                            if scroll is not None and name.startswith("r44"):
+                                flick = scroll.property("contentItem")
+                                if flick is not None:
+                                    center = item.mapToScene(QPointF(
+                                        item.width() / 2, item.height() / 2))
+                                    viewport = scroll.mapToScene(QPointF(
+                                        scroll.width() / 2, scroll.height() / 2))
+                                    current = float(flick.property("contentY") or 0)
+                                    total = float(flick.property("contentHeight") or 0)
+                                    limit = max(0.0, total - float(scroll.height()))
+                                    target = min(limit, max(0.0,
+                                        current + center.y() - viewport.y()))
+                                    flick.setProperty("contentY", target)
+                                    QTest.qWait(45)
+                            pos = item.mapToScene(QPointF(
+                                item.width() / 2, item.height() / 2))
+                            if (pos.x() < 0 or pos.y() < 0 or
+                                    pos.x() > window.width() or
+                                    pos.y() > window.height()):
+                                raise AssertionError(
+                                    "Control not in visible viewport: " + name)
+                            from PySide6.QtCore import QPoint
+                            QTest.mouseClick(window, Qt.LeftButton,
+                                             pos=QPoint(round(pos.x()),
+                                                        round(pos.y())))
+                            QTest.qWait(110)
+                            return
+                    raise AssertionError(
+                        "Missing visible and enabled QML control: " + name)
+
+                click("r14NewGame")
+                ids = [entry[0] for entry in VALLEYS]
+                for index, scene_id in enumerate(ids):
+                    state = controller.state()
+                    if (state["screen"] != "exploration" or
+                            state["world_atlas"]["scene"] != scene_id):
+                        raise AssertionError(
+                            "Expected R44 exploration " + scene_id +
+                            ", got " + str(state["world_atlas"].get("scene")))
+                    click("r44Object-relic")
+                    if not controller.state()["world_atlas"]["objects"][0]["active"]:
+                        raise AssertionError("R44 relic was not activated")
+                    if index + 1 < len(ids):
+                        # Walk with real Qt shortcuts to [3,2], adjacent to
+                        # the authored portal at [3,3] (not a free teleport).
+                        for key in (Qt.Key_Right, Qt.Key_Right, Qt.Key_Down):
+                            QTest.keyClick(window, key)
+                            QTest.qWait(60)
+                        click("r44Portal-to_" + ids[index + 1])
+                    if index == 1:
+                        # Save and resume halfway through the authored route.
+                        QTest.keyClick(window, Qt.Key_F5)
+                        QTest.qWait(100)
+                        if 1 not in controller.slots():
+                            raise AssertionError("R44 save shortcut did not create slot")
+                        before = controller.session.recording()
+                        click("r14PauseMenu")
+                        click("r14TitleFromPause")
+                        click("r14Continue")
+                        if controller.session.recording() != before:
+                            raise AssertionError("R44 QML reload changed checkpoint")
+                for key in (Qt.Key_Right, Qt.Key_Right, Qt.Key_Down):
+                    QTest.keyClick(window, key)
+                    QTest.qWait(60)
+                click("r44Portal-back_ridge")
+                if (controller.state()["world_atlas"]["scene"] != "ridge" or
+                        not controller.state()["world_atlas"]["objects"][0]["active"]):
+                    raise AssertionError("R44 return lost a persistent relic")
+                print("R44 Qt journey PASS: 5 regions, QML actions, F5, "
+                      "title/continue and persistent return", flush=True)
+                app.exit(0)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                app.exit(1)
+
+        QTimer.singleShot(350, world_journey)
+    elif args.gui_journey or args.gui_target_journey:
         # Drives production QML and the actual PlayerBridge. This intentionally
         # runs in a separate QGuiApplication process from the Widgets Studio.
         from PySide6.QtCore import QPoint, QPointF, Qt

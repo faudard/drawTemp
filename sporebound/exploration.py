@@ -175,9 +175,10 @@ class Exploration:
                 and result["tick"] >= actor["deadline"] else "active")
         return result
 
-    def move(self, progress, scene_id, dx, dy):
+    def move(self, progress, scene_id, dx, dy, *, allow_completed=False):
         stage = self.state(progress, scene_id)
-        require(stage is not None and not stage["completed"], "No active exploration")
+        require(stage is not None and (not stage["completed"] or allow_completed),
+                "No active exploration")
         require(type(dx) is int and type(dy) is int
                 and abs(dx) + abs(dy) == 1, "Move one cardinal cell")
         x, y = stage["position"]
@@ -189,9 +190,10 @@ class Exploration:
         progress.story_flags[_key(scene_id, "tick")] = stage["tick"] + 1
         return self.state(progress, scene_id)
 
-    def interact(self, progress, scene_id, point_id):
+    def interact(self, progress, scene_id, point_id, *, allow_completed=False):
         stage = self.state(progress, scene_id)
-        require(stage is not None and not stage["completed"], "No active exploration")
+        require(stage is not None and (not stage["completed"] or allow_completed),
+                "No active exploration")
         point = next((p for p in stage["interactions"] if p["id"] == point_id), None)
         require(point is not None, "Unknown exploration interaction")
         require(sum(abs(a - b) for a, b in zip(stage["position"], point["pos"])) <= 1,

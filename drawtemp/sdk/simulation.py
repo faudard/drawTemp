@@ -220,6 +220,86 @@ class Simulation:
     def roguelite_restart(self, *, expected_revision=None):
         return self._apply('roguelite_restart', expected_revision=expected_revision)
 
+    def world_atlas_state(self):
+        """Read-only R44 projection. Never duplicate routing or saved state."""
+        session = self._session
+        graph = session._world_graph
+        if (graph is None or session.mode != "campaign" or
+                session.route_scene not in session.project.exploration or
+                session.active_scene() is not None):
+            return freeze({"enabled": False, "scene": "", "region": "",
+                           "region_title": "", "portals": [], "objects": [],
+                           "object_ids": [], "reachability": {
+                               "scenes": [], "regions": [], "blocked_routes": []},
+                           "region_total": 0, "visited_regions": []})
+        scene = session.route_scene
+        region = next(region for region in graph.raw["regions"]
+                      if any(entry["id"] == scene for entry in region["scenes"]))
+        objects = graph.object_states(session.progress, scene)
+        # Objects may be decorative/remote (especially NPCs). They remain
+        # visible in the atlas but must not be advertised as interactive unless
+        # they have a real non-exit exploration hotspot and supported action.
+        hotspots = {
+            point["id"] for point in session.project.exploration[scene]["interactions"]
+            if point["exit"] is False
+        }
+        object_actions = sorted(
+            ident for ident, obj in objects.items()
+            if ident in hotspots and obj["kind"] in ("chest", "door", "switch"))
+        stage = session.route_state()
+        position = stage["position"]
+        # Current conditional reachability and past actual visits are separate:
+        # neither is a mutable progress ledger, only projections of R25 + flags.
+        reachability = graph.reachable_scenes(scene, session.progress)
+        visited = {session.scene_router.start}
+        for route_id in session.route_history:
+            visited.add(session.scene_router.links[route_id]["destination"])
+        visited_regions = sorted({
+            region["id"] for region in graph.raw["regions"]
+            if any(entry["id"] in visited for entry in region["scenes"])
+        })
+        portals = []
+        for portal in graph.raw["portals"]:
+            link = session.scene_router.links[portal["route"]]
+            if link["source"] != scene:
+                continue
+            unlocked = True
+            try:
+                graph.inspect_portal(scene, portal["route"], session.progress)
+            except RuleError:
+                unlocked = False
+            target = link["destination"]
+            title = session.project.exploration.get(target, {}).get("title", target)
+            portals.append({
+                "id": portal["route"], "destination": target,
+                "title": title, "travel_cost": portal["travel_cost"],
+                "source": list(portal["source"]), "unlocked": unlocked,
+                "in_reach": sum(abs(a-b) for a, b in zip(
+                    position, portal["source"])) <= 1,
+                "available": unlocked,
+                "has_condition": "when" in link,
+            })
+        return freeze({
+            "enabled": True, "scene": scene, "region": region["id"],
+            "region_title": region["title"], "biome": region["biome"],
+            "projection": region["projection"], "portals": portals,
+            "objects": [{"id": ident, **obj} for ident, obj in sorted(objects.items())],
+            "object_ids": object_actions,
+            "reachability": reachability,
+            "region_total": len(graph.raw["regions"]),
+            "visited_regions": visited_regions,
+        })
+
+    def world_interact(self, object_id, *, expected_revision=None):
+        """R44 action uses the same rollback and revision guard as exploration."""
+        return self._apply("route_world_interact", object_id,
+                           expected_revision=expected_revision)
+
+    def world_transition(self, route_id, *, expected_revision=None):
+        """R44 portal + R25 condition, with no independent teleport ledger."""
+        return self._apply("route_world_transition", route_id,
+                           expected_revision=expected_revision)
+
     def explore_move(self, dx, dy, *, expected_revision=None):
         session = self._session
         # R25 routed exploration is not a narrative StoryBook scene.

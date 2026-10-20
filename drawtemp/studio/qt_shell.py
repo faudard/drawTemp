@@ -489,6 +489,7 @@ class StudioWindow(QMainWindow):
         self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r44_atlas", "R44 • World Atlas 2.0…", self.open_world_atlas)
         self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
         self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
         self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
@@ -575,6 +576,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r44_atlas"])
         tools_menu.addAction(self.commands["r37_ai"])
         tools_menu.addAction(self.commands["r37_sensor"])
         tools_menu.addAction(self.commands["r37_squad"])
@@ -804,6 +806,14 @@ class StudioWindow(QMainWindow):
         dialog = LivingEconomyDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
+            self.refresh()
+
+    def open_world_atlas(self):
+        """R44.B region and portal editor; shared R1 history and save."""
+        from drawtemp.studio.world_atlas_qt import WorldAtlasDialog
+        prior = self.session.revision
+        WorldAtlasDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
             self.refresh()
 
     def open_logic_graph(self):
