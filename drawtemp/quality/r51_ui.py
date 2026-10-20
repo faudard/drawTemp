@@ -49,6 +49,8 @@ def ui_export_audit(project):
     warnings = []
     screens = []
     counted_kinds = set()
+    if not catalog["layouts"]:
+        errors.append("R51: empty opt-in UI catalog cannot replace any Player screen")
     for layout_id, layout in sorted(catalog["layouts"].items()):
         kind = layout["kind"]
         widgets = tuple(_walk(layout["root"]))
