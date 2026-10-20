@@ -83,6 +83,13 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         directory = Path.home() / ".drawtemp" / "player5" / campaign
     controller = PlayerController(content, project, campaign, directory)
     controller.asset_project_path = project_manifest
+    # Optional R57 sidecar is presentation-only, outside all canonical saves.
+    controller.localization = None
+    if content_path is not None:
+        from drawtemp.localization import Catalog, sidecar_path
+        catalog_path = sidecar_path(source)
+        if catalog_path.exists() or catalog_path.is_symlink():
+            controller.localization = Catalog.load(catalog_path)
     return controller
 
 
@@ -119,6 +126,7 @@ def create_bridge(controller, renderer):
             super().__init__()
             self.controller = controller
             self.renderer = renderer
+            self.display_language = controller.project.options["language"]
             self.animator = AnimationDirector()
             self._pending_recovery = None  # ephemeral confirmation, never gameplay
             self._recovery_notice = {}
@@ -131,7 +139,21 @@ def create_bridge(controller, renderer):
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
-            return self.controller.state()
+            from drawtemp.localization import localize_view
+            return localize_view(self.controller.state(),
+                                 getattr(self.controller, "localization", None),
+                                 self.display_language)
+
+        @Slot(str)
+        def selectLanguage(self, language):
+            from drawtemp.localization.r57 import LANGUAGES, PSEUDO_LANGUAGES
+            if language not in LANGUAGES | PSEUDO_LANGUAGES:
+                self.controller.message = "Langue d'affichage invalide"
+                self.stateChanged.emit()
+                return
+            # R57.B preview mode: do not write gameplay saves or project JSON.
+            self.display_language = language
+            self.stateChanged.emit()
 
         @Slot(int, result="QVariantMap")
         def authoredHud(self, width):
