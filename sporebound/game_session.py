@@ -442,6 +442,10 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        # R63 uses the same fixed frame and staged transaction as R55.
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -473,6 +477,8 @@ class GameSession:
             self._living_world.advance(1)
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return self.route_realtime_state()
 
     def _platform_definition(self):
@@ -553,6 +559,9 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         command = {"tick": runtime.tick + 1, "move": move,
                    "jump": jump, "interact": interact}
         if "boss" in runtime.scene:
@@ -574,6 +583,8 @@ class GameSession:
         self._platform = runtime
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return {"state": runtime.snapshot(), "events": events}
 
     def route_platform_travel(self, link_id):
