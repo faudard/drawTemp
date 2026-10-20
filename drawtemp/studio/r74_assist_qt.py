@@ -205,10 +205,13 @@ class R74DungeonAssistDialog(QDialog):
         self.branches_spin.setMaximum(min(5, self.rooms_spin.value() - 3))
 
     def _invalidate_physical(self, *_):
+        had_spatial = self.spatial_plan is not None
         self.physical_plan = None
         self.physical_apply_button.setEnabled(False)
         self.spatial_plan = None
         self.spatial_apply_button.setEnabled(False)
+        if had_spatial and self.proposals:
+            self._selection_changed()
 
     def _clear(self):
         self.proposals = ()
@@ -273,11 +276,20 @@ class R74DungeonAssistDialog(QDialog):
         proposal = self._selected()
         self.apply_button.setEnabled(proposal is not None)
         self.pin_button.setEnabled(proposal is not None)
-        self._draw(self.candidate_graph, proposal)
+        if self.spatial_plan is not None and proposal is not None:
+            self._draw_spatial_preview(
+                self.spatial_plan.proofs[self.variant_table.currentRow()])
+            self.diff_report.setPlainText(json.dumps(
+                self.spatial_plan.proofs[self.variant_table.currentRow()],
+                ensure_ascii=False, indent=2))
+        else:
+            self._draw(self.candidate_graph, proposal)
         self._draw(self.reference_graph, self.pinned or (
             self.proposals[0] if self.proposals else None))
         if proposal is None:
             self.diff_report.clear()
+            return
+        if self.spatial_plan is not None:
             return
         reference = self.pinned or self.proposals[0]
         self.diff_report.setPlainText(json.dumps(
@@ -331,6 +343,64 @@ class R74DungeonAssistDialog(QDialog):
             label.setBrush(QBrush(QColor("#171717")))
             label.setPos(x + 5, y + 15)
         scene.setSceneRect(scene.itemsBoundingRect())
+
+    def _draw_spatial_preview(self, proof):
+        """Read-only scaled R5 tiles: boxes = 5×5 floors, lines = corridors."""
+        view = self.candidate_graph
+        scene = view.scene()
+        scene.clear()
+        scale = 10
+        room_centers = {
+            int(rid): tuple(cell)
+            for rid, cell in proof["room_centers"].items()
+        }
+        for a, b in proof["physical_edges"]:
+            x, y = room_centers[a]
+            xx, yy = room_centers[b]
+            if x == xx:
+                top, bottom = sorted((y, yy))
+                scene.addRect(
+                    (x - 0.5) * scale, (top + 2) * scale,
+                    scale, (bottom - top - 3) * scale,
+                    QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
+            else:
+                left, right = sorted((x, xx))
+                scene.addRect(
+                    (left + 2) * scale, (y - 0.5) * scale,
+                    (right - left - 3) * scale, scale,
+                    QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
+        for rid, (x, y) in sorted(room_centers.items()):
+            scene.addRect((x - 2.5) * scale, (y - 2.5) * scale,
+                          5 * scale, 5 * scale,
+                          QPen(QColor("#53646f")),
+                          QBrush(QColor("#d5d9d5")))
+            label = scene.addSimpleText(str(rid))
+            label.setBrush(QBrush(QColor("#191919")))
+            label.setPos((x - 0.5) * scale, (y - 0.9) * scale)
+        markers = (
+            (proof["entry"], "#2f987c", "E"),
+            (proof["goal"], "#d8a630", "G"),
+            (proof["exit"], "#568ed2", "S"),
+            (proof["key"], "#4aaa43", "K"),
+        )
+        markers += tuple((cell, "#ce4646", "D")
+                         for cell in proof["lock_cells"])
+        for cell, color, letter in markers:
+            if cell is None:
+                continue
+            x, y = cell
+            scene.addEllipse((x - 0.5) * scale, (y - 0.5) * scale,
+                             scale, scale,
+                             QPen(QColor("#222222")), QBrush(QColor(color)))
+            label = scene.addSimpleText(letter)
+            label.setBrush(QBrush(QColor("#ffffff")))
+            label.setPos((x - 0.35) * scale, (y - 0.5) * scale)
+        view.setAccessibleDescription(
+            "Carte R74.C2 " + str(proof["room_count"]) +
+            " salles ; E entrée, G objectif, S sortie, K clé, D porte. "
+            "Connexion et parcours physique certifiés par preuve R27.")
+        scene.setSceneRect(scene.itemsBoundingRect())
+        view.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
     def prepare_physical_generation(self):
         """Dry-run three actual R27 missions; the live editor remains untouched."""
@@ -403,8 +473,7 @@ class R74DungeonAssistDialog(QDialog):
             return None
         self.spatial_plan = plan
         self.spatial_apply_button.setEnabled(True)
-        self.diff_report.setPlainText(json.dumps(
-            plan.to_dict(), ensure_ascii=False, indent=2))
+        self._selection_changed()
         self.status.setText(
             "Parité exacte des salles/arêtes R34 dans 3 cartes R5 prouvée ; "
             "témoin R27 objectif/sortie disponible. "
