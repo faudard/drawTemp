@@ -33,7 +33,7 @@ def _player(content, root):
 
 class R40PlayerRoutesTests(unittest.TestCase):
     def test_real_studio_to_player_three_scenes_with_save_load(self):
-        for kind in ("r40-adventure", "r40-metroidvania"):
+        for kind in ("r40-adventure",):
             with self.subTest(kind=kind), TemporaryDirectory() as folder:
                 content = _project(folder, kind)
                 player = _player(content, folder)
@@ -78,6 +78,30 @@ class R40PlayerRoutesTests(unittest.TestCase):
                 third = _player(content, folder)
                 self.assertEqual(third.load(1)["exploration"]["scene_id"],
                                  "r40_citadel")
+
+    def test_metroidvania_cannot_bypass_high_physical_portal(self):
+        with TemporaryDirectory() as folder:
+            content = _project(folder, "r40-metroidvania")
+            player = _player(content, folder)
+            initial = player.new_game()
+            self.assertEqual([row["id"] for row in initial["routes"]],
+                             ["to_ruins", "high_gate"])
+            self.assertFalse(initial["routes"][1]["available"])
+            player.explore_move(1, 0)
+            player.explore_interact("waystone")
+            player.route_transition("to_ruins")
+            exits = player.state()["routes"]
+            self.assertEqual([row["id"] for row in exits],
+                             ["back_to_village"])
+            before = player.session.recording()
+            with self.assertRaises(SimulationError):
+                player.route_transition("to_citadel")
+            self.assertEqual(before, player.session.recording())
+            player.save(1)
+            restored = _player(content, folder)
+            self.assertEqual([row["id"] for row in
+                              restored.load(1)["routes"]],
+                             ["back_to_village"])
 
     def test_real_studio_authoring_transaction_is_loaded_by_player(self):
         with TemporaryDirectory() as folder:
