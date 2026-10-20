@@ -42,6 +42,19 @@ class LiveIntegrityTests(unittest.TestCase):
         self.assertFalse(verified["rights_verified"])
         self.registry.enable(target["id"], grants=target["permissions"])
 
+    def test_deleted_pack_cannot_be_granted_or_previewed(self):
+        target = self.mods[0]
+        archive = next(iter(self.archives[target["id"]].values()))
+        original = archive.read_bytes()
+        archive.unlink()
+        with self.assertRaises(ModError) as denied:
+            self.registry.enable(target["id"], grants=target["permissions"])
+        self.assertEqual(denied.exception.code, "resource_changed")
+        self.assertFalse(self.registry.status(target["id"])["enabled"])
+        archive.write_bytes(original)
+        self.registry.enable(target["id"], grants=target["permissions"])
+        self.registry.preview_extension(target["id"], self.editor)
+
     def test_tampering_after_consent_prevents_preview_and_apply(self):
         target = self.mods[0]
         self.registry.enable(target["id"], grants=target["permissions"])
