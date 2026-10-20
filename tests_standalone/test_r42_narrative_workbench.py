@@ -88,6 +88,25 @@ class NarrativeWorkbenchR42Tests(unittest.TestCase):
         self.assertEqual(error.exception.code, 'stale_revision')
         self.assertNotIn('state', self.studio.document())
 
+    def test_vs42_template_preview_is_two_document_undoable_transaction(self):
+        before = self.editor.snapshot().to_dict()
+        preview = self.studio.preview_captain_slice()
+        self.assertEqual(self.editor.snapshot().to_dict(), before)
+        self.studio.apply(preview)
+        now = self.editor.snapshot().to_dict()
+        self.assertEqual(now['project']['title'], 'La loyauté du capitaine')
+        self.assertEqual(now['project']['story']['schema_version'], 2)
+        self.assertGreater(len(now['content']['missions']),
+                           len(before['content']['missions']))
+        self.assertEqual(len(now['project']['campaign_flow']['endings']), 3)
+        self.studio.undo()
+        restored = self.editor.snapshot().to_dict()
+        self.assertEqual(restored['content'], before['content'])
+        self.assertEqual(restored['project'], before['project'])
+        self.studio.redo()
+        self.assertEqual(self.editor.snapshot().to_dict()['project'],
+                         now['project'])
+
     def test_invalid_lines_do_not_mutate_documents(self):
         self.studio.apply(self.studio.preview_migrate())
         original = self.editor.snapshot().to_dict()
