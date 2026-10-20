@@ -423,6 +423,9 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-71 (conditionnel) — Session synchronisée de laboratoire.
 
+**Implémentation proposée (R71.A uniquement) :** [laboratoire de sessions connectées v1](R71_CONNECTED_LAB.md). Expérimental, hors Player, non certifié : R67=GO et R70 restent à établir; R71.B/C ne sont pas couverts.
+
+
 ## R72 — Cooperative Gameplay Prototype (11.2 conditionnel)
 
 **Objectif :** Tester une boucle coop à deux joueurs sans compromettre la sauvegarde solo.
