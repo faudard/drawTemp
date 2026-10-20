@@ -150,6 +150,63 @@ class RefactorTests(unittest.TestCase):
             preview_rename_identity(session, "objects", mid, "gate", "gate_2")
         self.assertEqual(session.snapshot().to_dict(), before)
 
+    def test_prefab_instance_mapping_renames_only_placed_target(self):
+        from sporebound.editor_groups import create_editor_group
+        from sporebound.group_prefabs import capture_group_prefab
+        from sporebound.prefab_variants import (
+            KIND, prefab_digest, preview_register_variant, preview_place_variant,
+            NAMESPACE,
+        )
+        c, project = reference_project()
+        mid = next(iter(c.missions))
+        data = add_blank_mission(c.to_dict(), "linked_area", "Prefab target", 24, 24)
+        data = create_editor_group(data, mid, "Paired gates",
+                                   cells=((2, 4), (3, 4)))
+        group_id = next(g["id"] for g in next(
+            m for m in data["missions"] if m["id"] == mid)["editor_groups"])
+        source = capture_group_prefab(data, mid, (group_id,), "Paired gates")
+        content = Content.from_dict(data)
+        session = AuthoringSession.new(content, GameProject.default(content))
+        variant = {"kind": KIND, "version": 1, "id": "doors",
+                   "base_sha256": prefab_digest(source), "overrides": []}
+        session.apply(preview_register_variant(session, source, variant))
+        session.apply(preview_place_variant(
+            session, source, "doors", "linked_area", (9, 9), "door_instance"))
+        spec = session.snapshot().to_dict()["project"]["extensions"][NAMESPACE]
+        record = spec["data"]["instances"][0]
+        placed_gate = record["mapping"]["objects"]["gate"]
+        old_mapping = deepcopy(record["mapping"])
+        review = preview_rename_identity(
+            session, "objects", "linked_area", placed_gate, "refactored_gate")
+        self.assertTrue(any("mapping.objects" in c.path for c in review.changes))
+        session.apply(review.plan)
+        after = session.snapshot().to_dict()["project"]["extensions"][NAMESPACE]
+        self.assertEqual(after["data"]["instances"][0]["mapping"]["objects"]["gate"],
+                         "refactored_gate")
+        self.assertEqual(after["data"]["variants"][0], variant)
+        self.assertEqual(next(o for o in snapshot_mission(session, "linked_area")["objects"]
+                              if o["id"] == record["mapping"]["objects"]["lever"])["link"],
+                         "refactored_gate")
+        session.undo()
+        back = session.snapshot().to_dict()["project"]["extensions"][NAMESPACE]
+        self.assertEqual(back["data"]["instances"][0]["mapping"], old_mapping)
+
+    def test_unknown_typed_extension_fails_closed(self):
+        session, mid = fixture()
+        def add_opaque(c, p):
+            p.setdefault("extensions", {})["org.example.future"] = {
+                "schema_version": 1,
+                "data": {"object_id": "gate", "prose": "gate"},
+                "references": [{"kind": "mission", "id": mid}],
+            }
+            return c, p
+        session.apply(session.preview_pair(add_opaque))
+        before = session.snapshot().to_dict()
+        with self.assertRaises(AuthoringError) as raised:
+            preview_rename_identity(session, "objects", mid, "gate", "unknown_gate")
+        self.assertIn("Unmigrated typed dependency", str(raised.exception))
+        self.assertEqual(before, session.snapshot().to_dict())
+
     def test_stale_preview_collision_and_unsupported_family(self):
         session, mid = fixture()
         with self.assertRaises(AuthoringError):
