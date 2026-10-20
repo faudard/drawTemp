@@ -1,5 +1,6 @@
 """R51.A headless contract, authoring atomicity, and legacy/CT regression."""
 from copy import deepcopy
+from dataclasses import replace
 import json
 import unittest
 
@@ -104,6 +105,8 @@ class DeclarativeUiTests(unittest.TestCase):
         session = GameSession.new(self.content, project, "main", seed=12)
         battle = Battle(self.content, MISSION, seed=9)
         frame = battle_frame(battle)
+        active = next(a for a in frame.actors if a.team == "player")
+        frame = replace(frame, active_id=active.id)
         before_session = session.recording()
         before_battle = battle.digest()
         catalog = catalog_from_project(project)
