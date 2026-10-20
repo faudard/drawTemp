@@ -13,7 +13,7 @@ Le dialogue Studio **Outils → Packages de ressources R58** propose désormais
    ou conservés. Par défaut toute confirmation est **Non**.
 4. Confirmer pour créer les nouveaux fichiers dans un **répertoire de version
    distinct**, puis appliquer la migration en **une** transaction
-   \`AuthoringSession\` avec Undo/Redo. La sauvegarde disque est manuelle.
+   `AuthoringSession` avec Undo/Redo. La sauvegarde disque est manuelle.
 5. Pour revenir à une version plus ancienne, fournir **son archive vérifiée**,
    confirmer explicitement la rétrogradation puis confirmer son diff. Si les
    fichiers de cette version sont déjà présents, ils sont revalidés et réutilisés
@@ -54,20 +54,20 @@ hors de ce lot.
 
 ## Vérification
 
-\`\`\`sh
+```sh
 python -m unittest \
   tests_standalone.test_drawtemp_r58b_upgrades \
   tests_standalone.test_drawtemp_r58b_package_manager \
   tests_standalone.test_drawtemp_r58a_package_ecosystem \
   tests_standalone.test_drawtemp5_r24c
-\`\`\`
+```
 
 Test Qt additionnel sous Python 3.12 + PySide6 6.8.3 :
 
-\`\`\`sh
+```sh
 QT_QPA_PLATFORM=offscreen python -m unittest \
   tests_standalone.test_drawtemp_r58b_qt
-\`\`\`
+```
 
 Le test offscreen, même réussi, ne certifie ni la navigation clavier/manette
 en conditions réelles ni le DPI, le GPU, la compatibilité OS ou l'accessibilité.
