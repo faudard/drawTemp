@@ -16,6 +16,9 @@ from .building_geometry import pick_surface
 from .texture_batches import TerrainTextureBatches, make_image_provider
 from .depth_pipeline import (effect_capabilities, normalize_depth_profile,
                              projected_depth_layers)
+from .ambient_presentation import (AmbientTransition, camera_presets,
+                                   normalize_lighting_profile,
+                                   resolve_camera_preset, sample_lighting)
 
 
 def default_atlas_url():
@@ -40,6 +43,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
         sceneChanged = Signal()
         cameraChanged = Signal()
         picked = Signal("QVariantMap")
+        presentationChanged = Signal()
 
         def __init__(self):
             super().__init__()
@@ -50,6 +54,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self.projection_mode = projection_mode
             self._depth_profile = normalize_depth_profile(
                 depth_profile, projection_mode=projection_mode)
+            self._lighting = normalize_lighting_profile()
+            self._ambient = AmbientTransition(self._lighting["phase"])
             self.selection = None
             self._building_level = 0
             self._building_cutaway = False
@@ -342,6 +348,53 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             if candidate != self._depth_profile:
                 self._depth_profile = candidate
                 self.sceneChanged.emit()
+
+        # R52.B1 presentation clock never modifies R1/CT/GameSession state.
+        @Property("QVariantMap", notify=presentationChanged)
+        def lightingProfile(self):
+            return dict(self._lighting, phase=self._ambient.phase)
+
+        @Property("QVariantMap", notify=presentationChanged)
+        def lightingOverlay(self):
+            return sample_lighting(self._lighting, self._ambient.phase)
+
+        @Property(bool, notify=presentationChanged)
+        def lightingAnimating(self):
+            return self._ambient.active
+
+        @Property("QVariantList", constant=True)
+        def cameraPresets(self):
+            return camera_presets(self.projection_mode)
+
+        @Slot("QVariantMap")
+        def setLightingProfile(self, profile):
+            """Preview a checked profile atomically, never commit project data."""
+            candidate = normalize_lighting_profile(profile)
+            self._lighting = candidate
+            self._ambient.reset(candidate["phase"])
+            self.presentationChanged.emit()
+
+        @Slot(float, int)
+        def transitionLighting(self, target, duration_ms):
+            """Visual-only animated day/night transition."""
+            self._ambient.start(target, duration_ms)
+            self.presentationChanged.emit()
+
+        @Slot(int)
+        def advanceLighting(self, elapsed_ms):
+            if self._ambient.active:
+                self._ambient.advance(elapsed_ms)
+                self.presentationChanged.emit()
+
+        @Slot(str)
+        def setCameraPreset(self, identifier):
+            """Preserve world-space viewport centre and R3 picking."""
+            value = resolve_camera_preset(identifier, self.projection_mode)
+            centre = self.camera.world(self.camera.width / 2,
+                                       self.camera.height / 2)
+            self.camera.zoom = value["zoom"]
+            self.camera.center(*centre)
+            self.refresh()
 
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
