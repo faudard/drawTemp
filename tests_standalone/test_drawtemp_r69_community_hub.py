@@ -161,7 +161,8 @@ class CommunityHubTests(unittest.TestCase):
                      "enemy-share", self.packs["enemy-share"])
         already = self.recipient / "owned.zip"
         already.write_bytes(b"precious")
-        self._reject("stored_pack_changed", acquire_pack, self.hub, "enemy-share",
+        stored.write_bytes(self.packs["enemy-share"].read_bytes())
+        self._reject("destination_exists", acquire_pack, self.hub, "enemy-share",
                      "1.0.0", already, confirm=True)
         self.assertEqual(already.read_bytes(), b"precious")
 
