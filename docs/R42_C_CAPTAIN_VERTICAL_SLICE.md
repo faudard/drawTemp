@@ -98,8 +98,11 @@ scénarios R10/R31 ou certifier la compatibilité GPU.
 
 Les tests `test_r42_captain_slice` couvrent trois fins, relations et
 mission conditionnelle, un aller/retour `GameSession.recording` à mi-dialogue,
-une reprise manuelle `PlayerController`, l'absence de double choix, les
-scènes orphelines, les conditions impossibles et les budgets trop courts.
+une reprise manuelle `PlayerController`, l'absence de double choix,
+l'entrée dans la **vraie mission CT déverrouillée** et son checkpoint de combat,
+les scènes orphelines, les conditions impossibles et les budgets trop courts.
+Le test vérifie l'initialisation/reprise de la mission, **pas une victoire
+tactique effective**.
 
 À certifier avant de considérer **R42.C comme terminé** :
 
