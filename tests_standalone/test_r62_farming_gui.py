@@ -1,6 +1,7 @@
 """R62.B.1 QTest-compatible offscreen native Farm Studio smoke."""
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -69,12 +70,11 @@ class FarmStudioQtTests(unittest.TestCase):
         crop.ident.setText("turnip")
         for check in crop.season_checks:
             check.setChecked(False)
-        crop._accept_record()
-        self.assertEqual(crop.result(), QDialog.Accepted)
         before = draft.document
-        from sporebound.model import RuleError
-        with self.assertRaises(RuleError):
-            draft.upsert("crops", crop.record)
+        with patch("drawtemp.studio.farming_qt.QMessageBox.warning") as warning:
+            crop._accept_record()
+        warning.assert_called_once()
+        self.assertNotEqual(crop.result(), QDialog.Accepted)
         self.assertEqual(draft.document, before)
         animal = FarmRecordEditor("animals", draft, parent=self.dialog)
         animal.ident.setText("hen")
