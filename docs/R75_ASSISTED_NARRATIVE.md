@@ -1,7 +1,8 @@
 # R75.A — Assisted Narrative & Quest Authoring (premier incrément)
 
-**Statut : implémentation en PR, non certifiée.** R75.B (assistant visuel Qt)
-et la validation par auteur tiers/UX de R75.C restent ouvertes.
+**Statut : implémentation en PR, non certifiée.** Le premier assistant Qt
+R75.B est raccordé au Studio. Il reste à certifier l'UX et la revue
+par auteur tiers R75.C, ainsi que la couverture de sauvegardes préexistantes.
 
 ## Contrat canonique
 
@@ -26,6 +27,26 @@ pas un second schéma sauvegardé. Le contenu appliqué reste uniquement
 - `apply(review, approved=True)` exige une approbation explicite, l'identité
   exacte de la revue, et une révision `AuthoringSession` valide. Chaque
   validation acceptée est un unique pas Undo/Redo; `save()` demeure distinct.
+
+## Assistant Qt opt-in (première tranche R75.B)
+
+Depuis le shell principal : **Outils → R75 • Quêtes et dialogues assistés…**
+(également dans la palette de commandes). Le dialogue
+`R75NarrativeAssistDialog` partage la `AuthoringSession` du Studio.
+Il choisit une mission et un préfixe, propose un arbre déterministe local,
+puis présente **un diff lisible** : scènes, textes, choix, prédicats,
+effets, provenance, droits déclarés, chemins témoins et SHA-256.
+
+Un changement de paramètres annule la revue. L'action Approuver est
+désactivée tant que l'aperçu n'a pas abouti et exige une confirmation
+explicite dans une boîte de dialogue (refus par défaut). La session
+est alors modifiée en un seul pas Undo, **sans sauvegarde implicite**.
+Qt reste une dépendance optionnelle; le Core n'importe jamais PySide6.
+
+L'interface n'est pas un service génératif ni un éditeur de texte
+libre multi-quêtes et n'est pas certifiée sur matériel réel.
+Le test Qt offscreen vérifie l'affichage du diff, le refus,
+l'invalidation des paramètres, la révision obsolète et Undo.
 
 ## Analyse de couverture
 
@@ -53,6 +74,13 @@ python -m unittest tests_standalone.test_drawtemp_r75_narrative -v
 ```
 
 Le workflow R75 lance ces tests sur Ubuntu, Windows et macOS.
+Pour l'intégration Qt facultative :
+
+```sh
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r75_narrative_qt -v
+```
+
+`PySide6` est requis pour la suite Qt, lancée dans un job Ubuntu dédié.
 Les gates complémentaires restent nécessaires : Qt onscreen, vrai gameplay
 Studio/Player, validation auteur tiers, compatibilité longue durée des
 sauvegardes et certification de release sur SHA final.
