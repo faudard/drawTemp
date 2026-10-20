@@ -360,14 +360,14 @@ class R74DungeonAssistDialog(QDialog):
             if x == xx:
                 top, bottom = sorted((y, yy))
                 scene.addRect(
-                    (x - 0.5) * scale, (top + 2) * scale,
-                    scale, (bottom - top - 3) * scale,
+                    (x - 0.5) * scale, (top + 2.5) * scale,
+                    scale, (bottom - top - 5) * scale,
                     QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
             else:
                 left, right = sorted((x, xx))
                 scene.addRect(
-                    (left + 2) * scale, (y - 0.5) * scale,
-                    (right - left - 3) * scale, scale,
+                    (left + 2.5) * scale, (y - 0.5) * scale,
+                    (right - left - 5) * scale, scale,
                     QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
         for rid, (x, y) in sorted(room_centers.items()):
             scene.addRect((x - 2.5) * scale, (y - 2.5) * scale,
