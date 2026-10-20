@@ -110,7 +110,8 @@ class GameSession:
         self._living_world = (
             LivingWorld(spec["data"],
                         set(self.project.exploration) | set(self.content.missions),
-                        exploration=self.project.exploration)
+                        exploration=self.project.exploration,
+                        item_ids=set(self.content.equipment))
             if spec is not None else None)
         self.battle = None
         self.fronts = None
@@ -225,6 +226,19 @@ class GameSession:
         return self._living_world.transact(
             self.progress, self.progress.story_flags, self.route_scene,
             shop_id, item_id, action, quantity, transaction_id)
+
+    def living_world_craft(self, recipe_id, quantity, transaction_id):
+        """R45.A atomic crafting in canonical Campaign gold and inventory."""
+        require(self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Crafting requires exploration without pending dialogue")
+        return self._living_world.craft(
+            self.progress, self.progress.story_flags, self.route_scene,
+            recipe_id, quantity, transaction_id)
 
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""

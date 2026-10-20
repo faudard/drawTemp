@@ -474,6 +474,7 @@ class StudioWindow(QMainWindow):
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -545,6 +546,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -649,6 +651,15 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.living_world_qt import LivingWorldDialog
         revision = self.session.revision
         dialog = LivingWorldDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_living_economy(self):
+        """R45.B editor uses the one canonical session and its R1 undo history."""
+        from drawtemp.studio.living_economy_qt import LivingEconomyDialog
+        revision = self.session.revision
+        dialog = LivingEconomyDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
