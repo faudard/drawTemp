@@ -4,6 +4,8 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 import os
+import struct
+import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -136,8 +138,14 @@ class R80A3SecurityTests(unittest.TestCase):
         AuthoringSession.new(content, project).save_as(source)
         pack_dir = self.root / "resource"
         (pack_dir / "terrain").mkdir(parents=True)
-        # The importer currently checks the PNG magic and minimum 24 bytes.
-        raw = b"\x89PNG\r\n\x1a\n" + b"R80-a3-inert-test-bytes"
+        # A valid one-pixel PNG keeps the staging preflight meaningful.
+        def chunk(kind, payload):
+            return (struct.pack(">I", len(payload)) + kind + payload +
+                    struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff))
+        raw = (b"\x89PNG\r\n\x1a\n" +
+               chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)) +
+               chunk(b"IDAT", zlib.compress(b"\x00\x88\x55\x33\xff")) +
+               chunk(b"IEND", b""))
         (pack_dir / "terrain" / "grass.png").write_bytes(raw)
         pack = build_pack(pack_dir, self.root / "pack.zip", _pack_document(raw))
         bindings = [{"path": "terrain/grass.png", "kind": "sprite", "name": "grass"}]
