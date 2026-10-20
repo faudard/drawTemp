@@ -90,10 +90,28 @@ Qt 6.8 packaged dependency does not guarantee a cross-platform Gamepad API;
 do not report controller support without a tested input backend. The global
 R57 gate remains NO-GO.
 
+## Auditable automated language readiness (still not certification)
+
+The headless `drawtemp.localization.qa` reader consumes the actual saved
+GameProject manifest plus its optional sidecar, without changing either
+source or the tactical simulation. Its JSON evidence lists every missing or
+overlong target-language key, stale source key, pseudo-RTL isolate failure
+and totals for authored FR/EN coverage. Automated passage explicitly
+**does not** certify translated prose or end-to-end accessibility.
+
+    python -m drawtemp.localization.qa path/to/game.game.json path/to/game.l10n.json --json-out /tmp/r57-evidence.json
+
+Return codes: `0` = **automated** checks pass; `1` = incomplete/failed
+coverage; `2` = bad input or unreadable sidecar. The report always lists the
+outstanding human QA gates: FR/EN narrative review, screenshot overflow and
+bidi shaping, native assistive technology, controller-only hardware gameplay
+and photosensitivity/device inspections. It is safe to run against external
+published Content/GameProject projects as a separate, read-only preflight.
+
 ## Manual validation
 
     python -m compileall -q drawtemp/localization drawtemp/player/r57_accessibility.py drawtemp/quality/r57_a11y.py drawtemp/studio/r57_translation_qt.py
-    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences tests_standalone.test_r42_narrative_player -v
+    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences tests_standalone.test_r42_narrative_player tests_standalone.test_drawtemp5_r57_qa -v
     QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m unittest tests_standalone.test_drawtemp5_r57 tests_standalone.test_drawtemp5_r57c -v
     QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --reference
 
