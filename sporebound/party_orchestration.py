@@ -91,15 +91,14 @@ def validate_orchestration(data, *, campaigns, content=None):
 class PartyOrchestration:
     """Session-owned leader/slots; R41 still owns active member selection."""
 
-    def __init__(self, specification, config, *, campaign_id=None):
+    def __init__(self, specification, config, *, campaign_id=None,
+                 campaigns=None):
         key = campaign_id if campaign_id is not None else "current"
-        # The document was validated against *all* campaigns by GameProject.
-        # This session owns just one campaign; ignore unrelated defaults here.
-        local = deepcopy(specification)
-        if "defaults" in local:
-            local["defaults"] = {
-                key: local["defaults"][key]} if key in local["defaults"] else {}
-        validate_orchestration(local, campaigns={key: config})
+        all_campaigns = campaigns if campaigns is not None else {key: config}
+        require(key in all_campaigns and all_campaigns[key] == config,
+                "R53 orchestration campaign mismatches canonical R41 configuration")
+        validate_orchestration(specification, campaigns=all_campaigns)
+        self._campaigns = deepcopy(all_campaigns)
         self._spec = deepcopy(specification)
         self._config = deepcopy(config)
         self._campaign_id = key
@@ -181,7 +180,8 @@ class PartyOrchestration:
         activations = [row["members"] for row in party.events
                        if row["op"] == "activate"]
         candidate = type(self)(self._spec, self._config,
-                               campaign_id=self._campaign_id)
+                               campaign_id=self._campaign_id,
+                               campaigns=self._campaigns)
         consumed = 0
         for event in recording["events"]:
             require(type(event) is dict and type(event.get("op")) is str,
