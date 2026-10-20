@@ -154,6 +154,8 @@ class R55SystemDesignerTests(unittest.TestCase):
         for mutate in (
                 lambda x: x.update(tick=3),
                 lambda x: x["stocks"].update(ore=99),
+                lambda x: x["stocks"].update(ore=True),
+                lambda x: x.update(tick=True),
                 lambda x: x["journal"].append({"kind": "advance", "ticks": True}),
                 lambda x: x["journal"].append({"kind": "magic", "ticks": 1}),
         ):
