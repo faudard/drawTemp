@@ -3,7 +3,7 @@
 Roadmap: [R53 in R51–R80](../DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md).
 
 **Status: CODE IN STACKED PR, NOT R53 CERTIFIED.**
-Base: [R41 Party & Encounter PR #381](https://github.com/faudard/drawTemp/pull/381), still pending merge into `master`. Merge R41 first, then retarget/rebase this PR onto `master`.
+Base actuelle de [PR #400](https://github.com/faudard/drawTemp/pull/400) : `integration/consolidate-r31-r55-20261020`, orchestrée par une consolidation parallèle. [R41 #381](https://github.com/faudard/drawTemp/pull/381) reste une dépendance obligatoire : résoudre les écarts et conflits avec la base de consolidation avant toute fusion, sans présumer que `master` l'a intégrée.
 
 ## One canonical state, opt-in version
 
@@ -39,7 +39,7 @@ Example inside the existing R41 `data` object:
 ## Reproducible test commands
 
 ```sh
-python -m unittest -v tests_standalone.test_r53_party_orchestration tests_standalone.test_r53_combo_rpg
+python -m unittest -v tests_standalone.test_r53_party_orchestration tests_standalone.test_r53_combo_rpg tests_standalone.test_r53_party_composer tests_standalone.test_r53_party_composer_qt tests_standalone.test_r53_player_combo
 python -m unittest -v tests_standalone.test_r41_classic_party tests_standalone.test_r41_encounter tests_standalone.test_r41_routed_encounter tests_standalone.test_game_session tests_standalone.test_r25_foundation
 ```
 
@@ -48,7 +48,7 @@ Dedicated GitHub workflow requests Python 3.12 on Ubuntu, Windows and macOS. **N
 ## Remaining NO-GO
 
 R53.A2 delivered partially for **RPG_TURN only**: native two/four-hero offensive skills, validated MP, helper turn recovery, replay/restore and legacy R41 compatibility. **Still NO-GO** for CT and ACTION_REALTIME execution, defensive/healing combos, per-tick pause across action scenes, R43 merged integration and real Player UI.
-R53.B1 implemented as a transactional Qt Party Composer with campaign leader/formation defaults, native combo authoring, headless + Qt offscreen tests. R53.B2 remains open for rendered placement, keyboard/a11y proofs across platforms, animated combo impact preview and live Player flows.
+R53.B1 ajoute un Party Composer Qt transactionnel, des valeurs de départ par campagne et des combos fondés sur Content ; des tests headless et Qt offscreen sont ajoutés (non certifiés). R53.B2 est partiel : le Player QML dispose du sélecteur des combos RPG jouables, du raccourci C et du feedback de récupération, testés en headless ; restent le placement visuel, les rôles et liens, les tests onscreen/a11y sur trois OS et le parcours hybride complet.
 R53.C: hybrid exploration→tactical→exploration with canonical HP/inventory/rewards, three companions, two combat modes, two seeds and crash-save/reload.
 Other dependencies: R41, R43, R51 and R50 gates still need proof on `master`.
 
