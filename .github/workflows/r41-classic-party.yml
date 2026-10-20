@@ -12,6 +12,9 @@ on:
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
       - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'tests_standalone/test_r41_vertical_slice.py'
+      - 'drawtemp/creator_examples/classic_rpg.py'
+      - 'drawtemp/export/templates.py'
       - 'tests_standalone/test_r41_routed_qt.py'
       - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
@@ -39,6 +42,9 @@ on:
       - 'tests_standalone/test_r41_party_studio.py'
       - 'tests_standalone/test_r41_encounter.py'
       - 'tests_standalone/test_r41_routed_encounter.py'
+      - 'tests_standalone/test_r41_vertical_slice.py'
+      - 'drawtemp/creator_examples/classic_rpg.py'
+      - 'drawtemp/export/templates.py'
       - 'tests_standalone/test_r41_routed_qt.py'
       - 'sporebound/scene_router.py'
       - 'tests_standalone/test_r41_encounter_qt.py'
@@ -83,6 +89,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r41_encounter -v
       - name: R41.B3 routed transition and replay gates
         run: python -m unittest tests_standalone.test_r41_routed_encounter -v
+      - name: R41.C village three-hero two-encounter template and Player recovery
+        run: python -m unittest tests_standalone.test_r41_vertical_slice -v
       - name: R25 profiles and tactical unchanged
         run: python -m unittest tests_standalone.test_r25_foundation -v
       - name: Canonical GameSession and Jeanne replay
