@@ -93,7 +93,7 @@ class ActionArenaR65(ActionCombatR65):
         # At least one tick of warning before any authored boss attack.
         return max(1, matching[0] if matching else 6)
 
-    def _boss_action(self, kind):
+    def _boss_action(self, kind, guard):
         boss_id = self.setup["boss_id"]
         actor = self.enemies[boss_id]
         if actor["hp"] <= 0 or not self.hero["alive"]:
@@ -107,7 +107,7 @@ class ActionArenaR65(ActionCombatR65):
             if dx * dx + dy * dy <= 1450 ** 2 and (
                     self._ray_clear(actor["pos"], self.hero["pos"])):
                 self._hurt_hero(2 if self.boss["phase"] == 2 else 1,
-                                boss_id, False)
+                                boss_id, guard)
         elif kind == "dodge":
             dx = actor["pos"][0] - self.hero["pos"][0]
             dy = actor["pos"][1] - self.hero["pos"][1]
@@ -136,7 +136,7 @@ class ActionArenaR65(ActionCombatR65):
                        projectile=self.next_hostile_id)
             self.next_hostile_id += 1
 
-    def _advance_boss(self):
+    def _advance_boss(self, guard):
         name = self.setup["boss_id"]
         actor = self.enemies[name]
         if actor["hp"] <= 0 or not self.hero["alive"]:
@@ -170,7 +170,7 @@ class ActionArenaR65(ActionCombatR65):
         self.boss["windup"] -= 1
         if self.boss["windup"] > 0:
             return
-        self._boss_action(row["kind"])
+        self._boss_action(row["kind"], guard)
         self.boss["casting"] = False
         self.boss["cooldown"] = row["wait_ticks"]
         self.boss["repeat"] += 1
@@ -230,7 +230,7 @@ class ActionArenaR65(ActionCombatR65):
                     self._move(name, actor, vx * min(85, length) // length,
                                vy * min(85, length) // length)
 
-    def _advance_hostile_shots(self):
+    def _advance_hostile_shots(self, guard):
         survivors = []
         for shot in self.hostile_shots:
             x, y = shot["pos"]
@@ -249,7 +249,7 @@ class ActionArenaR65(ActionCombatR65):
                 dy = self.hero["pos"][1] - py
                 if self.hero["alive"] and dx * dx + dy * dy <= (
                         2 * RADIUS) ** 2:
-                    self._hurt_hero(shot["damage"], shot["source"], False)
+                    self._hurt_hero(shot["damage"], shot["source"], guard)
                     self._emit("boss_projectile_impact",
                                projectile=shot["id"])
                     hit = True
@@ -266,8 +266,8 @@ class ActionArenaR65(ActionCombatR65):
         # R26 still owns enemies/HP/movement. R65.C replaces ONLY this
         # explicitly opted-in scene's AI decisions and attack sequencing.
         self._advance_flankers(guard)
-        self._advance_boss()
-        self._advance_hostile_shots()
+        self._advance_boss(guard)
+        self._advance_hostile_shots(guard)
 
     def step(self, command):
         # Additional state must also roll back if the R65.A transaction fails.
