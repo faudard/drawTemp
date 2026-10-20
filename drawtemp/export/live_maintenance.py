@@ -260,7 +260,7 @@ def verify_save_snapshot(snapshot):
     if files_root.is_symlink() or not files_root.is_dir():
         raise ExportError("Snapshot files directory missing")
     actual = _walk_regular(files_root)
-    expected = []
+    index = {}
     seen = set()
     for item in record["files"]:
         if type(item) is not dict or set(item) != {"path", "size", "sha256"}:
@@ -271,14 +271,18 @@ def verify_save_snapshot(snapshot):
                 or type(item["sha256"]) is not str or not _SHA.fullmatch(item["sha256"])):
             raise ExportError("Duplicate/invalid snapshot file")
         seen.add(rel.casefold())
-        expected.append(rel)
-    if sorted(expected) != [r for r, _ in actual]:
+        index[rel] = item
+    if sorted(index) != [r for r, _ in actual]:
         raise ExportError("Snapshot files do not match manifest")
     for rel, path in actual:
-        row = next(item for item in record["files"] if item["path"] == rel)
-        if path.stat().st_size != row["size"] or sha256(path.read_bytes()).hexdigest() != row["sha256"]:
+        row = index[rel]
+        digest = sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if path.stat().st_size != row["size"] or digest.hexdigest() != row["sha256"]:
             raise ExportError("Snapshot checksum mismatch: " + rel)
-    if {r for r, _ in _walk_regular(root)} != {"snapshot.json"} | {"files/" + r for r in expected}:
+    if {r for r, _ in _walk_regular(root)} != {"snapshot.json"} | {"files/" + r for r in index}:
         raise ExportError("Snapshot contains untracked files")
     return record
 
