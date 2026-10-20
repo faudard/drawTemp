@@ -15,7 +15,8 @@ from sporebound.model import require
 
 
 def audit_narrative(content, project, campaign_id, *, expected_endings=(),
-                    max_states=2048, max_choices=32, strict=False):
+                    min_reused_scenes=0, max_states=2048, max_choices=32,
+                    strict=False):
     """Enumerate narrative branches, produce route witnesses and dead-choice cases.
 
     Each outgoing edge forks a *copy* of the canonical GameSession. The input
@@ -25,7 +26,10 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
     require(type(max_states) is int and 1 <= max_states <= 4096
             and type(max_choices) is int and 1 <= max_choices <= 32,
             'Invalid R42 reachability budget')
+    require(type(min_reused_scenes) is int and 0 <= min_reused_scenes <= 16,
+            'Invalid reusable-scene coverage threshold')
     require(type(expected_endings) in (list, tuple)
+            and bool(expected_endings)
             and all(type(v) is str and v for v in expected_endings)
             and len(set(expected_endings)) == len(expected_endings),
             'Invalid expected R42 ending identities')
@@ -108,8 +112,21 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
             'condition': deepcopy(choice.get('when')),
             'counterexample': deepcopy(samples.get(scene_id)),
         })
+    # Count *dynamically traversed* fan-in, not just authored edges that
+    # could be permanently disabled by impossible conditions.
+    incoming = {scene_id: set() for scene_id in scenes}
+    for origin, choice_id in seen_choices:
+        choice = next(c for c in scenes[origin]['choices']
+                      if c['id'] == choice_id)
+        target = choice.get('next_scene')
+        if target:
+            incoming[target].add(origin)
+    reused_scenes = sorted(scene_id for scene_id, sources in incoming.items()
+                           if len(sources) >= 2)
+    missing_reuse = max(0, min_reused_scenes - len(reused_scenes))
     missing_endings = sorted(set(expected_endings) - set(witnesses))
-    passed = not dead_scenes and not dead_choices and not missing_endings and not unclassified
+    passed = (not dead_scenes and not dead_choices and not missing_endings
+              and not unclassified and not missing_reuse)
     report = {
         'campaign': campaign_id, 'scope': 'campaign_entry_narrative_only',
         'explored_states': explored, 'choice_transitions': transitions,
@@ -118,6 +135,9 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
                               for s, c in sorted(seen_choices)],
         'dead_scenes': dead_scenes, 'dead_choices': dead_choices,
         'missing_endings': missing_endings,
+        'reused_scenes': reused_scenes,
+        'required_reused_scenes': min_reused_scenes,
+        'missing_reused_scenes': missing_reuse,
         'endings': {name: deepcopy(witnesses[name])
                     for name in sorted(witnesses)},
         'unclassified_terminals': unclassified,
@@ -130,6 +150,7 @@ def audit_narrative(content, project, campaign_id, *, expected_endings=(),
                 'dead_choices': [row['scene'] + '/' + row['choice']
                                  for row in dead_choices],
                 'missing_endings': missing_endings,
+                'missing_reused_scenes': missing_reuse,
                 'unclassified_terminals': len(unclassified),
             }, ensure_ascii=False, sort_keys=True))
     return report
@@ -140,7 +161,8 @@ def captain_slice_audit():
     from .r42_captain_slice import CAMPAIGN, ENDINGS, make_captain_slice
     content, project = make_captain_slice()
     return audit_narrative(content, project, CAMPAIGN,
-                           expected_endings=ENDINGS, strict=True)
+                           expected_endings=ENDINGS, min_reused_scenes=2,
+                           strict=True)
 
 
 if __name__ == '__main__':
