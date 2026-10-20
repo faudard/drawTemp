@@ -22,6 +22,7 @@ from drawtemp.sdk.roguelite_authoring import preview_roguelite_project
 from drawtemp.sdk.simulation import thaw
 from sporebound.game_project import GameProject
 from sporebound.model import Content
+from sporebound.roguelite import MAX_RUNS
 
 
 MAX_VARIANTS = 5
@@ -137,7 +138,7 @@ class AssistedDungeonController:
         reject the *whole* request rather than returning duplicates/partial data.
         """
         self.invalidate()
-        _integer(seed, "seed", 0, (1 << 63) - 1 - MAX_ATTEMPTS)
+        _integer(seed, "seed", 0, (1 << 63) - 1 - MAX_RUNS - MAX_ATTEMPTS)
         _integer(count, "count", 1, MAX_VARIANTS)
         _integer(rooms, "rooms", 3, MAX_ASSISTED_ROOMS)
         _integer(branches, "branches", 0, rooms - 3)
