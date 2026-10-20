@@ -40,6 +40,7 @@ class OptimizerDialog(QDialog):
         self.registry = AssetRegistry(snapshot["project"].get("assets") or None)
         self.plan = None
         self.published = None
+        self.staged_project = None
 
         layout = QVBoxLayout(self)
         warning = QLabel(
@@ -92,6 +93,23 @@ class OptimizerDialog(QDialog):
         output_row.addWidget(browse)
         layout.addLayout(output_row)
 
+        # R76.B2: separate, strictly rights-gated project copy.
+        project_row = QHBoxLayout()
+        self.project_output = QLineEdit()
+        self.project_output.setObjectName("r76b2-project-output")
+        self.project_output.setAccessibleName("Destination du projet optimisé R15")
+        self.project_output.setPlaceholderText("Dossier de projet optimisé neuf, hors source")
+        choose_project = QPushButton("Destination projet R15…")
+        choose_project.clicked.connect(self.choose_project_output)
+        project_row.addWidget(self.project_output, 1)
+        project_row.addWidget(choose_project)
+        layout.addLayout(project_row)
+        self.project_approve = QCheckBox(
+            "J'approuve une copie complète contrôlée par R15 ; "
+            "goldens, GPU et release restent non certifiés")
+        self.project_approve.setObjectName("r76b2-project-approval")
+        layout.addWidget(self.project_approve)
+
         self.approve = QCheckBox(
             "J'approuve la création d'une copie dérivée non distribuable ; "
             "aucune écriture dans le projet original")
@@ -109,6 +127,14 @@ class OptimizerDialog(QDialog):
         self.undo_button.setObjectName("r76-undo-derived")
         self.undo_button.clicked.connect(self.undo_derived)
         controls.addWidget(self.undo_button)
+        self.project_button = QPushButton("Préparer projet R15")
+        self.project_button.setObjectName("r76b2-stage-project")
+        self.project_button.clicked.connect(self.stage_project)
+        controls.addWidget(self.project_button)
+        self.project_undo_button = QPushButton("Annuler projet R15")
+        self.project_undo_button.setObjectName("r76b2-undo-project")
+        self.project_undo_button.clicked.connect(self.undo_project)
+        controls.addWidget(self.project_undo_button)
         close = QPushButton("Fermer")
         close.clicked.connect(self.accept)
         controls.addWidget(close)
@@ -116,6 +142,8 @@ class OptimizerDialog(QDialog):
         self.table.currentCellChanged.connect(self.show_comparison)
         self.approve.toggled.connect(self._buttons)
         self.output.textChanged.connect(self._buttons)
+        self.project_output.textChanged.connect(self._buttons)
+        self.project_approve.toggled.connect(self._buttons)
         self.refresh()
 
     def _check_revision(self):
@@ -128,9 +156,15 @@ class OptimizerDialog(QDialog):
             and self.approve.isChecked() and bool(self.output.text().strip())
             and self.published is None)
         self.undo_button.setEnabled(self.published is not None)
+        self.project_button.setEnabled(
+            self.plan is not None and bool(self.plan["proposals"])
+            and self.project_approve.isChecked()
+            and bool(self.project_output.text().strip())
+            and self.staged_project is None)
+        self.project_undo_button.setEnabled(self.staged_project is not None)
 
     def refresh(self):
-        if self.published is not None:
+        if self.published is not None or self.staged_project is not None:
             self.overview.setText(
                 "Une copie dérivée est déjà créée. Annulez-la avant de recalculer.")
             return False
@@ -210,6 +244,56 @@ class OptimizerDialog(QDialog):
         parent = QFileDialog.getExistingDirectory(self, "Parent de l'artefact R76")
         if parent:
             self.output.setText(str(Path(parent) / "r76b-derived-assets"))
+
+    def choose_project_output(self):
+        folder = QFileDialog.getExistingDirectory(self, "Parent du projet optimisé R15")
+        if folder:
+            self.project_output.setText(str(Path(folder) / "r76b2-project-preview"))
+
+    def stage_project(self):
+        """R76.B2: strict rights + decoded PNG proof on a detached project."""
+        if self.plan is None or not self.project_approve.isChecked():
+            self.overview.setText("Audit et approbation du projet R15 requis.")
+            return False
+        try:
+            self._check_revision()
+            from drawtemp.export.r76b2 import inspect_preview, prepare_preview
+            review = inspect_preview(self.content_path)
+            if review["optimizer_plan"] != self.plan:
+                raise OptimizerError("Studio review stale; recalculate the audit")
+            self.staged_project = prepare_preview(
+                self.content_path, review,
+                Path(self.project_output.text().strip()), approved=True)
+            self.overview.setText(
+                "Projet optimisé vérifié R15 : " + self.staged_project["directory"] +
+                "\\nAucune certification release / golden humain / GPU / gameplay.")
+            self._buttons()
+            return True
+        except (OptimizerError, ValueError, OSError) as exc:
+            self.overview.setText("Préparation R15 refusée : " + str(exc))
+            return False
+
+    def undo_project(self):
+        if self.staged_project is None:
+            return False
+        if QMessageBox.question(
+                self, "Annuler le projet optimisé",
+                "Supprimer uniquement la copie de projet contrôlée R76.B2 ? "
+                "Aucun asset original ne sera supprimé.") != QMessageBox.StandardButton.Yes:
+            return False
+        try:
+            from drawtemp.export.r76b2 import undo_preview
+            undo_preview(
+                Path(self.staged_project["directory"]),
+                expected_receipt_sha256=self.staged_project["receipt_sha256"])
+            self.staged_project = None
+            self.project_approve.setChecked(False)
+            self.overview.setText("Copie du projet R15 supprimée ; original intact.")
+            self._buttons()
+            return True
+        except (OptimizerError, ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Annulation du projet refusée", str(exc))
+            return False
 
     def apply(self):
         if self.plan is None or not self.approve.isChecked():
