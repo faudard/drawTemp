@@ -99,6 +99,62 @@ class DungeonSuggestion:
         }
 
 
+def compare_dungeon_suggestions(reference: DungeonSuggestion,
+                                candidate: DungeonSuggestion) -> dict:
+    """Read-only, semantic room-graph diff (not a physical map diff)."""
+    if not isinstance(reference, DungeonSuggestion) or not isinstance(
+            candidate, DungeonSuggestion):
+        raise DungeonAssistError("invalid_comparison", "Expected R74 suggestions")
+    before = {r["id"]: r for r in reference.layout["rooms"]}
+    after = {r["id"]: r for r in candidate.layout["rooms"]}
+
+    def edges(rooms):
+        return {tuple(sorted((room_id, neighbor)))
+                for room_id, room in rooms.items()
+                for neighbor in room["neighbors"]}
+
+    changes = []
+    for room_id in sorted(before.keys() | after.keys()):
+        old, new = before.get(room_id), after.get(room_id)
+        if old is None or new is None or (
+                old["role"], old["neighbors"], old["keys"], old["prefab_id"]
+        ) != (
+                new["role"], new["neighbors"], new["keys"], new["prefab_id"]
+        ):
+            changes.append({
+                "id": room_id,
+                "before": None if old is None else {
+                    "role": old["role"], "neighbors": list(old["neighbors"]),
+                    "keys": list(old["keys"]), "prefab": old["prefab_id"],
+                },
+                "after": None if new is None else {
+                    "role": new["role"], "neighbors": list(new["neighbors"]),
+                    "keys": list(new["keys"]), "prefab": new["prefab_id"],
+                },
+            })
+    return {
+        "reference_seed": reference.seed,
+        "candidate_seed": candidate.seed,
+        "topology_changed": reference.topology_digest != candidate.topology_digest,
+        "rooms_before": len(before),
+        "rooms_after": len(after),
+        "changed_rooms": changes,
+        "edges_added": [list(e) for e in sorted(edges(after) - edges(before))],
+        "edges_removed": [list(e) for e in sorted(edges(before) - edges(after))],
+        "locks_before": deepcopy(reference.layout["locks"]),
+        "locks_after": deepcopy(candidate.layout["locks"]),
+        "route_before": list(reference.layout["route"]),
+        "route_after": list(candidate.layout["route"]),
+        "encounters_delta": sum(r["encounters"] for r in after.values())
+                            - sum(r["encounters"] for r in before.values()),
+        "loot_delta": sum(r["loot"] for r in after.values())
+                      - sum(r["loot"] for r in before.values()),
+        "meta_reward_before": reference.provenance["meta_reward"],
+        "meta_reward_after": candidate.provenance["meta_reward"],
+        "logical_only": True,
+    }
+
+
 class AssistedDungeonController:
     """Explicit preview -> select/apply or reject, with no parallel content store."""
 
