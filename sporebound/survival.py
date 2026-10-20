@@ -11,7 +11,7 @@ from .model import require
 EXTENSION = "org.drawtemp.survival"
 VERSION = 1
 MAX_QUANTITY = 1_000_000
-MAX_TICK = 65_536
+MAX_TICK = 1_000_000
 MAX_STEP = 256
 MAX_JOURNAL = 512
 
@@ -170,10 +170,19 @@ class SurvivalRuntime:
                 "Invalid R63 tick advance")
         self._room("advance")
         rates = self.spec["needs"]
-        for meter, drain in (("energy", rates["energy_drain"]),
-                             ("hunger", rates["hunger_drain"]),
-                             ("temperature", rates["cold_drain"])):
-            self.needs[meter] = max(0, self.needs[meter] - ticks * drain)
+        temperature = self.needs["temperature"]
+        cold = rates["cold_drain"]
+        # Closed-form cold exposure: this matches exactly N repeated one-tick
+        # updates and avoids per-frame loops in large deterministic fast-forward.
+        if cold == 0:
+            exposure = ticks if temperature <= 20 else 0
+        else:
+            first_exposure = max(1, (max(0, temperature - 20) + cold - 1) // cold)
+            exposure = max(0, ticks - first_exposure + 1)
+        self.needs["temperature"] = max(0, temperature - ticks * cold)
+        self.needs["hunger"] = max(0, self.needs["hunger"] - ticks * rates["hunger_drain"])
+        self.needs["energy"] = max(
+            0, self.needs["energy"] - ticks * rates["energy_drain"] - exposure)
         self.tick += ticks
         if self.journal and self.journal[-1]["kind"] == "advance":
             self.journal[-1]["ticks"] += ticks
