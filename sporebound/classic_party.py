@@ -35,7 +35,7 @@ def validate_classic_party(data, *, content, project):
     """
     require(type(data) is dict and {"version", "campaigns"} <= set(data)
             and set(data) <= {"version", "campaigns", "encounters", "quest",
-                               "starting_inventory"}
+                               "starting_inventory", "orchestration"}
             and type(data["version"]) is int and data["version"] == VERSION,
             "Unsupported R41 party schema")
     campaigns = data["campaigns"]
@@ -67,6 +67,10 @@ def validate_classic_party(data, *, content, project):
                 and set(active) <= set(initial) <= set(recruitable)
                 and set(recruitable) <= players,
                 "Invalid active/initial/recruitable hero references")
+    if "orchestration" in data:
+        from .party_orchestration import validate_orchestration
+        validate_orchestration(data["orchestration"], campaigns=campaigns,
+                               content=content)
     if "starting_inventory" in data:
         supply = data["starting_inventory"]
         require(type(supply) is dict and len(supply) <= 20

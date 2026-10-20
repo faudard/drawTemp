@@ -1,0 +1,43 @@
+name: R53 Party Orchestration Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/party_orchestration.py'
+      - 'sporebound/classic_party.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/classic_encounter.py'
+      - 'drawtemp/player/controller.py'
+      - 'tests_standalone/test_r53_combo_rpg.py'
+      - 'tests_standalone/test_r53_party_orchestration.py'
+      - '.github/workflows/r53-party-orchestration.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/party_orchestration.py'
+      - 'sporebound/classic_party.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/classic_encounter.py'
+      - 'drawtemp/player/controller.py'
+      - 'tests_standalone/test_r53_combo_rpg.py'
+      - 'tests_standalone/test_r53_party_orchestration.py'
+permissions:
+  contents: read
+jobs:
+  party-r53:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - run: python -m compileall -q sporebound/party_orchestration.py sporebound/classic_party.py sporebound/game_session.py
+      - run: python -m unittest -v tests_standalone.test_r53_party_orchestration tests_standalone.test_r53_combo_rpg
+      - run: python -m unittest -v tests_standalone.test_r41_classic_party tests_standalone.test_r41_encounter tests_standalone.test_r41_routed_encounter tests_standalone.test_game_session tests_standalone.test_r25_foundation

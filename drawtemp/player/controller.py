@@ -233,10 +233,12 @@ class PlayerController:
         if view["result"]:
             raise ValueError("Encounter already finished")
         action = {"kind": kind, "actor": view["active"]}
-        if kind in ("attack", "item", "skill"):
+        if kind in ("attack", "item", "skill", "combo"):
             action["target"] = target
         if kind == "skill":
             action["skill"] = skill
+        if kind == "combo":
+            action["combo"] = skill
         if kind == "item":
             action["item"] = "potion"
         self.session.rpg_action(action, expected_revision=state.revision)
