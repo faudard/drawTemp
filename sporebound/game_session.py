@@ -437,15 +437,18 @@ class GameSession:
                         "R33 gate does not match the authored scene route")
                 require(set(row["requires"]) <= self._metroidvania_abilities(),
                         "R33 scene gate requires an earned capability")
-                physical = (self.project.extensions.get("drawtemp.physics", {})
-                            .get("data", {}).get("scenes", {})
-                            .get(self.route_scene, {}))
-                portals = {c["route"] for c in physical.get("colliders", [])
-                           if "route" in c}
-                if link_id in portals:
-                    require(self._platform is not None and
-                            link_id in self._platform.available_routes(),
-                            "R33 physical gate requires actual R32 portal overlap")
+        # Every authored physical portal requires actual R32 overlap,
+        # including non-ability routes. Prevent old narrative APIs from
+        # bypassing the Player's physical movement and collision system.
+        physical = (self.project.extensions.get("drawtemp.physics", {})
+                    .get("data", {}).get("scenes", {})
+                    .get(self.route_scene, {}))
+        portals = {c["route"] for c in physical.get("colliders", [])
+                   if "route" in c}
+        if link_id in portals:
+            require(self._platform is not None and
+                    link_id in self._platform.available_routes(),
+                    "Physical scene route requires actual R32 portal contact")
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
