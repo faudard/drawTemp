@@ -105,7 +105,7 @@ Item {
 
         onPaint: {
             var ctx = getContext("2d")
-            ctx.reset()
+            ctx.clearRect(0, 0, width, height)
             ctx.fillStyle = "#142735"
             ctx.fillRect(0, 0, width, height)
             if (!root.world.width || !root.world.height || !root.game.actor)
