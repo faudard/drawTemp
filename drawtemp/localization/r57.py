@@ -237,8 +237,11 @@ def seeded_for_project(project, catalog=None):
     data = deepcopy(base.data)
     sources = {
         "project.title": (project.get("title", ""), "Title screen", 120),
-        "project.subtitle": (project.get("subtitle", ""), "Title screen subtitle", 240),
     }
+    # Subtitle is legitimately empty in historical GameProject v1 projects.
+    if project.get("subtitle"):
+        sources["project.subtitle"] = (
+            project["subtitle"], "Title screen subtitle", 240)
     for campaign in project.get("campaigns", []):
         cid = campaign["id"]
         sources["campaign." + cid + ".name"] = (
