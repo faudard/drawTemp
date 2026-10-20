@@ -242,12 +242,22 @@ def verify_trilogy_player(content, project, campaign_id, proofs, *, seed=74):
         session.start_mission(mid)
         stage = _follow_mission(session, proof)
         session.return_to_campaign()
-        # GameSession save format checks replay of the embedded tactical
-        # journal, not a fabricated checkpoint object.
-        check = GameSession.from_recording(session.recording(), content, project)
-        if check.recording() != session.recording():
-            raise DungeonAssistError("player_replay", mid + " checkpoint diverged")
-        stage["recording_digest"] = _digest(session.recording())
+        # Verify BOTH portable in-memory canonical replay and a real, scoped
+        # disk checkpoint after each victory. Temporary files are cleaned
+        # before returning to the caller; this never saves the editor project.
+        snapshot = session.recording()
+        check = GameSession.from_recording(snapshot, content, project)
+        if check.recording() != snapshot:
+            raise DungeonAssistError("player_replay", mid + " in-memory replay diverged")
+        with TemporaryDirectory(prefix="r74-stage-save-") as folder:
+            checkpoint = Path(folder) / "game-session.json"
+            session.save(checkpoint)
+            restored = GameSession.load(checkpoint, content, project)
+            if restored.recording() != snapshot:
+                raise DungeonAssistError("player_replay", mid + " saved checkpoint diverged")
+            session = restored
+        stage["recording_digest"] = _digest(snapshot)
+        stage["checkpoint_disk_roundtrip"] = True
         stage["completed"] = mid in session.progress.completed
         if not stage["completed"]:
             raise DungeonAssistError("player_progress", mid + " not marked completed")
