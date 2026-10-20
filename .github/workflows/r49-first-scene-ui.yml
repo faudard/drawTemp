@@ -1,0 +1,85 @@
+name: DrawTemp R49.C2 First Scene Creator
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r49_first_scene.py'
+      - 'drawtemp/studio/r28d_workflow_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/quality/r49_creator_gate.py'
+      - 'tests_standalone/test_r49_first_scene.py'
+      - 'docs/drawtemp5/R49C2_FIRST_SCENE_UI.md'
+      - '.github/workflows/r49-first-scene-ui.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/r49_first_scene.py'
+      - 'drawtemp/studio/r28d_workflow_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/quality/r49_creator_gate.py'
+      - 'tests_standalone/test_r49_first_scene.py'
+      - '.github/workflows/r49-first-scene-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  first-scene-creator:
+    name: R49.C2 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+      - name: Install Studio and Player
+        run: python -m pip install -e ".[qt6]"
+      - name: Canonical scene, event, playtest and Creator regression
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_r49_first_scene
+          tests_standalone.test_r49_creator_gate
+          tests_standalone.test_r49_playtest_lifecycle
+          tests_standalone.test_r49_inspector_integrity
+          tests_standalone.test_r28d_animation_events_roundtrip
+          tests_standalone.test_r28_creator_workflow
+          tests_standalone.test_drawtemp5_r15_creator
+      - name: Compile new UI and model
+        run: >-
+          python -m compileall -q
+          drawtemp/studio/r49_first_scene.py
+          drawtemp/studio/r28d_workflow_qt.py
+          drawtemp/studio/qt_shell.py
+          drawtemp/quality/r49_creator_gate.py
+          tests_standalone/test_r49_first_scene.py
+      - name: Offscreen Studio shell startup
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.qt_shell --workspace events --smoke
+      - name: Record non-certifying canonical slice
+        run: >-
+          python -m drawtemp.quality.r49_creator_gate
+          --output r49-c2-evidence
+          --revision ${{ github.sha }}
+          --genre srpg
+      - name: Upload reviewed-scope diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r49-c2-headless-${{ matrix.os }}
+          path: r49-c2-evidence/report.json
+          if-no-files-found: ignore
+          retention-days: 7

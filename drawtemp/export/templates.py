@@ -43,7 +43,7 @@ def create_template(kind, destination, *, title=None, subtitle=None,
     if fullscreen is not None and type(fullscreen) is not bool:
         raise ExportError("Fullscreen must be a boolean")
     output = Path(destination).absolute()
-    if output.exists():
+    if output.exists() or output.is_symlink():
         raise ExportError("A project already exists at this destination")
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".drawtemp-template-", dir=output.parent) as folder:
