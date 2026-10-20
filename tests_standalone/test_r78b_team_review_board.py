@@ -187,6 +187,27 @@ class TeamReviewBoardTests(unittest.TestCase):
                 actor="alice", title="Move", status="done", task=1)
         self.assertEqual(self.tasks.path.read_bytes(), before)
 
+    def test_foreign_project_notes_refused_before_read_or_append(self):
+        foreign_graph = RevisionGraph()
+        foreign = foreign_graph.add(make_revision(
+            self.original_content, self.original_project, author="outside"),
+            label="other-workspace")
+        entry = self.notes.append(
+            foreign, expected_head=None, anchor="/project",
+            author="outside", text="Valid checksum, wrong project")
+        before_bytes = self.notes.path.read_bytes()
+        with self.assertRaises(TeamBoardError) as caught:
+            self.board.verify_journals("alice")
+        self.assertEqual(caught.exception.code, "foreign_revision")
+        with self.assertRaises(TeamBoardError):
+            self.board.discussions("guest", self.local.node_id)
+        with self.assertRaises(TeamBoardError):
+            self.board.note("alice", node_id=self.local.node_id,
+                path="/project", expected_head=entry["digest"],
+                text="Must not append into other project")
+        self.assertEqual(self.notes.path.read_bytes(), before_bytes)
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+
     def test_same_file_for_notes_and_tasks_is_refused(self):
         with self.assertRaises(TeamBoardError) as caught:
             TeamReviewBoard(self.graph, self.policy,
@@ -236,6 +257,22 @@ class TeamReviewQtTests(TeamReviewBoardTests):
         self.dialog.task_state.setCurrentIndex(1)
         self.assertIsNotNone(self.dialog.update_task())
         self.assertEqual(self.dialog.tasks_table.item(0, 3).text(), "in_progress")
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+
+    def test_opening_foreign_notes_journal_refuses_workspace(self):
+        foreign_graph = RevisionGraph()
+        foreign = foreign_graph.add(make_revision(
+            self.original_content, self.original_project, author="outsider"),
+            label="unrelated-project")
+        notes = ReviewNoteStore(self.folder / "r78_review_notes.jsonl")
+        notes.append(foreign, expected_head=None,
+                     anchor="/project", author="outsider",
+                     text="Review belongs to another project")
+        original = notes.path.read_bytes()
+        self.assertFalse(self.dialog.use_directory(self.folder))
+        self.assertIsNone(self.dialog.board)
+        self.assertEqual(notes.path.read_bytes(), original)
+        self.assertFalse((self.folder / "r78_team_board.jsonl").exists())
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
 
     def test_readonly_reviewer_controls_and_explicit_journal(self):
