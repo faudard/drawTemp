@@ -194,6 +194,11 @@ def _follow_mission(session, proof):
             index += 1
             actor = session.battle.active if not session.finalized else None
             continue
+        if tuple(actor.pos) == target:
+            # The R27 symbolic witness may list a position already reached
+            # by a longer but legal tactical move on the previous activation.
+            index += 1
+            continue
         if actor.moved:
             actor = _finish_turn(session, stats)
             continue
