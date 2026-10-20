@@ -182,7 +182,7 @@ class R50BActionCombatTests(unittest.TestCase):
         content, project = self._pair(path)
         player = PlayerController(content, project, self.root / "p.json")
         player.new_game("main", 1, seed=50)
-        player.route_action_step({"tick": 1, "attack": True})
+        player.route_action_step({"tick": 1, "dx": 1, "attack": True})
         before = player.session.recording()
         data = player.path_for("main", 1).read_bytes()
         with self.assertRaises(RuleError):
