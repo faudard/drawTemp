@@ -751,7 +751,10 @@ class PlayerController:
                 ],
                 "heroes": [{
                     "id": uid,
-                    "name": uid,
+                    "name": next(
+                        (unit.name for mission in self.content.missions.values()
+                         for unit in mission.units
+                         if unit.id == uid and unit.team == "player"), uid),
                     "job": progress["heroes"][uid]["job"],
                     "xp": progress["heroes"][uid]["xp"],
                     "active": uid in party["active"],
