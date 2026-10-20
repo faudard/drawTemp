@@ -179,6 +179,10 @@ every neighbor edge, instead of drawing a single key/door room.
 - The R27 bounded single-player puzzle analyzer supplies **separate**
   key/door/walk witnesses to the R34 goal-room center and the exit-room
   center. Both must be verified; no false fallback or partial proposal set.
+- The Studio uses the selected R74 variant row to display a **scaled
+  physical map preview** with room rectangles, actual corridor footprints and
+  markers **E** (entry), **K** (key), **D** (door), **G** (goal) and
+  **S** (exit). Switching variants selects its own R27 witness report.
 - A canonical `GameProject.campaigns` entry links the three missions using
   existing `Mission.next_missions`, while `AuthoringSession` owns one
   opt-in transaction and the same Undo/Redo history. No disk writes until
