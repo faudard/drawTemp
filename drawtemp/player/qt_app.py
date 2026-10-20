@@ -35,6 +35,8 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()
     elif content_path is not None:
+        if mod_registry is not None and Path(content_path).expanduser().is_symlink():
+            raise ValueError("R47 mod preflight refuses symlinked Content")
         source = Path(content_path).expanduser().resolve()
         manifest = (Path(project_path).expanduser().resolve()
                     if project_path is not None
