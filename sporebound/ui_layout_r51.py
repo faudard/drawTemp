@@ -33,6 +33,12 @@ FIELDS = {
     "combat.selection": "str",
     "combat.active_hp": "int",
     "combat.active_max_hp": "int",
+    # R51.C2: read-only values projected from the existing Player snapshot.
+    "dialogue.title": "str",
+    "dialogue.speaker": "str",
+    "dialogue.text": "str",
+    "dialogue.progress": "str",
+    "inventory.item_count": "int",
 }
 
 
@@ -164,7 +170,7 @@ def catalog_from_project(project):
     return validate_ui_catalog(spec["data"])
 
 
-def _values(session, battle_frame=None):
+def _values(session, battle_frame=None, *, dialogue_view=None, inventory_view=None):
     from .game_session import GameSession
     _require(isinstance(session, GameSession), "canonical GameSession required")
     values = {
@@ -187,10 +193,28 @@ def _values(session, battle_frame=None):
         if active is not None:
             values["combat.active_hp"] = active.hp
             values["combat.active_max_hp"] = active.max_hp
+    # No arbitrary mapping traversal or unknown fields: the Player must
+    # project only the documented, already-authenticated view values.
+    if dialogue_view is not None:
+        _require(type(dialogue_view) is dict and
+                 set(dialogue_view) == {"title", "speaker", "text", "progress"},
+                 "invalid canonical dialogue projection")
+        for field, value in dialogue_view.items():
+            _require(type(value) is str and len(value) <= 10000,
+                     "invalid dialogue scalar")
+            values["dialogue." + field] = value
+    if inventory_view is not None:
+        _require(type(inventory_view) is dict and
+                 set(inventory_view) == {"item_count"} and
+                 type(inventory_view["item_count"]) is int and
+                 0 <= inventory_view["item_count"] <= 1000000,
+                 "invalid inventory scalar")
+        values["inventory.item_count"] = inventory_view["item_count"]
     return values
 
 
-def project_layout(layout_id, catalog, session, *, width, battle_frame=None):
+def project_layout(layout_id, catalog, session, *, width, battle_frame=None,
+                   dialogue_view=None, inventory_view=None):
     """Shared read-only Studio/Player projection; never submit commands.
 
     The output contains only declarative widgets, responsive columns, and
@@ -204,7 +228,8 @@ def project_layout(layout_id, catalog, session, *, width, battle_frame=None):
     layout = data["layouts"][layout_id]
     point = next(p for p in reversed(layout["breakpoints"])
                  if width >= p["min_width"])
-    values = _values(session, battle_frame)
+    values = _values(session, battle_frame, dialogue_view=dialogue_view,
+                     inventory_view=inventory_view)
 
     def resolve(node):
         result = deepcopy(node)
