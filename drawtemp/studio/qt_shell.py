@@ -433,6 +433,7 @@ class StudioWindow(QMainWindow):
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
         self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
+        self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
@@ -487,6 +488,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r37_ai"])
         tools_menu.addAction(self.commands["r37_sensor"])
+        tools_menu.addAction(self.commands["r37_squad"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -593,6 +595,16 @@ class StudioWindow(QMainWindow):
         dialog = LivingWorldDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
+            self.refresh()
+
+    def open_ai_squads(self):
+        """R37.D3 role and radio assignment, with the canonical R1 history."""
+        from drawtemp.studio.ai_squad_qt import AISquadDialog
+        initial = self.session.revision
+        dialog = AISquadDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial:
             self.refresh()
 
     def open_ai_sensors(self):
