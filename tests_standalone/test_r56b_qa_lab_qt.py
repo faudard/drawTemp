@@ -66,6 +66,13 @@ class QALabQtTests(unittest.TestCase):
             dialog.steps.setCurrentRow(1)
             self.assertIn("route_realtime_step", dialog.detail.toPlainText())
             self.assertTrue(dialog.navigate_button.isEnabled())
+            dialog.replay_selected()
+            for _ in range(200):
+                if dialog._thread is None:
+                    break
+                QTest.qWait(30)
+            self.assertIsNone(dialog._thread, dialog.status.text())
+            self.assertIn('"status": "reproduced"', dialog.detail.toPlainText())
             self.assertEqual(owner.session.revision, 0)
             self.assertFalse(dialog._batch["release_certified"])
             dialog.navigate_source()
