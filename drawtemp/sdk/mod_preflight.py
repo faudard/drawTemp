@@ -26,6 +26,10 @@ def _no_duplicates(pairs):
     return result
 
 
+def _reject_constant(value):
+    raise ValueError("Non-finite JSON number: " + value)
+
+
 def _read_bounded(path):
     if path.is_symlink() or not path.is_file():
         raise ValueError("A regular Content/GameProject document is required")
@@ -34,8 +38,7 @@ def _read_bounded(path):
     if len(raw) > MAX_DOCUMENT_BYTES:
         raise ValueError("Content/GameProject exceeds 32 MiB preview budget")
     data = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates,
-                      parse_constant=lambda _value: (_ for _ in ()).throw(
-                          ValueError("Non-finite JSON number")))
+                      parse_constant=_reject_constant)
     if type(data) is not dict:
         raise ValueError("Content/GameProject must be a JSON object")
     return data, sha256(raw).hexdigest()
