@@ -1,0 +1,31 @@
+name: R79 research evidence gate (headless only)
+
+on:
+  pull_request:
+    paths:
+      - 'tools/r79_platform_gate.py'
+      - 'tests_standalone/test_r79_platform_gate.py'
+      - 'docs/ADR_R79_FUTURE_PLATFORMS.md'
+      - '.github/workflows/r79-research.yml'
+  push:
+    paths:
+      - 'tools/r79_platform_gate.py'
+      - 'tests_standalone/test_r79_platform_gate.py'
+      - '.github/workflows/r79-research.yml'
+
+jobs:
+  contract-tests:
+    name: Contract only / ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: R79 strict contract tests (no GPU claims)
+        run: python -m unittest discover -s tests_standalone -p test_r79_platform_gate.py -v
