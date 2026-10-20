@@ -600,12 +600,14 @@ ApplicationWindow {
                     }
                     Label {
                         text: root.playerData.scene.speaker || "Narrateur"
+                        textFormat: Text.PlainText
                         color: root.gold
                         font.bold: true
                         font.pixelSize: 15 * root.textScale
                     }
                     Label {
                         text: root.playerData.scene.text || ""
+                        textFormat: Text.PlainText
                         color: root.ivory
                         font.pixelSize: 19 * root.textScale * root.subtitleScale
                         Accessible.name: text
@@ -2474,12 +2476,14 @@ ApplicationWindow {
                 anchors.margins: 17
                 Label {
                     text: cinematicOverlay.frameData.speaker || cinematicOverlay.clip.title
+                    textFormat: Text.PlainText
                     font.bold: true
                     color: "#f5ca91"
                     font.pixelSize: 17 * root.textScale
                 }
                 Label {
                     text: cinematicOverlay.frameData.dialogue || "..."
+                    textFormat: Text.PlainText
                     color: "#f5ead5"
                     font.pixelSize: 18 * root.textScale * root.subtitleScale
                     Accessible.name: text
