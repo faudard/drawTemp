@@ -207,7 +207,7 @@ class GameSession:
                       if (not self.scene_router.enabled
                           or (self.route_scene == row["scene"]
                               and self.route_scene in self.project.exploration))
-                      and not self.progress.story_flags.get("r41:" + eid, False))
+                      and not self.progress.story_flags.get("r41_" + eid, False))
 
     def rpg_start(self, encounter_id):
         """Begin RPG_TURN combat at the current routed exploration checkpoint."""
@@ -250,10 +250,12 @@ class GameSession:
                 "Resolve RPG_TURN combat before returning to campaign")
         candidate = deepcopy(self.progress)
         encounter = self._rpg_encounter
-        flag = "r41:" + encounter.id
+        flag = "r41_" + encounter.id
         if encounter.result == "victory":
             require(not candidate.story_flags.get(flag, False),
                     "R41 encounter reward was already settled")
+            require(candidate.gold + encounter.reward_gold <= 1000000,
+                    "R41 reward exceeds campaign gold cap")
             candidate.story_flags[flag] = True
             candidate.gold += encounter.reward_gold
             for uid in encounter.party:
@@ -262,6 +264,56 @@ class GameSession:
         self._rpg_encounter = None
         return {"id": encounter.id, "result": encounter.result,
                 "gold": candidate.gold}
+
+    def rpg_quest_state(self):
+        """Read a single template quest from canonical GameProject + Campaign.
+
+        No independent quest state, rewards register or private save extension:
+        all progress derives from R41 victory flags and the R9 story flag ledger.
+        """
+        from .classic_party import EXTENSION
+        spec = self.project.extensions.get(EXTENSION)
+        quest = spec["data"].get("quest") if spec is not None else None
+        if quest is None or self._classic_party is None:
+            return None
+        flags = self.progress.story_flags
+        cleared = [eid for eid in quest["encounters"]
+                   if flags.get("r41_" + eid) is True]
+        flag = "r41_quest_" + self.campaign_id
+        claimed = flags.get(flag) is True
+        ready = (not claimed and len(cleared) == len(quest["encounters"])
+                 and self.mode == "campaign"
+                 and not self.progress.story_pending
+                 and (not self.scene_router.enabled
+                      or self.route_scene == quest["return_scene"]))
+        return {"title": quest["title"], "completed": claimed,
+                "cleared": cleared, "required": list(quest["encounters"]),
+                "return_scene": quest["return_scene"],
+                "ready": ready, "reward_gold": quest["reward_gold"],
+                "reward_item": quest["reward_item"],
+                "reward_quantity": quest["reward_quantity"]}
+
+    def rpg_claim_quest(self):
+        """Exactly-once story reward; atomic, save/replay stable and routed."""
+        quest = self.rpg_quest_state()
+        require(quest is not None and quest["ready"],
+                "R41 quest requires two victories and a return to the village")
+        candidate = deepcopy(self.progress)
+        flag = "r41_quest_" + self.campaign_id
+        require(flag not in candidate.story_flags,
+                "R41 quest has already been claimed")
+        require(candidate.gold + quest["reward_gold"] <= 1000000,
+                "Quest gold exceeds campaign bounds")
+        existing = candidate.inventory.get(quest["reward_item"], 0)
+        require(type(existing) is int and 0 <= existing
+                and existing + quest["reward_quantity"] <= 1000000,
+                "Quest item reward exceeds campaign bounds")
+        candidate.story_flags[flag] = True
+        candidate.gold += quest["reward_gold"]
+        candidate.inventory[quest["reward_item"]] = (
+            existing + quest["reward_quantity"])
+        self.progress = candidate
+        return self.rpg_quest_state()
 
     def roguelite_state(self):
         """Detached run/meta snapshot; never expose mutable gameplay state."""
@@ -1188,7 +1240,7 @@ class GameSession:
                     and not data["settled_fronts"]
                     and not session.progress.story_pending
                     and not session.progress.story_flags.get(
-                        "r41:" + str(data["rpg_encounter"].get("id", "")), False),
+                        "r41_" + str(data["rpg_encounter"].get("id", "")), False),
                     "Invalid R41 encounter mode/checkpoint")
             encounter_id = data["rpg_encounter"]["id"]
             spec = session.project.extensions[EXTENSION]["data"].get(
