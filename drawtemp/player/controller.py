@@ -856,7 +856,9 @@ class PlayerController:
             scene_id = base["exploration"].get("scene_id")
             energy = survival["needs"]["energy"]
             hunger = survival["needs"]["hunger"]
-            can_work = hunger > 0
+            condition = thaw(self.session.survival_condition(
+                expected_revision=snapshot.revision))
+            can_work = condition["can_work"]
             position = base["exploration"].get("position")
             def within_reach(row):
                 return ("pos" not in row or
@@ -875,7 +877,7 @@ class PlayerController:
                            for item, quantity in items.items())
             base["survival"] = {
                 "enabled": True, "tick": survival["tick"],
-                "needs": survival["needs"],
+                "needs": survival["needs"], "condition": condition,
                 "tools": [
                     {"id": key, "durability": value}
                     for key, value in sorted(survival["durability"].items())],
