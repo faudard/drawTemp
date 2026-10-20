@@ -113,6 +113,24 @@ class ProjectHistoryDialog(QDialog):
         self.import_button.clicked.connect(self._choose_import)
         history_actions.addWidget(self.import_button)
         layout.addLayout(history_actions)
+        durable_row = QHBoxLayout()
+        self.history_path = QLineEdit()
+        self.history_path.setObjectName("r48-history-path")
+        self.history_path.setReadOnly(True)
+        self.history_path.setAccessibleName("Fichier de l'historique R48 conservé séparément")
+        self.history_path.setPlaceholderText("Historique non enregistré — choisir un fichier")
+        durable_row.addWidget(self.history_path, 3)
+        self.history_save_button = QPushButton("Enregistrer l'historique…")
+        self.history_save_button.setObjectName("r48-history-save")
+        self.history_save_button.setAccessibleName(
+            "Enregistrer explicitement les révisions dans un fichier local")
+        self.history_save_button.clicked.connect(self._save_history_dialog)
+        durable_row.addWidget(self.history_save_button)
+        self.history_load_button = QPushButton("Ouvrir un historique…")
+        self.history_load_button.setObjectName("r48-history-load")
+        self.history_load_button.clicked.connect(self._load_history_dialog)
+        durable_row.addWidget(self.history_load_button)
+        layout.addLayout(durable_row)
 
         compare_row = QHBoxLayout()
         compare_row.addWidget(QLabel("Locale (Studio actuel)"))
@@ -366,6 +384,49 @@ class ProjectHistoryDialog(QDialog):
         self.status.setText("Snapshot local en mémoire : " + node.node_id[:12] +
                             ". Aucun fichier modifié.")
         return node
+
+    def _save_history_dialog(self):
+        if self.workspace.history_path is None:
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Enregistrer un historique R48 indépendant", "",
+                "Historique DrawTemp (*.r48.json);;JSON (*.json)")
+            if not path:
+                return
+        else:
+            path = self.workspace.history_path
+        self.save_history(path)
+
+    def save_history(self, path=None):
+        try:
+            digest = self.workspace.save_history(path)
+        except (ValueError, OSError, TypeError) as exc:
+            self.status.setText("Historique non enregistré : " + str(exc))
+            return None
+        self.history_path.setText(str(self.workspace.history_path))
+        self.status.setText(
+            f"Historique enregistré explicitement ({len(self.workspace.graph)} révisions, "
+            f"SHA {digest[:12]}). Les fichiers du jeu sont inchangés.")
+        return digest
+
+    def _load_history_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Ouvrir un historique R48 validé", "",
+            "Historique DrawTemp (*.r48.json);;JSON (*.json)")
+        if path:
+            self.load_history(path)
+
+    def load_history(self, path):
+        try:
+            graph = self.workspace.load_history(path)
+        except (ValueError, OSError, TypeError) as exc:
+            self.status.setText("Chargement de l'historique refusé : " + str(exc))
+            return None
+        self.history_path.setText(str(self.workspace.history_path))
+        self._populate_history()
+        self.status.setText(
+            f"{len(graph)} versions validées rechargées. "
+            "Aucun Content/GameProject ni commentaire modifié.")
+        return graph
 
     def _choose_import(self):
         path, _ = QFileDialog.getOpenFileName(
