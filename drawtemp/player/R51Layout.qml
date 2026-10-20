@@ -27,6 +27,7 @@ Item {
         var order = projection.focus_order || []
         if (!allowActions || order.length === 0) return false
         var current = order.indexOf(focusedWidgetId)
+        if (current === -1 && direction < 0) current = 0
         for (var i = 1; i <= order.length; ++i) {
             var next = (current + i * direction) % order.length
             if (next < 0) next += order.length
