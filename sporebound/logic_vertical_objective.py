@@ -12,6 +12,17 @@ OBJECTIVE = "r31h_quest_extract"
 CHEST = "r31h_chest"
 
 
+def validate_slice_mission(mission):
+    from .model import require
+    matching = [obj for obj in mission.objects
+                if obj["id"] == CHEST and obj["kind"] == "chest"]
+    require(len(matching) == 1,
+            "R31.H extraction requires one authored native chest")
+    require(not matching[0].get("used", False),
+            "R31.H authored chest must begin unopened")
+    require(bool(mission.goal), "R31.H extraction requires a goal cell")
+
+
 def achieved(battle):
     chest = next((obj for obj in battle.mission.objects
                   if obj["id"] == CHEST and obj["kind"] == "chest"), None)
