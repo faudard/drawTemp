@@ -137,6 +137,58 @@ class R63SurvivalTests(unittest.TestCase):
         restored.restore(a.snapshot())
         self.assertEqual(restored.snapshot(), a.snapshot())
 
+    def test_crafting_cycles_are_rejected(self):
+        spec = survival_spec()
+        spec["recipes"].append({
+            "id": "unmake_camp", "inputs": {"camp": 1},
+            "outputs": {"wood": 1}, "energy_cost": 1})
+        with self.assertRaises(RuleError):
+            validate_survival(spec, {"arrival"})
+
+    def test_authoring_preview_undo_redo_and_stale_revision(self):
+        from drawtemp.sdk.authoring import AuthoringSession
+        from drawtemp.studio.survival_authoring import (
+            apply_survival_design, preview_survival_design)
+        from tests_standalone.test_r25_scene_router import scene_fixture
+        content, project = scene_fixture()
+        session = AuthoringSession(content, project)
+        before = session.snapshot().to_dict()
+        preview = preview_survival_design(
+            session, survival_spec(), expected_revision=before["revision"])
+        self.assertEqual(preview.report["recipes"], 2)
+        self.assertEqual(preview.report["hazards"], 1)
+        self.assertEqual(session.snapshot().to_dict()["project"], before["project"])
+        apply_survival_design(session, preview)
+        self.assertIn(EXTENSION,
+                      session.snapshot().to_dict()["project"]["extensions"])
+        with self.assertRaises(ValueError):
+            preview_survival_design(
+                session, survival_spec(), expected_revision=before["revision"])
+        session.undo()
+        self.assertNotIn(EXTENSION,
+                         session.snapshot().to_dict()["project"].get("extensions", {}))
+        session.redo()
+        self.assertIn(EXTENSION,
+                      session.snapshot().to_dict()["project"]["extensions"])
+
+    def test_movement_uses_atomic_fixed_survival_ticks(self):
+        from sporebound.game_session import GameSession
+        from tests_standalone.test_r25_scene_router import scene_fixture
+        content, project = scene_fixture()
+        project.extensions[EXTENSION] = {
+            "schema_version": 1, "data": survival_spec(), "references": []}
+        project.validate(content)
+        session = GameSession.new(content, project, "main")
+        before = session.recording()
+        with self.assertRaises(RuleError):
+            session.route_realtime_step(9, 0)
+        self.assertEqual(session.recording(), before)
+        session.route_realtime_step(0, 0)
+        self.assertEqual(session.survival_state()["tick"], 1)
+        recording = session.recording()
+        self.assertEqual(GameSession.from_recording(
+            recording, content, project).recording(), recording)
+
     def test_gamesession_opt_in_checkpoint_and_sdk_revision(self):
         from drawtemp.sdk.simulation import Simulation, SimulationError
         from sporebound.game_session import GameSession, digest
