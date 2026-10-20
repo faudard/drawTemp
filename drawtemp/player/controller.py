@@ -867,6 +867,12 @@ class PlayerController:
             def has_items(items):
                 return all(inventory.get(item, 0) >= quantity
                            for item, quantity in items.items())
+            def has_capacity(items, consumed=None):
+                from sporebound.survival import MAX_QUANTITY
+                consumed = consumed or {}
+                return all(inventory.get(item, 0) - consumed.get(item, 0)
+                           + quantity <= MAX_QUANTITY
+                           for item, quantity in items.items())
             base["survival"] = {
                 "enabled": True, "tick": survival["tick"],
                 "needs": survival["needs"],
@@ -884,6 +890,7 @@ class PlayerController:
                      "available": (within_reach(row) and can_work
                          and energy >= row["energy_cost"]
                          and survival["stock"][row["id"]] >= row["yield"]
+                         and has_capacity({row["item"]: row["yield"]})
                          and (row["tool"] is None or
                               (inventory.get(row["tool"], 0) > 0 and
                                survival["durability"][row["tool"]] >= row["wear"])))}
@@ -892,7 +899,8 @@ class PlayerController:
                     {"id": row["id"], "inputs": row["inputs"],
                      "outputs": row["outputs"],
                      "available": (can_work and energy >= row["energy_cost"]
-                                   and has_items(row["inputs"]))}
+                                   and has_items(row["inputs"])
+                                   and has_capacity(row["outputs"], row["inputs"]))}
                     for row in authored["recipes"]],
                 "shelters": [
                     {"id": row["id"], "pos": row.get("pos"),
