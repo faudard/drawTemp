@@ -106,6 +106,7 @@ class R51CExportTests(unittest.TestCase):
         original = json.loads(manifest.read_text(encoding="utf-8"))
         for altered in (
             dict(original, ui=dict(original["ui"], sha256="0" * 64)),
+            dict(original, ui=dict(original["ui"], screens=[])),
             {key: val for key, val in original.items() if key != "ui"},
         ):
             manifest.write_text(json.dumps(altered), encoding="utf-8")
@@ -149,6 +150,18 @@ class R51CExportTests(unittest.TestCase):
         audit = ui_export_audit(json.loads(self.project_path.read_text()))
         self.assertTrue(any("GameSession bindings" in msg
                             for msg in audit["errors"]))
+
+    def test_empty_and_duplicate_runtime_kinds_refuse_export(self):
+        empty = self.write_ui({})
+        self.assertTrue(any("empty opt-in UI" in msg
+                            for msg in ui_export_audit(empty)["errors"]))
+        first = new_layout("MENU")
+        second = new_layout("MENU")
+        second["root"]["children"][0]["text"] = "Recommencer"
+        duplicate = self.write_ui({"first": first, "second": second})
+        self.assertTrue(any("duplicate runtime screen kind" in msg
+                            for msg in ui_export_audit(duplicate)["errors"]))
+        self.assertFalse(preflight(self.content)["passed"])
 
     def test_preview_bundle_rejects_pending_attestations(self):
         self.write_ui({"menu": new_layout("MENU")})
