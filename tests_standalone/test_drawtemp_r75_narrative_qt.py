@@ -43,7 +43,10 @@ class R75NarrativeDialogTests(unittest.TestCase):
     def test_cancelled_confirmation_no_mutation_approved_one_undo(self):
         from PySide6.QtWidgets import QMessageBox
         self.dialog.preview_proposal()
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+        with patch("drawtemp.studio.r75_narrative_assist_qt.QMessageBox") as popup:
+            popup.Yes = QMessageBox.Yes
+            popup.No = QMessageBox.No
+            popup.question.return_value = QMessageBox.No
             self.assertIsNone(self.dialog.confirm_apply())
         self.assertEqual(self.before, self.session.snapshot().to_dict())
         changed = self.dialog.apply_review(approved=True)
