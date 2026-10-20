@@ -48,7 +48,7 @@ Dedicated GitHub workflow requests Python 3.12 on Ubuntu, Windows and macOS. **N
 ## Remaining NO-GO
 
 R53.A2 delivered partially for **RPG_TURN only**: native two/four-hero offensive skills, validated MP, helper turn recovery, replay/restore and legacy R41 compatibility. **Still NO-GO** for CT and ACTION_REALTIME execution, defensive/healing combos, per-tick pause across action scenes, R43 merged integration and real Player UI.
-R53.B: Party Composer Qt, placement, preview, undo/redo, user input evidence.
+R53.B1 implemented as a transactional Qt Party Composer with campaign leader/formation defaults, native combo authoring, headless + Qt offscreen tests. R53.B2 remains open for rendered placement, keyboard/a11y proofs across platforms, animated combo impact preview and live Player flows.
 R53.C: hybrid exploration→tactical→exploration with canonical HP/inventory/rewards, three companions, two combat modes, two seeds and crash-save/reload.
 Other dependencies: R41, R43, R51 and R50 gates still need proof on `master`.
 
@@ -71,3 +71,7 @@ The optional `skills` mapping makes an authored combination executable **only** 
 - Legacy encounters without executable combos emit exactly the historical R41 view fields; R53-enabled executable encounters include read-only `combos` and `combo_skip` fields inside the replayed view.
 - Failures do not partially consume MP/inventory because `GameSession.rpg_action` commits only a verified candidate encounter. Saved combo commands are replayed from canonical authored skills; checksum-only tampering is rejected.
 - Player QML buttons, remapping/assistive controls, video/on-screen testing, R53.B and R53.C remain outstanding.
+
+## R53.B1 — Party Composer transactionnel
+
+Voir [R53B Party Composer](R53B_PARTY_COMPOSER.md) pour le contrat auteur, l'interface Qt, les actions R1 et les limites de validation.
