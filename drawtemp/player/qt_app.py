@@ -15,7 +15,8 @@ from drawtemp.render.qt_viewport import make_controller
 
 
 def build_controller(*, save_dir=None, reference=False, content_path=None,
-                     project_path=None, campaign_id=None):
+                     project_path=None, campaign_id=None, mod_registry=None,
+                     expected_mod_pins=None, managed_mod_namespaces=()):
     """Load the packaged demo, R0 reference, or a validated authored pair.
 
     A custom project owns a distinct default save directory so two unrelated
@@ -25,6 +26,10 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         raise ValueError("--reference cannot be combined with authored content")
     if project_path is not None and content_path is None:
         raise ValueError("--project requires --content")
+    if (mod_registry is None) != (expected_mod_pins is None):
+        raise ValueError("Mod registry and separately trusted pins must be provided together")
+    if mod_registry is not None and content_path is None:
+        raise ValueError("Mod verification requires explicit authored Content")
     project_manifest = None
     if reference:
         from drawtemp.sdk.reference import reference_project
@@ -34,6 +39,21 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         manifest = (Path(project_path).expanduser().resolve()
                     if project_path is not None
                     else source.with_suffix(".game.json"))
+        # This is opt-in. Builtin and pre-existing games continue to load
+        # their inert extensions without executing any third-party mod code.
+        if mod_registry is not None:
+            if project_path is not None and manifest != source.with_name(
+                    source.stem + ".game.json"):
+                raise ValueError(
+                    "R47 mod preflight requires canonical Content/GameProject filenames")
+            from drawtemp.sdk.mod_preflight import inspect_modded_project
+            audit = inspect_modded_project(
+                source, mod_registry, expected_pins=expected_mod_pins,
+                managed_namespaces=managed_mod_namespaces)
+            if not audit["ready_for_player_preview"]:
+                raise ValueError(
+                    "R47 mod preflight refused Player preview: " +
+                    "; ".join(audit["errors"]))
         # Reuse the validated Content/Project pair and its authored rules.
         import json
         from sporebound.tactical_rpg3 import authored_rules_for_document
