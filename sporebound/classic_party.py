@@ -94,9 +94,9 @@ def validate_classic_party(data, *, content, project):
                 "R41 quest title is required")
         require(type(quest["encounters"]) is list
                 and 1 <= len(quest["encounters"]) <= 8
-                and len(set(quest["encounters"])) == len(quest["encounters"])
                 and all(type(eid) is str and eid in catalogue
-                        for eid in quest["encounters"]),
+                        for eid in quest["encounters"])
+                and len(set(quest["encounters"])) == len(quest["encounters"]),
                 "R41 quest must reference unique authored encounters")
         require(type(quest["return_scene"]) is str
                 and quest["return_scene"] in project.exploration
