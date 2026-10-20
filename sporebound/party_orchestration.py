@@ -93,7 +93,13 @@ class PartyOrchestration:
 
     def __init__(self, specification, config, *, campaign_id=None):
         key = campaign_id if campaign_id is not None else "current"
-        validate_orchestration(specification, campaigns={key: config})
+        # The document was validated against *all* campaigns by GameProject.
+        # This session owns just one campaign; ignore unrelated defaults here.
+        local = deepcopy(specification)
+        if "defaults" in local:
+            local["defaults"] = {
+                key: local["defaults"][key]} if key in local["defaults"] else {}
+        validate_orchestration(local, campaigns={key: config})
         self._spec = deepcopy(specification)
         self._config = deepcopy(config)
         self._campaign_id = key

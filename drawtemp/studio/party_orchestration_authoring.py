@@ -46,6 +46,30 @@ def inspect_orchestration(snapshot, campaign_id):
     }
 
 
+def native_damage_choices(snapshot, hero_id):
+    """Native enemy-damage skills for the first canonical player template."""
+    pair = _pair(snapshot)
+    player = None
+    for mission in pair["content"]["missions"]:
+        for unit in mission["units"]:
+            if unit["team"] == "player" and unit["id"] == hero_id:
+                player = unit
+                break
+        if player is not None:
+            break
+    if player is None:
+        return ()
+    skills = {skill["id"]: skill for skill in pair["content"]["skills"]}
+    choices = []
+    for skill_id in player["skills"]:
+        skill = skills.get(skill_id)
+        if skill is not None and skill.get("target", "enemy") == "enemy" and (
+                skill.get("effects") and
+                all(effect["kind"] == "damage" for effect in skill["effects"])):
+            choices.append((skill_id, skill.get("name", skill_id)))
+    return tuple(choices)
+
+
 def combo_impact_preview(snapshot, combos):
     """Show native skill MP/effect stats, never fabricated live damage."""
     pair = _pair(snapshot)
@@ -123,5 +147,6 @@ def apply_orchestration_edit(session: AuthoringSession, draft: OrchestrationDraf
 
 __all__ = [
     "OrchestrationDraft", "inspect_orchestration", "combo_impact_preview",
+    "native_damage_choices",
     "preview_orchestration_edit", "apply_orchestration_edit",
 ]

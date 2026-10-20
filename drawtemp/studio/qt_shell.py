@@ -432,6 +432,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
+        self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
         self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -486,6 +487,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r41_party"])
+        tools_menu.addAction(self.commands["r53_composer"])
         tools_menu.addAction(self.commands["r41_encounter"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -600,6 +602,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.party_qt import PartyStudioDialog
         revision = self.session.revision
         dialog = PartyStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_r53_composer(self):
+        """R53.B reuses the single R1 Studio authoring transaction/history."""
+        from drawtemp.studio.party_orchestration_qt import R53PartyComposerDialog
+        revision = self.session.revision
+        dialog = R53PartyComposerDialog(self.session, parent=self)
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != revision:
