@@ -517,6 +517,8 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-77 — Chasse au softlock avec preuve reproductible.
 
+**R77.A, premier incrément (PR #433, non certifié) :** [exploration R26 headless, seeds, couverture, replay et limites de preuve](R77_EXPLORATORY_QA.md). R77.B/C et la gate restent ouverts.
+
 ## R78 — Professional Team Workflows (11.8→12.0)
 
 **Objectif :** Supporter les équipes sans collaborer par un état parallèle opaque.
