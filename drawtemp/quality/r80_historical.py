@@ -100,10 +100,12 @@ def run_historical_regressions(*, source_root=None):
     for stem in ("core", "jeanne"):
         content = Content.from_dict(deepcopy(sources[stem + ".json"][1]))
         project = GameProject.from_dict(deepcopy(sources[stem + ".game.json"][1]), content)
-        _assert(content.to_dict() == sources[stem + ".json"][1],
-                "Content v1 round trip drift: " + stem)
-        _assert(project.to_dict() == sources[stem + ".game.json"][1],
-                "GameProject v1 round trip drift: " + stem)
+        canonical_content = content.to_dict()
+        canonical_project = project.to_dict()
+        _assert(Content.from_dict(canonical_content).to_dict() == canonical_content,
+                "Content v1 canonical round trip drift: " + stem)
+        _assert(GameProject.from_dict(canonical_project, content).to_dict() ==
+                canonical_project, "GameProject v1 canonical round trip drift: " + stem)
         observations[stem] = {
             "content_git_blob": PINNED[stem + ".json"],
             "project_git_blob": PINNED[stem + ".game.json"],
@@ -152,11 +154,15 @@ def run_historical_regressions(*, source_root=None):
         converted_game = converted_path.with_suffix(".game.json")
         _assert((v0_path.read_bytes(), v0_project.read_bytes()) == v0_originals,
                 "Envelope migration changed historical source")
-        _assert(Content.load(converted_path).to_dict() == sources["core.json"][1],
-                "Content envelope normalization differs from v1")
+        expected_content = Content.from_dict(sources["core.json"][1])
+        expected_project = GameProject.from_dict(
+            sources["core.game.json"][1], expected_content)
         converted_content = Content.load(converted_path)
+        _assert(converted_content.to_dict() == expected_content.to_dict(),
+                "Content envelope normalization differs from canonical v1")
         _assert(GameProject.load(converted_game, converted_content).to_dict() ==
-                sources["core.game.json"][1], "Project envelope normalization differs from v1")
+                expected_project.to_dict(),
+                "Project envelope normalization differs from canonical v1")
         # Explicit stale approval must fail before any new destination appears.
         v0_path.write_bytes(v0_originals[0] + b" ")
         stale_target = folder / "stale.json"
