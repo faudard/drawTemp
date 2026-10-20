@@ -6,8 +6,11 @@ on:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
       - 'sporebound/ai_squad.py'
+      - 'sporebound/ai_boss_director.py'
       - 'drawtemp/studio/ai_squad_authoring.py'
       - 'drawtemp/studio/ai_squad_qt.py'
+      - 'drawtemp/studio/ai_boss_authoring.py'
+      - 'drawtemp/studio/ai_boss_qt.py'
       - 'drawtemp/studio/ai_sensor_authoring.py'
       - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
@@ -26,6 +29,8 @@ on:
       - 'tests_standalone/test_r37_perception_qt.py'
       - 'tests_standalone/test_r37_squad.py'
       - 'tests_standalone/test_r37_squad_qt.py'
+      - 'tests_standalone/test_r37_boss_director.py'
+      - 'tests_standalone/test_r37_boss_director_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   push:
     branches: [master]
@@ -33,8 +38,11 @@ on:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
       - 'sporebound/ai_squad.py'
+      - 'sporebound/ai_boss_director.py'
       - 'drawtemp/studio/ai_squad_authoring.py'
       - 'drawtemp/studio/ai_squad_qt.py'
+      - 'drawtemp/studio/ai_boss_authoring.py'
+      - 'drawtemp/studio/ai_boss_qt.py'
       - 'drawtemp/studio/ai_sensor_authoring.py'
       - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
@@ -53,6 +61,8 @@ on:
       - 'tests_standalone/test_r37_perception_qt.py'
       - 'tests_standalone/test_r37_squad.py'
       - 'tests_standalone/test_r37_squad_qt.py'
+      - 'tests_standalone/test_r37_boss_director.py'
+      - 'tests_standalone/test_r37_boss_director_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   workflow_dispatch:
 
@@ -90,6 +100,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r37_perception -v
       - name: R37.D3 direct radio squads and save/replay
         run: python -m unittest tests_standalone.test_r37_squad -v
+      - name: R37.E canonical boss director, R6 telegraphs, authoring and replay
+        run: python -m unittest tests_standalone.test_r37_boss_director tests_standalone.test_elite_boss_r6 tests_standalone.test_boss_encounter_r6b -v
       - name: R31 compatible declarative graph contracts
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
 
@@ -106,4 +118,4 @@ jobs:
       - name: R37.C visual tree, diagnostics and Undo/Redo
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt tests_standalone.test_r37_perception_qt tests_standalone.test_r37_squad_qt -v
+        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt tests_standalone.test_r37_perception_qt tests_standalone.test_r37_squad_qt tests_standalone.test_r37_boss_director_qt -v
