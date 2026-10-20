@@ -8,8 +8,8 @@ authoritative checkpoint metadata; never deserialize these from a client.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 import json
+from math import isfinite
 import re
 from typing import Mapping
 
@@ -134,9 +134,10 @@ def _ready(policy: SessionPolicy, approved_gates: frozenset[str]) -> Decision:
 
 
 def _members(members: object, policy: SessionPolicy) -> bool:
-    return (type(members) in (tuple, frozenset) and len(members) <= 2 and
+    if type(members) not in (tuple, frozenset) or len(members) > 2:
+        return False
+    return (all(_valid_id(member) for member in members) and
             len(set(members)) == len(members) and
-            all(_valid_id(member) for member in members) and
             (not members or policy.host_id in members))
 
 
@@ -199,7 +200,9 @@ def _decode_command(raw: object, limit: int) -> dict | None:
                 for k, v in node.items())
         if isinstance(node, list):
             return len(node) <= 64 and all(bounded(v, depth + 1) for v in node)
-        return (node is None or isinstance(node, (str, int, float, bool)))
+        if type(node) is float:
+            return isfinite(node)
+        return node is None or isinstance(node, (str, int, bool))
     if not isinstance(value["args"], dict) or not bounded(value):
         return None
     return value
