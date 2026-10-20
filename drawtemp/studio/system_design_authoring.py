@@ -26,9 +26,8 @@ def preview_system_design(session, document, *, expected_revision=None):
             type(expected_revision) is not int
             or snap["revision"] != expected_revision):
         raise ValueError("Outdated R55 system designer revision")
-    known_scenes = (
-        {row["id"] for row in snap["content"]["missions"]}
-        | set(snap["project"].get("exploration", {})))
+    # Merchant commands are permitted only in authored exploration scenes.
+    known_scenes = set(snap["project"].get("exploration", {}))
     if document is not None:
         spec = validate_systems(document, known_scenes)
     else:
