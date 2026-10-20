@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from drawtemp.quality.r80_cross_revision import run_cross_revision
 from drawtemp.quality.r80_historical import (
     HISTORICAL_COMMIT, PINNED, ROOT, SUPPORTED, HistoricalRegressionError,
     _git_blob, load_pinned_sources, main, run_historical_regressions,
@@ -94,6 +95,24 @@ class R80A2HistoricalTests(unittest.TestCase):
         with patch.dict(PINNED, {"core.json": "0" * 40}):
             with self.assertRaisesRegex(HistoricalRegressionError, "drift"):
                 load_pinned_sources()
+
+    def test_cross_revision_refuses_unverified_checkout(self):
+        fake = self.scratch / "fake-r16"
+        fake.mkdir()
+        with self.assertRaisesRegex(HistoricalRegressionError,
+                                    "authenticate historical Git checkout"):
+            run_cross_revision(fake)
+
+    def test_cross_revision_refuses_symlink_directory(self):
+        real = self.scratch / "real"
+        real.mkdir()
+        alias = self.scratch / "alias"
+        try:
+            alias.symlink_to(real, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Directory symlinks unsupported")
+        with self.assertRaisesRegex(HistoricalRegressionError, "real directory"):
+            run_cross_revision(alias)
 
     def test_cli_produces_explicit_unreleased_report(self):
         output = self.scratch / "output" / "r80a2.json"
