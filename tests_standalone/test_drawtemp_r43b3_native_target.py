@@ -83,6 +83,25 @@ class R43NativeTargetTests(unittest.TestCase):
                     native_target_preview(
                         self.session, spec, MISSION, self.caster.id, aim)
 
+    def test_native_line_of_sight_respects_blocked_intermediate_tile(self):
+        from sporebound.model import Tile
+        from sporebound.game_project import GameProject
+        modified = deepcopy(self.content)
+        # Jeanne (1,4), target (1,2), wall (1,3): native supercover LOS.
+        mission = modified.missions[MISSION]
+        self.assertEqual(tuple(self.caster.pos), (1, 4))
+        mission.board.tiles[(1, 3)] = Tile(blocked=True)
+        scoped = AuthoringSession.new(modified, GameProject.default(modified))
+        spec = deepcopy(self.ability)
+        spec["target"].update(team="ground", range=8)
+        preview = native_target_preview(
+            scoped, spec, MISSION, "jeanne", (1, 2))
+        self.assertFalse(preview["line_of_sight"])
+        self.assertFalse(preview["legal"])
+        self.assertIn("Line of sight blocked", preview["rejection"])
+        self.assertNotIn([1, 2], preview["available"])
+        self.assertEqual(preview["recipients"], [])
+
     def test_unknown_ids_and_unsupported_ct_fail_closed(self):
         with self.assertRaises(AbilityError) as caught:
             native_target_preview(self.session, self.ability,
