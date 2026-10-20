@@ -8,7 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPen
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGraphicsScene,
     QGraphicsView, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
 from drawtemp.studio.system_design_authoring import (
     apply_system_design, forecast_system_design, preview_system_design)
 from sporebound.system_design import EXTENSION, validate_systems
+from drawtemp.studio.system_design_graph import edit_link
+from drawtemp.studio.system_design_graph_qt import InteractiveSystemGraph
 
 
 def _new_form(title, fields, parent):
@@ -107,11 +109,18 @@ class SystemDesignerDialog(QDialog):
         root.addWidget(QLabel(
             "Graphe déclaratif sans scripts. Validation, preview et commit "
             "utilisent l'historique partagé du projet."))
-        self.scene = QGraphicsScene(self)
-        graph = QGraphicsView(self.scene)
-        graph.setAccessibleName("Graphe des ressources, ateliers et contrats")
-        graph.setMinimumHeight(270)
-        root.addWidget(graph, 2)
+        self.positions = {}
+        # Local draft history is independent of the project's single
+        # AuthoringSession transaction committed by Apply.
+        self._draft_history = [(deepcopy(self.document), {})]
+        self._draft_index = 0
+        self._selection = None
+        self.graph = InteractiveSystemGraph(
+            on_select=self._selected_graph, on_connect=self._port_connect,
+            on_move=self._node_moved, on_status=self._status, parent=self)
+        self.scene = self.graph.canvas  # Compatible with original Qt smoke.
+        self.graph.setMinimumHeight(270)
+        root.addWidget(self.graph, 2)
         self.tabs = QTabWidget()
         self.lists = {}
         for category, title in (
@@ -138,6 +147,33 @@ class SystemDesignerDialog(QDialog):
             self.tabs.addTab(page, title)
             self.lists[category] = view
         root.addWidget(self.tabs, 2)
+        self.inspector = QPlainTextEdit()
+        self.inspector.setObjectName("r55GraphInspector")
+        self.inspector.setAccessibleName("Inspecteur du nœud ou lien sélectionné")
+        self.inspector.setReadOnly(True)
+        self.inspector.setMaximumHeight(115)
+        root.addWidget(self.inspector)
+        inspect_row = QHBoxLayout()
+        self.edit_selected = QPushButton("Modifier la sélection")
+        self.edit_selected.clicked.connect(self._edit_selected)
+        inspect_row.addWidget(self.edit_selected)
+        self.unlink_selected = QPushButton("Supprimer la liaison")
+        self.unlink_selected.clicked.connect(self._remove_selected_link)
+        inspect_row.addWidget(self.unlink_selected)
+        self.undo_button = QPushButton("Annuler (brouillon)")
+        self.undo_button.clicked.connect(self.undo_draft)
+        inspect_row.addWidget(self.undo_button)
+        self.redo_button = QPushButton("Rétablir (brouillon)")
+        self.redo_button.clicked.connect(self.redo_draft)
+        inspect_row.addWidget(self.redo_button)
+        root.addLayout(inspect_row)
+        self.status = QLabel("Cliquez sur une sortie verte, puis sur une entrée bleue.")
+        self.status.setAccessibleName("État des connexions du graphe")
+        root.addWidget(self.status)
+        self.undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
+        self.undo_shortcut.activated.connect(self.undo_draft)
+        self.redo_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Z"), self)
+        self.redo_shortcut.activated.connect(self.redo_draft)
         line = QHBoxLayout()
         line.addWidget(QLabel("Projection (ticks)"))
         self.ticks = QSpinBox()
@@ -216,6 +252,47 @@ class SystemDesignerDialog(QDialog):
              item.get("flag", ""), None),
         ], self)
 
+    def _push_draft(self, document, positions=None, *, selected=None,
+                    refresh=True):
+        target_positions = deepcopy(self.positions if positions is None else positions)
+        if (document, target_positions) == self._draft_history[self._draft_index]:
+            return False
+        self._draft_history = self._draft_history[:self._draft_index + 1]
+        self._draft_history.append((deepcopy(document), target_positions))
+        if len(self._draft_history) > 51:
+            self._draft_history.pop(0)
+        self._draft_index = len(self._draft_history) - 1
+        self.document = deepcopy(document)
+        self.positions = target_positions
+        if refresh:
+            self.refresh(selected=selected)
+        self._update_history_buttons()
+        return True
+
+    def _update_history_buttons(self):
+        self.undo_button.setEnabled(self._draft_index > 0)
+        self.redo_button.setEnabled(self._draft_index + 1 < len(self._draft_history))
+
+    def undo_draft(self):
+        if self._draft_index <= 0:
+            return False
+        self._draft_index -= 1
+        self.document, self.positions = deepcopy(self._draft_history[self._draft_index])
+        self.refresh()
+        self._update_history_buttons()
+        self._status("Brouillon précédent restauré ; projet non modifié.")
+        return True
+
+    def redo_draft(self):
+        if self._draft_index + 1 >= len(self._draft_history):
+            return False
+        self._draft_index += 1
+        self.document, self.positions = deepcopy(self._draft_history[self._draft_index])
+        self.refresh()
+        self._update_history_buttons()
+        self._status("Brouillon rétabli ; projet non modifié.")
+        return True
+
     def _commit_row(self, category, result, index=None):
         try:
             if category == "producers":
@@ -233,19 +310,20 @@ class SystemDesignerDialog(QDialog):
             if index is None:
                 items.append(row)
             else:
+                # Node identity changes cannot orphan ports and references.
+                if row["id"] != items[index]["id"]:
+                    raise ValueError(
+                        "Renommer un nœud référencé exige une migration explicite.")
                 items[index] = row
             if candidate["resources"]:
                 validate_systems(candidate, self.scenes)
             elif any(candidate[key] for key in ("producers", "merchants", "quests")):
                 raise ValueError("Le graphe requiert au moins une ressource.")
         except (ValueError, TypeError, KeyError) as exc:
+            self._status("Graphe invalide : " + str(exc))
             QMessageBox.warning(self, "Graphe invalide", str(exc))
             return
-        self.document = candidate
-        self.refresh()
-        if index is not None:
-            self.lists[category].setCurrentRow(index)
-
+        self._push_draft(candidate, selected=(category, row["id"]))
     def add_item(self, category):
         result = self._dialog(category)
         if result is not None:
@@ -272,15 +350,105 @@ class SystemDesignerDialog(QDialog):
                         for key in ("merchants", "quests")
                         for row in self.document[key])
             if used:
-                QMessageBox.warning(
-                    self, "Référence active",
-                    "Supprimez d'abord les producteurs/marchands/quêtes liés.")
+                self._status("Retirez d'abord les connexions de " + name)
                 return
-        del self.document[category][index]
-        self.refresh()
+        candidate = deepcopy(self.document)
+        del candidate[category][index]
+        if candidate["resources"]:
+            validate_systems(candidate, self.scenes)
+        self._push_draft(candidate)
 
-    def refresh(self):
-        self.scene.clear()
+    def connect_nodes(self, source, target, quantity=1):
+        """Headless-callable typed port edit used by mouse interaction."""
+        candidate = edit_link(
+            self.document, source, target,
+            quantity=quantity, scenes=self.scenes)
+        return self._push_draft(candidate, selected=target)
+
+    def disconnect_nodes(self, source, target):
+        candidate = edit_link(
+            self.document, source, target, scenes=self.scenes, remove=True)
+        return self._push_draft(candidate)
+
+    def _port_connect(self, source, target):
+        quantity = 1
+        if source[0] == "producers" or target[0] == "producers":
+            quantity, accepted = QInputDialog.getInt(
+                self, "Quantité du port", "Quantité par cycle :", 1, 1, 1000)
+            if not accepted:
+                self._status("Connexion annulée.")
+                return
+        try:
+            self.connect_nodes(source, target, quantity)
+        except ValueError as exc:
+            self._status("Connexion refusée : " + str(exc))
+        else:
+            self._status(source[1] + " → " + target[1] + " connecté.")
+
+    def _node_moved(self, key, old, new):
+        if old == new:
+            return
+        positions = deepcopy(self.positions)
+        positions[key] = new
+        self._push_draft(self.document, positions, refresh=False)
+        self._status("Nœud déplacé : " + key[1])
+
+    def move_node(self, key, x, y):
+        """Keyboard, mouse and QTest-compatible single layout command."""
+        if key not in self.graph.nodes:
+            raise ValueError("Nœud graphique introuvable")
+        old = self.graph.nodes[key].pos()
+        self.graph.nodes[key].setPos(float(x), float(y))
+        self._node_moved(key, (old.x(), old.y()), (float(x), float(y)))
+
+    def _selected_graph(self, selection):
+        self._selection = selection
+        if selection is None:
+            self.inspector.setPlainText("Sélectionner un nœud ou une liaison.")
+        elif selection[0] == "node":
+            category, ident = selection[1]
+            item = next((row for row in self.document[category]
+                         if row["id"] == ident), None)
+            if item is not None:
+                index = self.document[category].index(item)
+                self.tabs.setCurrentIndex(
+                    ("resources", "producers", "merchants", "quests").index(category))
+                self.lists[category].setCurrentRow(index)
+                lines = [f"{category} · {ident}"]
+                lines.extend(f"{key}: {value}" for key, value
+                             in sorted(item.items()) if key != "id")
+                self.inspector.setPlainText("\\n".join(lines))
+        else:
+            source, target = selection[1]
+            self.inspector.setPlainText(
+                "Liaison : " + source[1] + " → " + target[1] +
+                "\\nSupprimer la liaison (ports recette obligatoires).")
+        self.edit_selected.setEnabled(
+            selection is not None and selection[0] == "node")
+        self.unlink_selected.setEnabled(
+            selection is not None and selection[0] == "link")
+
+    def _edit_selected(self):
+        if self._selection and self._selection[0] == "node":
+            category, _ = self._selection[1]
+            self.edit_item(category)
+
+    def _remove_selected_link(self):
+        if not self._selection or self._selection[0] != "link":
+            return
+        source, target = self._selection[1]
+        try:
+            self.disconnect_nodes(source, target)
+        except ValueError as exc:
+            self._status("Suppression refusée : " + str(exc))
+        else:
+            self._status("Liaison supprimée.")
+
+    def _status(self, message):
+        self.status.setText(message)
+
+    def refresh(self, *, selected=None):
+        self._selection = None
         for kind, view in self.lists.items():
             view.clear()
             for row in self.document[kind]:
@@ -294,41 +462,11 @@ class SystemDesignerDialog(QDialog):
                 else:
                     title = f'{row["id"]}: {row["quantity"]} {row["resource"]} → {row["flag"]}'
                 view.addItem(title)
-        positions = {}
-        groups = [
-            ("resources", 30),
-            ("producers", 350),
-            ("merchants", 670),
-            ("quests", 670),
-        ]
-        for category, x in groups:
-            for i, row in enumerate(self.document[category]):
-                y = 18 + i * 54 + (280 if category == "quests" else 0)
-                self.scene.addRect(x, y, 238, 38, QPen(QColor("#64748b")))
-                text = self.scene.addText(row["id"] + " (" + category + ")")
-                text.setPos(x + 8, y + 6)
-                positions[(category, row["id"])] = (x, y)
-        for row in self.document["producers"]:
-            target = positions[("producers", row["id"])]
-            for rid in row["inputs"]:
-                src = positions[("resources", rid)]
-                self.scene.addLine(src[0] + 238, src[1] + 18,
-                                   target[0], target[1] + 18,
-                                   QPen(QColor("#1e88e5"), 2))
-            for rid in row["outputs"]:
-                # Back-edges are intentional resource flows, not script cycles.
-                dest = positions[("resources", rid)]
-                self.scene.addLine(target[0], target[1] + 30,
-                                   dest[0] + 238, dest[1] + 30,
-                                   QPen(QColor("#16a34a"), 2))
-        for category in ("merchants", "quests"):
-            for row in self.document[category]:
-                src = positions[("resources", row["resource"])]
-                dest = positions[(category, row["id"])]
-                self.scene.addLine(src[0] + 238, src[1] + 18,
-                                   dest[0], dest[1] + 18,
-                                   QPen(QColor("#ca8a04"), 2))
-        self.scene.setSceneRect(self.scene.itemsBoundingRect())
+        self.graph.rebuild(self.document, self.positions, selected)
+        self._selected_graph(None)
+        if selected is not None:
+            self._selected_graph(("node", selected))
+        self._update_history_buttons()
 
     def preview(self):
         try:
