@@ -131,6 +131,13 @@ class R37BossDirectorTests(unittest.TestCase):
         self.assertEqual(view["boss"], "warden")
         self.assertEqual(view["phases"][1]["trigger"], "final_fury")
         self.assertEqual(game.recording(), checkpoint)
+        report = game.ai_boss_replay_audit(director["id"])
+        self.assertTrue(report["verified"])
+        self.assertEqual(report["preview_digest"], view["digest"])
+        self.assertEqual(report["commands_checked"], 0)
+        self.assertEqual(game.recording(), checkpoint)
+        with self.assertRaises(RuleError):
+            game.ai_boss_replay_audit(director["id"], command_budget=0)
         with self.assertRaises(RuleError):
             game.ai_boss_preview("unknown_director")
         with TemporaryDirectory() as directory:
@@ -139,6 +146,7 @@ class R37BossDirectorTests(unittest.TestCase):
             resumed = GameSession.load(path, content, project, rules=rules)
         self.assertEqual(resumed.recording(), checkpoint)
         self.assertEqual(resumed.ai_boss_preview(director["id"]), view)
+        self.assertEqual(resumed.ai_boss_replay_audit(director["id"]), report)
         legacy = deepcopy(project)
         legacy.extensions.pop(EXTENSION)
         plain = GameSession.new(content, legacy, "main", rules=rules)
