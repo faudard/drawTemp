@@ -83,6 +83,10 @@ class VillageRelaySliceTests(unittest.TestCase):
                 player.claim_rpg_quest()
             with self.assertRaises(ValueError):
                 player.travel_route("woods_to_crypt")
+            self.assertIn("lame_relais", {
+                item["id"] for item in state["gear"]["inventory"]})
+            with self.assertRaises(Exception):
+                player.equip_hero("oren", "lame_relais")
             player.recruit_party_member("oren")
             player.recruit_party_member("mira")
             self.assertEqual(len(player.state()["party"]["recruitable"]), 0)
@@ -90,6 +94,12 @@ class VillageRelaySliceTests(unittest.TestCase):
             player.toggle_party_member("mira")
             self.assertEqual(set(player.state()["party"]["active"]),
                              {"elya", "oren", "mira"})
+            player.equip_hero("elya", "lame_relais")
+            player.equip_hero("mira", "cape_relais")
+            self.assertEqual(player.state()["party"]["equipment"]["elya"][
+                "weapon"], "lame_relais")
+            self.assertEqual(player.state()["party"]["equipment"]["mira"][
+                "armor"], "cape_relais")
             player.save(1)
             player.travel_route("village_to_woods")
             self.assertEqual(player.state()["exploration"]["scene_id"], "woods")
@@ -97,6 +107,9 @@ class VillageRelaySliceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 player.travel_route("woods_to_crypt")
             player.start_rpg_encounter("woods")
+            actors = {a["id"]: a for a in player.state()["rpg"]["actors"]}
+            self.assertEqual(actors["elya"]["attack"], 15)
+            self.assertEqual(actors["mira"]["max_hp"], 64)
             _defeat_enemy(player, "loup")
             player.finish_rpg_encounter()
             self.assertIn("woods_to_crypt", [
@@ -119,7 +132,7 @@ class VillageRelaySliceTests(unittest.TestCase):
             player.claim_rpg_quest()
             progress = player.session.snapshot().progress
             self.assertEqual(progress["gold"], 61)
-            self.assertEqual(progress["inventory"]["potion"], 2)
+            self.assertEqual(progress["inventory"]["potion"], 3)
             self.assertEqual(progress["heroes"]["elya"]["xp"], 100)
             self.assertEqual(progress["heroes"]["mira"]["xp"], 100)
             self.assertTrue(player.state()["rpg_quest"]["completed"])
@@ -136,6 +149,25 @@ class VillageRelaySliceTests(unittest.TestCase):
             self.assertEqual(restored.state()["party"], player.state()["party"])
             self.assertEqual(restored.state()["rpg_available"], [])
             self.assertEqual(restored.state()["exploration"]["scene_id"], "village")
+
+    def test_equipment_is_replayed_from_campaign_not_save_actor_cache(self):
+        session = GameSession.new(self.content, self.project, "main", seed=15)
+        session.equip_hero("elya", "lame_relais")
+        session.route_transition("village_to_woods")
+        session.rpg_start("woods")
+        checkpoint = session.recording()
+        actor = next(row for row in checkpoint["rpg_encounter"]["view"]["actors"]
+                     if row["id"] == "elya")
+        self.assertEqual(actor["attack"], 15)
+        loaded = GameSession.from_recording(
+            checkpoint, self.content, self.project)
+        self.assertEqual(loaded.rpg_state(), session.rpg_state())
+        forged = deepcopy(checkpoint)
+        forged["progress"]["heroes"]["elya"]["equipment"] = {}
+        forged["digest"] = digest({k: v for k, v in forged.items()
+                                   if k != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(forged, self.content, self.project)
 
     def test_checkpoint_rejects_invented_quest_claim_or_combat_gate(self):
         session = GameSession.new(self.content, self.project, "main")
