@@ -47,8 +47,8 @@ def authored_screen(controller, kind, width):
                 "R51: authored screen lacks mandatory text/action or has "
                 "unsupported intents; classic Player retained"}
     state = controller.state()
-    expected = "dialogue" if kind == "DIALOGUE" else "battle"
-    if state["screen"] != expected:
+    expected = ("dialogue",) if kind == "DIALOGUE" else ("battle", "campaign")
+    if state["screen"] not in expected:
         return {"available": False, "error": ""}
     game = controller.session._session  # Same authoritative Simulation owner.
     if kind == "DIALOGUE":
@@ -80,7 +80,48 @@ def authored_screen(controller, kind, width):
             "permitted_actions": ["dialogue.advance"] if can_advance else [],
         }
 
-    # Tactical inventory is not the campaign equipment editor, nor a new store.
+    if state["screen"] == "campaign":
+        # R8 campaign equipment is the authoritative inventory projection,
+        # *not* the battle stock. No free-form owner/hero IDs are accepted.
+        gear = state.get("gear") or {}
+        stock = gear.get("inventory") or []
+        equipped = gear.get("equipped") or {}
+        if type(stock) is not list or type(equipped) is not dict or any(
+            type(row) is not dict or
+            type(row.get("id")) is not str or
+            type(row.get("count")) is not int or
+            row["count"] < 0 or
+            type(row.get("slot")) is not str or
+            type(row.get("name")) is not str
+            for row in stock
+        ):
+            return {"available": False, "error": "Invalid campaign inventory"}
+        if len(stock) > 128 or any(
+            type(key) is not str or type(value) is not str
+            for key, value in equipped.items()
+        ):
+            return {"available": False, "error": "Invalid equipped items"}
+        stock_rows = sorted(
+            ({"id": row["id"], "name": row["name"],
+              "slot": row["slot"], "count": row["count"]}
+             for row in stock if row["count"] > 0),
+            key=lambda row: row["id"])
+        total = sum(row["count"] for row in stock_rows)
+        try:
+            projection = project_layout(
+                matches[0], catalog, game, width=width,
+                inventory_view={"item_count": total})
+        except UiLayoutError as exc:
+            return {"available": False, "error": str(exc)}
+        return {
+            "available": True, "error": "", "projection": projection,
+            "permitted_actions": ["inventory.close"],
+            "context": "campaign", "items": stock_rows,
+            "equipped": dict(equipped), "can_use": False,
+            "can_equip": True,
+        }
+
+    # Tactical inventory is intentionally separate from the campaign gear.
     battle = game.active_battle
     if battle is None or battle.result:
         return {"available": False, "error": ""}
@@ -106,7 +147,8 @@ def authored_screen(controller, kind, width):
     return {
         "available": True, "error": "", "projection": projection,
         "permitted_actions": ["inventory.close"],
-        "items": items, "can_use": can_use,
+        "context": "battle", "items": items, "can_use": can_use,
+        "can_equip": False, "equipped": {},
     }
 
 
@@ -128,3 +170,28 @@ def perform_inventory_use(controller, item_id):
     if item_id not in {row["id"] for row in screen["items"]}:
         raise UiLayoutError("R51: item absent from canonical inventory")
     return controller.use_item(item_id)
+
+
+
+def perform_campaign_equip(controller, item_id):
+    """Apply R8 equipment only when the canonical campaign owns the item."""
+    if type(item_id) is not str or len(item_id) > 120:
+        raise UiLayoutError("R51: invalid campaign equipment ID")
+    screen = authored_screen(controller, "INVENTORY", 800)
+    if not screen["available"] or screen.get("context") != "campaign":
+        raise UiLayoutError("R51: campaign equipment screen unavailable")
+    if item_id not in {row["id"] for row in screen["items"]}:
+        raise UiLayoutError("R51: equipment not in the real campaign stock")
+    return controller.equip_hero("jeanne", item_id)
+
+
+def perform_campaign_unequip(controller, slot):
+    """Never let authored UI select an arbitrary actor or inventory slot."""
+    if slot not in ("weapon", "armor", "accessory") or type(slot) is not str:
+        raise UiLayoutError("R51: invalid campaign equipment slot")
+    screen = authored_screen(controller, "INVENTORY", 800)
+    if not screen["available"] or screen.get("context") != "campaign":
+        raise UiLayoutError("R51: campaign equipment screen unavailable")
+    if not screen["equipped"].get(slot):
+        raise UiLayoutError("R51: equipment slot is already empty")
+    return controller.unequip_hero("jeanne", slot)
