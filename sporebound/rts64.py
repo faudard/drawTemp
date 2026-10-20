@@ -257,8 +257,8 @@ class RTSWorld:
                 if attacker["rules"] == "hold_fire":
                     continue
                 if (attacker["rules"] == "return_fire"
-                        and not 0 <= tick - attacker["last_hit"] <=
-                        2 * ATTACK_INTERVAL):
+                        and (attacker["last_hit"] < 0 or
+                             tick - attacker["last_hit"] > 2 * ATTACK_INTERVAL)):
                     continue
                 nearby = [a for a in living if a["team"] != attacker["team"]
                           and _distance(a["pos"], attacker["pos"]) == 1]
