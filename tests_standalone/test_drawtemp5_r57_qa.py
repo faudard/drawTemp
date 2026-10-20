@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from drawtemp.localization import seeded_for_project
+from drawtemp.localization import Catalog, seeded_for_project
 from drawtemp.localization.qa import audit_project, main
 from tests_standalone.test_drawtemp5_r57 import PROJECT
 
