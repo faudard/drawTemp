@@ -398,11 +398,46 @@ python -m unittest tests_standalone.test_drawtemp_r48a4_history_store -v
 python -m unittest tests_standalone.test_drawtemp_r48a4_rebase -v
 ```
 
+## R48.C1 — gate vertical deux auteurs, sauvegarde et replay Jeanne
+
+Le scénario intégral est décrit dans
+[`R48C_TWO_AUTHOR_RELEASE_GATE.md`](R48C_TWO_AUTHOR_RELEASE_GATE.md).
+
+`python -m drawtemp.sdk.r48_vertical_gate` construit deux branches
+indépendantes depuis `reference_project()` : **Alice** modifie la carte
+(un tile cobble→grass), le nom de mission et un titre de scène ; **Bob**
+modifie le texte narratif, le sous-titre du projet et revendique un titre
+différent pour la même scène. Le gate refuse une fusion sans choix explicite,
+puis applique la décision `incoming` en préservant les modifications
+non conflictuelles, avec validation du couple canonique Content/GameProject.
+
+Le gate enregistre et rouvre les documents du jeu, le DAG R48, une discussion
+de revue et son état résolu, puis rapproche l'audit en lecture seule.
+Enfin le **moteur réel** `GameSession` est lancé avec la seed 17 ; Jeanne
+ouvre la porte avec le levier, la bataille doit finir victorieuse et les
+enregistrements sauvegardés/rechargés/rejoués doivent être équivalents.
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48c_vertical -v
+python -m drawtemp.sdk.r48_vertical_gate
+```
+
+Les tests C1 supplémentaires injectent une interruption après publication
+d'un seul des deux documents du jeu et imposent un choix explicite de
+`complete` ou `rollback`, ainsi qu'une interruption de `os.replace`
+avant la publication de l'archive. Les anciennes versions valides doivent
+rester inspectables.
+
+**C1 est seulement un gate logiciel simulé** : pas encore d'extinction
+brutale, d'export Player validé, de concurrence entre vrais processus,
+d'exécution CI attestée ni de revue visuelle ou screen reader certifiée.
+Aucune fusion sur master tant que ces garanties n'ont pas été contrôlées.
+
 ## Tranches restantes
 
 - **R48.A5** : rejeu contrôlé commit-par-commit si requis, recovery réel
   multi-processus et coupure matérielle, garanties transactionnelles renforcées.
 - **R48.B3** : validations NVDA/VoiceOver, commentaires avec identité
   attestée et UX onscreen ; éventuelles vues d'ensemble multi-révisions.
-- **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
-  sauvegarde et replay, export reproductible et gate d'intégration final.
+- **R48.C2** : test deux processus/crash brutal, export Player reproductible,
+  replay approfondi, et gate d'intégration final Windows/macOS/Linux.
