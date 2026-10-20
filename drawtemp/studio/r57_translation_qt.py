@@ -22,11 +22,14 @@ class TranslationStudioDialog(QDialog):
             raise LocalizationError("Save the project before editing translations")
         self.path = sidecar_path(content_path)
         self.base_revision = file_revision(self.path)
-        if session.snapshot().dirty:
+        snapshot = session.snapshot()
+        if snapshot.dirty:
             raise LocalizationError("Enregistrez le projet avant les traductions.")
-        self.project = project
+        self.session = session
+        self.source_revision = snapshot.revision
+        self.project = thaw(snapshot.project)
         old = Catalog.load(self.path) if self.base_revision else None
-        self.catalog, self.drift = seeded_for_project(project, old)
+        self.catalog, self.drift = seeded_for_project(self.project, old)
         self.drafts = {}
         self._selected_key = None
         self.setWindowTitle("R57 • Translation Studio")
@@ -185,6 +188,15 @@ class TranslationStudioDialog(QDialog):
         self.refresh_list()
 
     def save(self):
+        # The project is authoritative: reopening is mandatory after an edit
+        # made in another Studio panel, even when no catalog file was changed.
+        snapshot = self.session.snapshot()
+        if snapshot.dirty or snapshot.revision != self.source_revision:
+            QMessageBox.warning(
+                self, "Projet modifié",
+                "Le projet a changé depuis l'ouverture de Translation Studio. "
+                "Enregistrez le projet puis rouvrez l'atelier.")
+            return
         if self.drift:
             QMessageBox.warning(
                 self, "Sources modifiées",
