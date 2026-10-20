@@ -261,6 +261,19 @@ def seeded_for_project(project, catalog=None):
             value = scene.get(field)
             if isinstance(value, str) and value:
                 sources["story." + sid + "." + field] = (value, context, limit)
+        # R42 Narrative v2: the stable *line ID*, not an array index,
+        # identifies the localization source across reordered dialogue.
+        for line in scene.get("lines", []):
+            if not isinstance(line, dict) or not isinstance(line.get("id"), str):
+                continue
+            lid = line["id"]
+            for field, context, limit in (
+                    ("speaker", "Narrative v2 line speaker", 120),
+                    ("text", "Narrative v2 line subtitle", 1500)):
+                value = line.get(field)
+                if isinstance(value, str) and value:
+                    sources["story." + sid + ".line." + lid + "." + field] = (
+                        value, context, limit)
         for choice in scene.get("choices", []):
             if (isinstance(choice, dict) and isinstance(choice.get("id"), str)
                     and isinstance(choice.get("label"), str) and choice["label"]):
@@ -329,10 +342,29 @@ def localize_view(view, catalog, language):
     if isinstance(scene, dict) and isinstance(scene.get("id"), str):
         sid = scene["id"]
         result["scene"] = dict(scene)
-        for field in ("title", "speaker", "text"):
-            if field in scene:
-                result["scene"][field] = translate(
-                    "story." + sid + "." + field, scene[field])
+        if "title" in scene:
+            result["scene"]["title"] = translate(
+                "story." + sid + ".title", scene["title"])
+        line = view.get("dialogue_line")
+        # The displayed R42 text is from a persisted dialogue cursor, not
+        # scene["text"]. Line-ID translation must take precedence over
+        # legacy scene-level text. Keep both projections in sync for clients.
+        if (isinstance(line, dict) and line.get("scene_id") == sid
+                and isinstance(line.get("id"), str)):
+            lid = line["id"]
+            translated_line = dict(line)
+            for field in ("speaker", "text"):
+                if field in line:
+                    translated_line[field] = translate(
+                        "story." + sid + ".line." + lid + "." + field,
+                        line[field])
+                    result["scene"][field] = translated_line[field]
+            result["dialogue_line"] = translated_line
+        else:
+            for field in ("speaker", "text"):
+                if field in scene:
+                    result["scene"][field] = translate(
+                        "story." + sid + "." + field, scene[field])
         choices = view.get("choices")
         if isinstance(choices, list):
             result["choices"] = [
