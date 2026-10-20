@@ -245,6 +245,99 @@ class GameSession:
                 "R37 suspicion must be an integer in 0..3")
         return value
 
+    def ai_squad_preview(self, squad_id):
+        """R37.D3 — direct same-scene radio sharing and role proposals only.
+
+        Positions and signal strength are taken from canonical R35 projections
+        and each actor's verified sensor/blackboard. No secondary NPC state,
+        full-map omniscience or implicit gameplay command execution.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        from .ai_squad import coordinate_squad
+        agents = sorted((
+            row for row in self._advanced_ai.agents.values()
+            if row.get("squad", {}).get("id") == squad_id),
+            key=lambda row: row["id"])
+        require(agents, "Unknown R37 authored squad")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 squad requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 squad scene is completed")
+        members = []
+        for agent in agents:
+            actor_id = agent["id"]
+            pose = self._living_world.npc_pose(
+                actor_id, self.progress.story_flags)
+            if pose["scene"] != self.route_scene or pose.get("pos") is None:
+                continue
+            perception = self.ai_perception_preview(actor_id)["perception"]
+            values = self._advanced_ai.state(actor_id)["values"]
+            fresh = perception["signal"]
+            if fresh in ("seen", "heard"):
+                known = list(perception["target"])
+                signal = fresh
+            elif (self._ai_suspicion(actor_id) > 0
+                  and values.get("last_known_scene") == self.route_scene
+                  and all(name in values
+                          for name in ("last_known_x", "last_known_y"))):
+                known = [values["last_known_x"], values["last_known_y"]]
+                signal = "memory"
+            else:
+                known = None
+                signal = "none"
+            members.append({
+                "actor_id": actor_id, "pos": list(pose["pos"]),
+                "role": agent["squad"]["role"],
+                "radio_range": agent["squad"]["radio_range"],
+                "signal": signal, "known_pos": known,
+            })
+        require(members, "No R37 squad members are present in this scene")
+        return coordinate_squad(stage, squad_id, members,
+                                scene=self.route_scene,
+                                tick=self._living_world.ticks)
+
+    def ai_squad_share(self, squad_id):
+        """Explicit atomic broadcast of *fresh* sightings to in-range peers.
+
+        Each recipient is written at most once per world tick. The regular
+        R37.B journal replay is the source of persistence; CT remains opt-out.
+        """
+        report = self.ai_squad_preview(squad_id)
+        recipients = [
+            row for row in report["members"]
+            if row["shared_from"] is not None and
+            row["received_signal"] in ("seen", "heard")]
+        require(recipients, "R37 squad has no deliverable fresh radio signals")
+        tick = report["tick"]
+        for row in recipients:
+            require(not any(
+                event["actor_id"] == row["actor_id"]
+                and event["tick"] == tick
+                and "squad_source" in event["changes"]
+                for event in self._advanced_ai.history),
+                "R37 squad already notified an actor this tick")
+        writes = []
+        for row in sorted(recipients, key=lambda item: item["actor_id"]):
+            signal = row["received_signal"]
+            known = row["known_pos"]
+            writes.append({
+                "actor_id": row["actor_id"],
+                "changes": {
+                    "alert": True, "suspicion": 3 if signal == "seen" else 2,
+                    "last_known_x": known[0], "last_known_y": known[1],
+                    "last_known_scene": report["scene"],
+                    "squad_source": row["shared_from"], "squad_signal": signal,
+                },
+            })
+        saved = self._advanced_ai.remember_batch(writes, tick=tick)
+        return {"preview": report, "delivered": [
+            {"actor_id": row["actor_id"], "source": row["shared_from"]}
+            for row in recipients], "blackboards": saved}
+
     def ai_decision_context(self, actor_id):
         """Derive observable facts from canonical CT or R35 exploration state.
 
@@ -282,6 +375,17 @@ class GameSession:
                 npc = pose["pos"]
                 facts["distance"] = abs(npc[0] - player[0]) + abs(npc[1] - player[1])
             tick = self._living_world.ticks
+            if "squad" in agent:
+                preview = self.ai_squad_preview(agent["squad"]["id"])
+                own = next((row for row in preview["members"]
+                            if row["actor_id"] == actor_id), None)
+                if own is not None:
+                    facts.update({
+                        "squad_alert": own["known_pos"] is not None,
+                        "squad_role": own["role"],
+                        "squad_intent": own["intent"],
+                        "squad_reachable": own["reachable"],
+                    })
             if "sensor" in agent:
                 memory = self._advanced_ai.state(actor_id)["values"]
                 if same_scene and pose.get("pos") is not None:
@@ -335,7 +439,9 @@ class GameSession:
         memory = self._advanced_ai.state(actor_id)["values"]
         prior = None
         if self._ai_suspicion(actor_id) > 0:
-            if "last_known_x" in memory and "last_known_y" in memory:
+            if (memory.get("last_known_scene") == self.route_scene
+                    and "last_known_x" in memory
+                    and "last_known_y" in memory):
                 prior = [memory["last_known_x"], memory["last_known_y"]]
         movement = False
         if self._rt_journal is not None:
@@ -380,6 +486,7 @@ class GameSession:
         if signal != "none":
             changes["last_known_x"] = observation["target"][0]
             changes["last_known_y"] = observation["target"][1]
+            changes["last_known_scene"] = report["scene"]
         updated = self._advanced_ai.remember(actor_id, changes, tick=tick)
         return {"observation": report, "blackboard": updated}
 
