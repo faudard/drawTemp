@@ -61,9 +61,11 @@ def validate_farming(spec, scene_ids, item_ids):
                 and _int(row["yield_quantity"], 1, 99)
                 and _int(row["grow_days"], 1, 120)
                 and type(row["soils"]) is list and bool(row["soils"])
+                and all(type(value) is str for value in row["soils"])
                 and len(row["soils"]) == len(set(row["soils"]))
                 and set(row["soils"]) <= set(SOILS)
                 and type(row["seasons"]) is list and bool(row["seasons"])
+                and all(type(value) is str for value in row["seasons"])
                 and len(row["seasons"]) == len(set(row["seasons"]))
                 and set(row["seasons"]) <= set(SEASONS),
                 "R62 invalid crop or canonical item reference")
@@ -92,6 +94,8 @@ class FarmingLife:
 
     def __init__(self, spec, scene_ids, item_ids):
         self.spec = validate_farming(spec, scene_ids, item_ids)
+        self.scene_ids = frozenset(scene_ids)
+        self.item_ids = frozenset(item_ids)
         self.plots = {row["id"]: row for row in self.spec["plots"]}
         self.crops = {row["id"]: row for row in self.spec["crops"]}
         self.animals = {row["id"]: row for row in self.spec["animals"]}
@@ -120,8 +124,7 @@ class FarmingLife:
         return "rain" if sample < 3 else ("cloud" if sample < 5 else "sun")
 
     def view(self, scene=None):
-        require(scene is None or scene in {row["scene"] for row in self.plots.values()}
-                | {row["scene"] for row in self.animals.values()},
+        require(scene is None or scene in self.scene_ids,
                 "R62 unknown farm scene")
         plots = {}
         for key, row in sorted(self.plots.items()):
@@ -212,13 +215,7 @@ class FarmingLife:
                 and type(data["journal"]) is list
                 and len(data["journal"]) <= MAX_RECEIPTS,
                 "R62 invalid farm checkpoint")
-        replay = FarmingLife(self.spec,
-                             {row['scene'] for row in self.plots.values()} |
-                             {row['scene'] for row in self.animals.values()},
-                             {row['seed_item'] for row in self.crops.values()} |
-                             {row['yield_item'] for row in self.crops.values()} |
-                             {row['feed_item'] for row in self.animals.values()} |
-                             {row['yield_item'] for row in self.animals.values()})
+        replay = FarmingLife(self.spec, self.scene_ids, self.item_ids)
         for row in data["journal"]:
             require(type(row) is dict
                     and set(row) == ({"kind", "target", "id", "day", "crop"}
