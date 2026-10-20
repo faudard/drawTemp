@@ -1,10 +1,15 @@
-name: R76.A–B Asset Optimization
+name: R76.A–C1 Asset Optimization
 
 on:
   push:
     paths:
       - "drawtemp/assets/optimization_audit.py"
       - "drawtemp/assets/optimizer.py"
+      - "drawtemp/quality/r76_bench.py"
+      - "drawtemp/studio/r76_bench_qt.py"
+      - "tests_standalone/test_r76c_bench.py"
+      - "tests_standalone/test_r76c_bench_qt.py"
+      - "docs/R76C_BUNDLE_AND_STARTUP_BENCH.md"
       - "drawtemp/studio/r76_optimizer_qt.py"
       - "drawtemp/studio/qt_shell.py"
       - "tests_standalone/test_r76b_optimizer.py"
@@ -17,6 +22,11 @@ on:
     paths:
       - "drawtemp/assets/optimization_audit.py"
       - "drawtemp/assets/optimizer.py"
+      - "drawtemp/quality/r76_bench.py"
+      - "drawtemp/studio/r76_bench_qt.py"
+      - "tests_standalone/test_r76c_bench.py"
+      - "tests_standalone/test_r76c_bench_qt.py"
+      - "docs/R76C_BUNDLE_AND_STARTUP_BENCH.md"
       - "drawtemp/studio/r76_optimizer_qt.py"
       - "drawtemp/studio/qt_shell.py"
       - "tests_standalone/test_r76_asset_audit.py"
@@ -43,8 +53,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install project
         run: python -m pip install -e .
-      - name: R76.A and R76.B1 — headless contracts
-        run: python -m unittest -v tests_standalone.test_r76_asset_audit tests_standalone.test_r76b_optimizer
+      - name: R76.A–C1 — headless and subprocess contracts
+        run: python -m unittest -v tests_standalone.test_r76_asset_audit tests_standalone.test_r76b_optimizer tests_standalone.test_r76c_bench tests_standalone.test_drawtemp5_r15
       - name: Regression — canonical assets
         run: python -m unittest -v tests_standalone.test_assets
 
@@ -61,5 +71,5 @@ jobs:
           python-version: "3.12"
       - name: Install editor Qt dependencies
         run: python -m pip install -e ".[qt6]"
-      - name: Qt optimizer dialogue smoke
-        run: python -m unittest -v tests_standalone.test_r76b_optimizer_qt
+      - name: Qt optimizer and benchmark report dialogue smoke
+        run: python -m unittest -v tests_standalone.test_r76b_optimizer_qt tests_standalone.test_r76c_bench_qt
