@@ -99,6 +99,36 @@ class R51C2ScreenTests(unittest.TestCase):
             player.choose("enter")
             self.assertFalse(authored_screen(player, "DIALOGUE", 800)["available"])
 
+    def test_multiline_dialogue_advance_reuses_R1_and_autosave(self):
+        from sporebound.narrative_r42 import migrate_story_v1, set_dialogue_lines
+        project = migrate_story_v1(self.project, self.content)
+        project = set_dialogue_lines(project, self.content, "arrival", [
+            {"id": "intro", "speaker": "Jeanne", "text": "Première réplique."},
+            {"id": "reply", "speaker": "Capitaine", "text": "Deuxième réplique."},
+        ])
+        make_project(self.content, project)
+        with TemporaryDirectory() as folder:
+            player = PlayerController(self.content, project, "main", folder)
+            player.new_game()
+            first = authored_screen(player, "DIALOGUE", 800)
+            self.assertTrue(first["available"])
+            self.assertEqual(first["permitted_actions"], ["dialogue.advance"])
+            before = player.session.snapshot().revision
+            recording = player.session.recording()
+            perform_dialogue_advance(player)
+            self.assertEqual(player.session.snapshot().revision, before + 1)
+            self.assertNotEqual(player.session.recording(), recording)
+            view = authored_screen(player, "DIALOGUE", 800)
+            self.assertTrue(view["available"])
+            self.assertEqual(view["permitted_actions"], [])
+            nodes = view["projection"]["root"]["children"]
+            self.assertIn("Deuxième réplique.", [n.get("value") for n in nodes])
+            self.assertIn("Capitaine", [n.get("value") for n in nodes])
+            with self.assertRaises(UiLayoutError):
+                perform_dialogue_advance(player)
+            self.assertEqual([choice["id"] for choice in player.state()["choices"]],
+                             ["enter"])
+
     def test_real_battle_inventory_view_and_disallowed_item_do_not_commit(self):
         make_project(self.content, self.project)
         with TemporaryDirectory() as folder:
