@@ -484,6 +484,7 @@ class StudioWindow(QMainWindow):
         self._action("r49_references", "Vérifier les références du projet…",
                      self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
+        self._action("r75_narrative", "R75 • Quêtes et dialogues assistés…", self.open_r75_narrative)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
@@ -561,6 +562,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r49_metrics"])
         tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
+        tools_menu.addAction(self.commands["r75_narrative"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["global_search"])
@@ -803,6 +805,14 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.r30_assist_qt import R30AssistDialog
         prior = self.session.revision
         R30AssistDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_r75_narrative(self):
+        """R75.B assisted narrative with canonical preview, approval and Undo."""
+        from drawtemp.studio.r75_narrative_assist_qt import R75NarrativeAssistDialog
+        prior = self.session.revision
+        R75NarrativeAssistDialog(self.session, parent=self).exec()
         if self.session.revision != prior:
             self.refresh()
 
