@@ -15,19 +15,29 @@ def new_layout(kind="HUD_CT"):
         raise UiLayoutError("R51: unknown screen kind")
     intent = "combat.end_turn" if kind == "HUD_CT" else "menu.continue"
     label = "Fin du tour" if kind == "HUD_CT" else "Continuer"
+    buttons = [
+        {"id": "main_action", "type": "button", "text": label,
+         "action": intent},
+    ]
+    if kind == "MENU":
+        buttons = [
+            {"id": "main_action", "type": "button", "text": "Nouvelle partie",
+             "action": "menu.new_game"},
+            {"id": "continue_action", "type": "button", "text": "Continuer",
+             "action": "menu.continue"},
+        ]
     return {
         "kind": kind,
         "root": {
             "id": "root", "type": "column",
             "children": [
                 {"id": "welcome", "type": "text", "text": "Interface personnalisable"},
-                {"id": "main_action", "type": "button", "text": label,
-                 "action": intent},
+                *buttons,
             ],
         },
         "breakpoints": [{"min_width": 0, "columns": 1},
                         {"min_width": 900, "columns": 2}],
-        "focus_order": ["main_action"],
+        "focus_order": [button["id"] for button in buttons],
     }
 
 
