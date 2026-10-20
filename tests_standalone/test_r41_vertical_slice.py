@@ -150,6 +150,21 @@ class VillageRelaySliceTests(unittest.TestCase):
             self.assertEqual(restored.state()["rpg_available"], [])
             self.assertEqual(restored.state()["exploration"]["scene_id"], "village")
 
+    def test_invalid_quest_and_starter_inventory_fail_closed(self):
+        for change in (
+            lambda data: data["starting_inventory"].update(potion=True),
+            lambda data: data["starting_inventory"].update(unknown_item=1),
+            lambda data: data["quest"].update(encounters=["woods", "woods"]),
+            lambda data: data["quest"].update(encounters=[["woods"]]),
+            lambda data: data["quest"].update(return_scene="missing"),
+            lambda data: data["quest"].update(reward_gold=True),
+            lambda data: data["quest"].update(reward_quantity=-1),
+        ):
+            project = deepcopy(self.project)
+            change(project.extensions[EXTENSION]["data"])
+            with self.subTest(change=change), self.assertRaises(RuleError):
+                project.validate(self.content)
+
     def test_equipment_is_replayed_from_campaign_not_save_actor_cache(self):
         session = GameSession.new(self.content, self.project, "main", seed=15)
         session.equip_hero("elya", "lame_relais")
