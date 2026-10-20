@@ -69,6 +69,15 @@ Les fusions conflictuelles combinent les changements textuels ; elles **ne prouv
 - Tests de régression ajoutés : journal de commentaires valide mais étranger, refus d'append, aucune modification de Content/GameProject et aucun fichier de tâches créé par l'UI refusée.
 - **CI non validée** : sur la branche d'intégration, des workflows GitHub Actions échouent sans jobs consultables (`total_count=0` sur plusieurs runs), ce qui ne permet pas de conclure à un succès ou un échec de test. Exemple : [Run R10](https://github.com/faudard/drawTemp/actions/runs/39413840198). Exécuter les suites sur une machine de build / rétablir l'exécution des jobs avant tout GO.
 
+## R58.B2 — évolutions du Package Manager après consolidation
+
+- Nouvelle voie d'upgrade **isolée** dans `drawtemp/studio/package_upgrades.py` : archive R24.C et SHA-256 indépendant requis, même ID/kind d'assets, aucune dépendance implicite, diff de ressources et révision Studio vérifiés.
+- Le dialogue `Packages de ressources R58` propose maintenant **Mettre à jour / Restaurer…** ; rétrogradation avec archive de la version antérieure et double confirmation explicite.
+- Écriture sous un répertoire de version **distinct** sans écrasement ; anciennes ressources conservées ; une transaction AuthoringSession Undo/Redo, sauvegarde manuelle. Pas de migration automatique des références physiques, ni de gestion d'upgrade multi-packs.
+- Limite majeure : un arrêt brutal pendant la copie peut laisser un répertoire de version incomplet, mais pas de remplacement de l'ancien pack enregistré. **Le rollback durable crash-safe multi-fichiers n'est pas certifié.**
+- Tests : `tests_standalone/test_drawtemp_r58b_upgrades.py` et parcours Qt offscreen, workflow R58 étendu. Résultat Actions [run 39418211683](https://github.com/faudard/drawTemp/actions/runs/39418211683) : échec avec **0 job**, aucune suite exécutée et aucune preuve de validation.
+- Détails et limites : [R58.B2](drawtemp5/R58B2_PACKAGE_UPGRADES.md). R58.B3 dépendances versionnées/transactions durables et R58.C cross-project restent ouverts.
+
 ## Gates avant fusion vers master
 
 - [ ] CI complète sur le SHA final de #446 et matrice Linux/Windows/macOS.
