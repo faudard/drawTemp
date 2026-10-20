@@ -126,7 +126,7 @@ def create_bridge(controller, renderer):
             super().__init__()
             self.controller = controller
             self.renderer = renderer
-            self.display_language = controller.project.options["language"]
+            # Language now comes from R57.C persisted presentation settings.
             self.animator = AnimationDirector()
             self._pending_recovery = None  # ephemeral confirmation, never gameplay
             self._recovery_notice = {}
@@ -140,20 +140,34 @@ def create_bridge(controller, renderer):
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
             from drawtemp.localization import localize_view
-            return localize_view(self.controller.state(),
-                                 getattr(self.controller, "localization", None),
-                                 self.display_language)
+            from drawtemp.player.r57_accessibility import filtered_cinematic_frame
+            state = self.controller.state()
+            access = state["accessibility"]
+            result = localize_view(
+                state, getattr(self.controller, "localization", None),
+                access["language"])
+            # Never mutate canonical cinematic transport or deterministic scenes.
+            cinematic = result.get("cinematic")
+            if isinstance(cinematic, dict) and isinstance(cinematic.get("frame"), dict):
+                result["cinematic"] = dict(cinematic)
+                result["cinematic"]["frame"] = filtered_cinematic_frame(
+                    cinematic["frame"], access)
+            return result
 
         @Slot(str)
         def selectLanguage(self, language):
-            from drawtemp.localization.r57 import LANGUAGES, PSEUDO_LANGUAGES
-            if language not in LANGUAGES | PSEUDO_LANGUAGES:
-                self.controller.message = "Langue d'affichage invalide"
-                self.stateChanged.emit()
-                return
-            # R57.B preview mode: do not write gameplay saves or project JSON.
-            self.display_language = language
-            self.stateChanged.emit()
+            self.settings_update(self.controller.set_accessibility,
+                                 "language", language)
+
+        @Slot(str, bool)
+        def setAccessibilityBool(self, setting, enabled):
+            self.settings_update(self.controller.set_accessibility,
+                                 setting, enabled)
+
+        @Slot(float)
+        def setSubtitleScale(self, value):
+            self.settings_update(self.controller.set_accessibility,
+                                 "subtitle_scale", value)
 
         @Slot(int, result="QVariantMap")
         def authoredHud(self, width):
@@ -188,7 +202,9 @@ def create_bridge(controller, renderer):
 
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
-            return self.animator.snapshot()
+            from drawtemp.player.r57_accessibility import presentation_animation
+            return presentation_animation(self.animator.snapshot(),
+                                          self.controller.accessibility.view())
 
         @Property("QVariantMap", notify=stateChanged)
         def recoveryOffer(self):
