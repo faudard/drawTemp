@@ -53,8 +53,9 @@ def make_revision(content, project, *, author: str, parents=()) -> ProjectRevisi
     """Validate and freeze a Content/GameProject pair plus declared parents."""
     if not isinstance(author, str) or not (1 <= len(author.strip()) <= 80):
         raise CollaborationError("invalid_author", "Author label must be 1..80 characters")
+    # Distinct graph nodes may have the same document digest. The revision
+    # records declared *content* parents; the DAG validates unique node IDs.
     if (not isinstance(parents, (tuple, list)) or len(parents) > 2 or
-            len(set(parents)) != len(parents) or
             any(not isinstance(p, str) or not _HEX.fullmatch(p) for p in parents)):
         raise CollaborationError("invalid_parents", "Expected up to two unique SHA-256 parents")
     data, manifest = validate_pair(content, project)
