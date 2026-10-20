@@ -14,7 +14,25 @@ Item {
     Component.onCompleted: if (width > 0 && height > 0)
                                renderer.resizeViewport(width, height)
 
-    Rectangle { anchors.fill: parent; color: "#192c29" }
+    Rectangle { anchors.fill: parent; color: "#192c29"; z: -300000 }
+
+    // R52.A: shared decorative pass, always behind interactive terrain.
+    Repeater {
+        model: renderer.depthLayers
+        delegate: Rectangle {
+            required property var modelData
+            readonly property var layer: modelData
+            readonly property real zoom: viewport.camera.zoom
+            visible: viewport.topDown
+            width: layer.width * zoom
+            height: layer.height * zoom
+            x: viewport.width / 2 + (viewport.camera.panX + layer.sx * zoom) * layer.parallax - width / 2
+            y: viewport.height / 2 + (viewport.camera.panY + layer.sy * zoom) * layer.parallax - height / 2
+            z: -200000 + layer.depthIndex
+            color: layer.color
+            opacity: layer.opacity
+        }
+    }
 
     Repeater {
         model: renderer.items
