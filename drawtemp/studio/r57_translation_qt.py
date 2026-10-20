@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from drawtemp.localization import (
-    Catalog, LocalizationError, file_revision, seeded_for_project, sidecar_path,
+    Catalog, LocalizationError, file_revision, rebase_project_sources, seeded_for_project, sidecar_path,
 )
 from drawtemp.sdk.simulation import thaw
 
@@ -22,7 +22,9 @@ class TranslationStudioDialog(QDialog):
             raise LocalizationError("Save the project before editing translations")
         self.path = sidecar_path(content_path)
         self.base_revision = file_revision(self.path)
-        project = thaw(session.snapshot().project)
+        if session.snapshot().dirty:
+            raise LocalizationError("Enregistrez le projet avant les traductions.")
+        self.project = project
         old = Catalog.load(self.path) if self.base_revision else None
         self.catalog, self.drift = seeded_for_project(project, old)
         self.drafts = {}
@@ -84,6 +86,10 @@ class TranslationStudioDialog(QDialog):
         self.status.setAccessibleName("Diagnostic de traduction")
         layout.addWidget(self.status)
         actions = QHBoxLayout()
+        self.rebase_button = QPushButton("Réconcilier les sources…")
+        self.rebase_button.setAccessibleName("Actualiser les textes sources modifiés")
+        self.rebase_button.clicked.connect(self.reconcile_sources)
+        actions.addWidget(self.rebase_button)
         self.save_button = QPushButton("Enregistrer les traductions")
         self.save_button.setShortcut("Ctrl+S")
         self.save_button.clicked.connect(self.save)
@@ -144,6 +150,7 @@ class TranslationStudioDialog(QDialog):
         self.text.blockSignals(False)
         issue_count = len(self.catalog.audit(
             "en" if self.catalog.data["source_language"] == "fr" else "fr"))
+        self.rebase_button.setEnabled(bool(self.drift))
         self.status.setText(
             f"{issue_count} entrée(s) incomplète(s) ou trop longue(s). " +
             (("Sources modifiées : " + ", ".join(self.drift) +
@@ -154,6 +161,28 @@ class TranslationStudioDialog(QDialog):
         lang = self.current_language()
         if self._selected_key and lang in ("fr", "en"):
             self.drafts[(self._selected_key, lang)] = self.text.toPlainText()
+
+    def reconcile_sources(self):
+        if not self.drift:
+            return
+        answer = QMessageBox.question(
+            self, "Réconcilier les sources",
+            "Les traductions des clés suivantes seront effacées car leurs textes "
+            "sources ont changé : " + ", ".join(self.drift) +
+            "\nLes traductions des autres clés seront préservées. Continuer ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            self.catalog, _ = rebase_project_sources(self.project, self.catalog)
+        except LocalizationError as exc:
+            QMessageBox.warning(self, "Réconciliation refusée", str(exc))
+            return
+        changed = set(self.drift)
+        self.drafts = {key: value for key, value in self.drafts.items()
+                       if key[0] not in changed}
+        self.drift = ()
+        self.refresh_list()
 
     def save(self):
         if self.drift:
