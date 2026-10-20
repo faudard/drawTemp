@@ -46,10 +46,11 @@ class R51CQtParityTests(unittest.TestCase):
         return widget
 
     def _capture(self, widget):
+        from PySide6.QtGui import QImage
         from PySide6.QtTest import QTest
         QTest.qWait(120)
         self.app.processEvents()
-        image = widget.grabFramebuffer().convertToFormat(4)  # QImage.Format_RGB32
+        image = widget.grabFramebuffer().convertToFormat(QImage.Format_RGB32)
         self.assertFalse(image.isNull(), "Qt offscreen produced an empty frame")
         self.assertEqual(image.width(), 420)
         self.assertEqual(image.height(), 260)
