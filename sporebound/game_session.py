@@ -303,8 +303,22 @@ class GameSession:
         self._survival_preflight()
         return self._survival.advance(ticks)
 
+    def _survival_near(self, row):
+        """Placed resources/refuges require the canonical campaign position."""
+        if "pos" not in row:
+            return
+        location = self.route_state().get("position")
+        require(type(location) in (list, tuple) and len(location) == 2
+                and all(type(v) in (int, float) for v in location)
+                and abs(location[0] - row["pos"][0])
+                  + abs(location[1] - row["pos"][1]) <= 1,
+                "Survival target is not within interaction reach")
+
     def survival_gather(self, node_id, transaction_id):
         self._survival_preflight()
+        row = self._survival.nodes.get(node_id)
+        if row is not None:
+            self._survival_near(row)
         return self._survival.gather(
             self.progress, self.route_scene, node_id, transaction_id)
 
@@ -315,6 +329,9 @@ class GameSession:
 
     def survival_rest(self, shelter_id, transaction_id):
         self._survival_preflight()
+        row = self._survival.shelters.get(shelter_id)
+        if row is not None:
+            self._survival_near(row)
         return self._survival.rest(
             self.progress, self.route_scene, shelter_id, transaction_id)
 
