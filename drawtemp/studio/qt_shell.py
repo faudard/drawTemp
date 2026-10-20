@@ -429,6 +429,8 @@ class StudioWindow(QMainWindow):
                      self.open_global_search)
         self._action("r38_prefabs", "R38 • Prefabs et variantes héritées…",
                      self.open_prefab_variants)
+        self._action("r38_refactor", "R38 • Renommer les références typées…",
+                     self.open_refactor)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
@@ -489,6 +491,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["global_search"])
         tools_menu.addAction(self.commands["r38_prefabs"])
+        tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r35_world"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -590,6 +593,14 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.r38_prefabs_qt import PrefabVariantsDialog
         prior = self.session.revision
         PrefabVariantsDialog(self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_refactor(self):
+        """R38.3 explicit mission-scoped reference rename with Undo/Redo."""
+        from drawtemp.studio.r38_refactor_qt import RefactorDialog
+        prior = self.session.revision
+        RefactorDialog(self).exec()
         if self.session.revision != prior:
             self.refresh()
 
