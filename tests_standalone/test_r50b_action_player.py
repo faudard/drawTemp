@@ -9,6 +9,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from drawtemp.player.r50b_action_controller import (
     R50BActionController, load_authored_action_pair,
@@ -149,6 +150,49 @@ class R50BActionPlayerTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("PySide6"), "PySide6 not installed")
 class R50BQtPlayerSmokeTests(unittest.TestCase):
+    def test_studio_only_launches_action_prototype_and_preserves_slots(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+        from drawtemp.studio.r50b_catalog_qt import R50CatalogWidget
+        from drawtemp.player.r50b_action_controller import (
+            load_authored_action_pair,
+        )
+        application = QApplication.instance() or QApplication([])
+        widget = R50CatalogWidget()
+        self.addCleanup(widget.close)
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            profile = root / "private-profile.json"
+            widget.parent_folder.setText(str(root))
+            widget.genre.setCurrentIndex(
+                widget.genre.findData("action_adventure"))
+            self.assertFalse(widget.play_button.isEnabled())
+            widget.genre.setCurrentIndex(
+                widget.genre.findData("action_combat_prototype"))
+            self.assertFalse(widget.play_button.isEnabled())
+            widget.create()
+            self.assertTrue(widget.play_button.isEnabled())
+            path = widget._created["action_combat_prototype"]
+            with patch(
+                    "drawtemp.player.r50b_action_app._default_profile",
+                    return_value=profile), patch(
+                    "drawtemp.studio.r50b_catalog_qt.subprocess.Popen") as launch:
+                widget.play_created()
+                launch.assert_called_once()
+                command = launch.call_args.args[0]
+                self.assertIn("--content", command)
+                self.assertIn(str(path), command)
+                self.assertIn("--new", command)
+                content, project = load_authored_action_pair(path)
+                R50BActionController(content, project, profile, new=True)
+                launch.reset_mock()
+                widget.play_created()
+                next_command = launch.call_args.args[0]
+                self.assertNotIn("--new", next_command)
+            self.assertTrue(
+                (profile.with_name(profile.stem + "_session_saves")
+                 / "main" / "slot_1.json").is_file())
+
     def test_real_qml_root_loads_offscreen_with_isolated_profile(self):
         root = TemporaryDirectory()
         self.addCleanup(root.cleanup)
