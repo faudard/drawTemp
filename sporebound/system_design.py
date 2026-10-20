@@ -123,7 +123,7 @@ class SystemEconomy:
     overflow and nonconserving operations are rejected before restore commits.
     """
 
-    def __init__(self, spec, scenes):
+    def __init__(self, spec, scenes, *, settlement=None):
         self.spec = validate_systems(spec, scenes)
         self.scenes = frozenset(scenes)
         self.producers = sorted(self.spec["producers"], key=lambda row: row["id"])
@@ -135,6 +135,12 @@ class SystemEconomy:
         self.journal = []
         self.transaction_ids = set()
         self.fulfilled = set()
+        self._settlement_spec = deepcopy(settlement)
+        if settlement is not None:
+            from .settlement_management import Settlement
+            self._settlement = Settlement(settlement, self, self.scenes)
+        else:
+            self._settlement = None
 
     def _room(self, *, advance=False):
         # Keep successive movement ticks in one canonical contiguous receipt.
@@ -149,6 +155,9 @@ class SystemEconomy:
                 "R55 tick advance exceeds deterministic budget")
         for t in range(self.tick + 1, self.tick + ticks + 1):
             for producer in self.producers:
+                if (self._settlement is not None
+                        and not self._settlement.can_produce(producer["id"])):
+                    continue
                 if t % producer["interval"]:
                     continue
                 inputs, outputs = producer["inputs"], producer["outputs"]
@@ -161,6 +170,8 @@ class SystemEconomy:
                     self.stocks[key] -= qty
                 for key, qty in outputs.items():
                     self.stocks[key] += qty
+            if self._settlement is not None:
+                self._settlement.consume(t)
         self.tick += ticks
 
     def advance(self, ticks=1):
@@ -191,6 +202,8 @@ class SystemEconomy:
                      previous["scene"]) == (merchant_id, action, quantity, scene),
                     "R55 receipt reused for a different trade")
             return False
+        require(transaction_id not in self.transaction_ids,
+                "R61 receipt ID is already used by another operation")
         self._room()
         merchant = self.merchants.get(merchant_id)
         require(merchant is not None and scene == merchant["scene"],
@@ -239,14 +252,62 @@ class SystemEconomy:
         self.journal.append({"kind": "quest", "id": quest_id, "tick": self.tick})
         return True
 
+    def settlement_state(self):
+        require(self._settlement is not None, "R61 settlement not configured")
+        return {"tick": self.tick, "stocks": deepcopy(self.stocks),
+                **self._settlement.snapshot()}
+
+    def settlement_build(self, building_id, receipt_id):
+        require(self._settlement is not None and _id(receipt_id),
+                "R61 settlement/receipt not configured")
+        previous = next((r for r in self.journal
+                         if r.get("id") == receipt_id), None)
+        if previous is not None:
+            require(previous["kind"] == "build"
+                    and previous["building"] == building_id,
+                    "R61 reused receipt ID with a different command")
+            return False
+        self._room()
+        self._settlement.build(building_id)  # cost paid from canonical R55 stock
+        self.journal.append({"kind": "build", "id": receipt_id,
+                             "building": building_id, "tick": self.tick})
+        self.transaction_ids.add(receipt_id)
+        return True
+
+    def settlement_assign(self, resident_id, building_id, receipt_id):
+        require(self._settlement is not None and _id(receipt_id),
+                "R61 settlement/receipt not configured")
+        previous = next((r for r in self.journal
+                         if r.get("id") == receipt_id), None)
+        if previous is not None:
+            require(previous["kind"] == "assign"
+                    and previous["resident"] == resident_id
+                    and previous["building"] == building_id,
+                    "R61 reused receipt ID with a different command")
+            return False
+        self._room()
+        changed = self._settlement.assign(resident_id, building_id)
+        if not changed:
+            return False
+        self.journal.append({"kind": "assign", "id": receipt_id,
+                             "resident": resident_id, "building": building_id,
+                             "tick": self.tick})
+        self.transaction_ids.add(receipt_id)
+        return True
+
     def snapshot(self):
-        return {"version": VERSION, "tick": self.tick,
+        data = {"version": VERSION, "tick": self.tick,
                 "stocks": deepcopy(self.stocks), "journal": deepcopy(self.journal)}
+        if self._settlement is not None:
+            data["settlement"] = self._settlement.snapshot()
+        return data
 
     def restore(self, checkpoint):
         """Re-execute bounded commands before accepting any persisted state."""
-        require(type(checkpoint) is dict and set(checkpoint) ==
-                {"version", "tick", "stocks", "journal"}
+        expected = {"version", "tick", "stocks", "journal"}
+        if self._settlement is not None:
+            expected.add("settlement")
+        require(type(checkpoint) is dict and set(checkpoint) == expected
                 and type(checkpoint["version"]) is int
                 and checkpoint["version"] == VERSION
                 and type(checkpoint["journal"]) is list
@@ -258,7 +319,7 @@ class SystemEconomy:
                 and all(_integer(count, 0, self.resources[key]["capacity"])
                         for key, count in checkpoint["stocks"].items()),
                 "Malformed or non-integer R55 persisted stock")
-        replay = SystemEconomy(self.spec, self.scenes)
+        replay = SystemEconomy(self.spec, self.scenes, settlement=self._settlement_spec)
         for command in checkpoint["journal"]:
             require(type(command) is dict, "Malformed R55 operation journal")
             kind = command.get("kind")
@@ -297,6 +358,24 @@ class SystemEconomy:
                 replay.stocks[key] = result
                 replay.transaction_ids.add(transaction_id)
                 replay.journal.append(deepcopy(command))
+            elif kind == "build":
+                require(self._settlement is not None
+                        and set(command) == {"kind", "id", "building", "tick"}
+                        and type(command["tick"]) is int
+                        and command["tick"] == replay.tick,
+                        "Malformed R61 construction receipt")
+                require(replay.settlement_build(command["building"], command["id"]),
+                        "Duplicate R61 construction receipt")
+            elif kind == "assign":
+                require(self._settlement is not None
+                        and set(command) ==
+                        {"kind", "id", "resident", "building", "tick"}
+                        and type(command["tick"]) is int
+                        and command["tick"] == replay.tick,
+                        "Malformed R61 workforce receipt")
+                require(replay.settlement_assign(
+                    command["resident"], command["building"], command["id"]),
+                    "Duplicate R61 workforce receipt")
             elif kind == "quest":
                 require(set(command) == {"kind", "id", "tick"}
                         and _id(command["id"]) and command["id"] in replay.quests
@@ -316,10 +395,13 @@ class SystemEconomy:
         self.journal = replay.journal
         self.transaction_ids = replay.transaction_ids
         self.fulfilled = replay.fulfilled
+        self._settlement = replay._settlement
+        if self._settlement is not None:
+            self._settlement.economy = self
 
     def preview(self, ticks):
         """Detached flow forecast, never mutates the live runtime."""
-        clone = SystemEconomy(self.spec, self.scenes)
+        clone = SystemEconomy(self.spec, self.scenes, settlement=self._settlement_spec)
         clone.restore(self.snapshot())
         clone.advance(ticks)
         return clone.snapshot()

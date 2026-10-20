@@ -164,9 +164,14 @@ class GameSession:
         # R55: canonical GameSession-owned economy, opt-in for authored projects.
         from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
         system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
+        from .settlement_management import EXTENSION as SETTLEMENT_EXTENSION
+        settlement_spec = self.project.extensions.get(SETTLEMENT_EXTENSION)
         self._systems = (
-            SystemEconomy(system_spec["data"],
-                          set(self.project.exploration) | set(self.content.missions))
+            SystemEconomy(
+                system_spec["data"],
+                set(self.project.exploration) | set(self.content.missions),
+                settlement=(settlement_spec["data"]
+                            if settlement_spec is not None else None))
             if system_spec is not None else None)
         self.battle = None
         self.fronts = None
@@ -582,6 +587,26 @@ class GameSession:
                 and not self.tactical_story_pending,
                 "R55 quest delivery requires active campaign without dialogue")
         return self._systems.fulfill(self.progress, quest_id)
+
+    def settlement_state(self):
+        """R61.A settlement view; stocks remain owned by R55 SystemEconomy."""
+        require(self._systems is not None, "R61 settlement not configured")
+        return self._systems.settlement_state()
+
+    def settlement_build(self, building_id, receipt_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R61 construction requires an unblocked campaign")
+        return self._systems.settlement_build(building_id, receipt_id)
+
+    def settlement_assign(self, resident_id, building_id, receipt_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R61 workforce changes require an unblocked campaign")
+        return self._systems.settlement_assign(
+            resident_id, building_id, receipt_id)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
