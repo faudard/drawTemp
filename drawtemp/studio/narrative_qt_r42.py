@@ -152,6 +152,7 @@ class NarrativeStudioDialog(QDialog):
         self.debug_buttons = {}
         for key, title, action in (
             ('start', 'Démarrer le debugger', self.debug_start),
+            ('audit', 'Auditer les chemins', self.audit_paths),
             ('break', 'Point d’arrêt', self.debug_breakpoint),
             ('next', 'Pas suivant', self.debug_step),
             ('choose', 'Tester un choix', self.debug_choose),
@@ -566,3 +567,52 @@ class NarrativeStudioDialog(QDialog):
                     json.dumps(forecast, ensure_ascii=False, indent=2))
         except Exception as exc:
             QMessageBox.warning(self, 'Prévision narrative', str(exc))
+
+    def audit_paths(self):
+        """Bounded read-only R42.C graph check with concrete route witnesses."""
+        if self._dirty or self._plan is not None:
+            QMessageBox.warning(self, 'Audit narratif',
+                                'Appliquez ou abandonnez les modifications avant l’audit.')
+            return
+        raw = self.workbench.session.snapshot().to_dict()
+        campaigns = [item['id'] for item in raw['project']['campaigns']]
+        campaign, ok = QInputDialog.getItem(
+            self, 'Auditer les chemins', 'Campagne', campaigns, 0, False)
+        if not ok:
+            return
+        try:
+            self._audit_campaign(campaign)
+        except Exception as exc:
+            QMessageBox.warning(self, 'Audit narratif', str(exc))
+
+    def _audit_campaign(self, campaign):
+        """Headless-compatible internal Qt view adapter; never applies an edit."""
+        from drawtemp.sdk.r42_reachability import audit_narrative
+        from sporebound.model import Content
+        from sporebound.game_project import GameProject
+        from sporebound.tactical_rpg3 import authored_rules_for_document
+
+        snapshot = self.workbench.session.snapshot().to_dict()
+        content_data = snapshot['content']
+        content = Content.from_dict(
+            content_data, rules=authored_rules_for_document(content_data))
+        project = GameProject.from_dict(snapshot['project'], content)
+        required = tuple(project.campaign_flow.get('endings', {}))
+        report = audit_narrative(
+            content, project, campaign, expected_endings=required,
+            min_reused_scenes=2, max_states=1024)
+        self.debug_output.setPlainText(json.dumps({
+            'succès': report['passed'],
+            'campagne': campaign,
+            'scènes_partagées': report['reused_scenes'],
+            'états_explorés': report['explored_states'],
+            'fins_et_chemins': {key: row['route']
+                                for key, row in report['endings'].items()},
+            'fins_manquantes': report['missing_endings'],
+            'scènes_inaccessibles': report['dead_scenes'],
+            'choix_bloqués_et_contre_exemples': report['dead_choices'],
+            'limite_de_preuve': report['scope'],
+            'replay_tactique_certifié': False,
+            'export_player_certifié': False,
+        }, ensure_ascii=False, indent=2))
+        return report
