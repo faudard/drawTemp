@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from drawtemp.quality.r56_scenarios import OPERATIONS
 from drawtemp.quality.r56_lab import (
     build_suite, capture_case, diff_batches, inspect_case, read_report,
-    read_suite, run_batch, save_json,
+    read_suite, replay_to_step, run_batch, save_json,
 )
 from drawtemp.studio.workspace_model import resources
 from sporebound.game_project import GameProject
@@ -47,6 +47,28 @@ class BatchWorker(QObject):
             self.finished.emit()
 
 
+class ReplayPointWorker(QObject):
+    completed = Signal(object)
+    error = Signal(str)
+    finished = Signal()
+
+    def __init__(self, case, content, project, revision, step, report):
+        super().__init__()
+        self.case, self.content, self.project = case, content, project
+        self.revision, self.step, self.report = revision, step, report
+
+    @Slot()
+    def run(self):
+        try:
+            self.completed.emit(replay_to_step(
+                self.case, self.content, self.project,
+                revision=self.revision, step=self.step, report=self.report))
+        except Exception as exc:
+            self.error.emit("%s: %s" % (type(exc).__name__, str(exc)[:400]))
+        finally:
+            self.finished.emit()
+
+
 class GameplayQALabDialog(QDialog):
     """Author explicit command captures, run batches, inspect and navigate.
 
@@ -70,6 +92,7 @@ class GameplayQALabDialog(QDialog):
         self._source_path = None
         self._thread = None
         self._worker = None
+        self._replay_identity = None
 
         self.setObjectName("r56-qa-lab")
         self.setWindowTitle("R56.B • QA Lab du gameplay")
@@ -184,6 +207,10 @@ class GameplayQALabDialog(QDialog):
         self.navigate_button.clicked.connect(self.navigate_source)
         self.navigate_button.setEnabled(False)
         footer.addWidget(self.navigate_button)
+        self.replay_button = QPushButton("Rejouer cette étape")
+        self.replay_button.setObjectName("r56-qa-replay-point")
+        self.replay_button.clicked.connect(self.replay_selected)
+        footer.addWidget(self.replay_button)
         self.close_button = QPushButton("Fermer")
         self.close_button.clicked.connect(self.reject)
         footer.addWidget(self.close_button)
@@ -371,8 +398,7 @@ class GameplayQALabDialog(QDialog):
             self._worker.finished.connect(self._worker.deleteLater)
             self._thread.finished.connect(self._thread_done)
             self._thread.finished.connect(self._thread.deleteLater)
-            self.run_button.setEnabled(False)
-            self.close_button.setEnabled(False)
+            self._set_busy(True)
             self.status.setText("Exécution headless en cours ; aucune action Studio modifiée")
             self._thread.start()
         except (ValueError, TypeError, RuntimeError) as exc:
@@ -388,12 +414,58 @@ class GameplayQALabDialog(QDialog):
             + " · aucune certification release")
         self.refresh_cases()
 
+    def _set_busy(self, active):
+        for control in (self.run_button, self.replay_button, self.close_button,
+                        self.import_button, self.export_button, self.report_button,
+                        self.compare_button, self.add, self.capture):
+            control.setEnabled(not active)
+
+    def replay_selected(self):
+        if self._thread is not None:
+            return
+        row, step = self.cases.currentRow(), self.steps.currentRow()
+        if not 0 <= row < len(self._cases) or step < 0:
+            self._error("Choisir un scénario et une étape")
+            return
+        try:
+            self._ensure_snapshot()
+            case = self._cases[row]
+            report = self._batch["cases"][row]["report"] if self._batch else None
+            self._replay_identity = (row, step)
+            self._thread = QThread(self)
+            self._worker = ReplayPointWorker(
+                case, self._content, self._project,
+                self.revision.text().strip(), step, report)
+            self._worker.moveToThread(self._thread)
+            self._thread.started.connect(self._worker.run)
+            self._worker.completed.connect(self._point_completed)
+            self._worker.error.connect(self._error)
+            self._worker.finished.connect(self._thread.quit)
+            self._worker.finished.connect(self._worker.deleteLater)
+            self._thread.finished.connect(self._thread_done)
+            self._thread.finished.connect(self._thread.deleteLater)
+            self._set_busy(True)
+            self.status.setText("Reproduction exacte de l'étape sur GameSession…")
+            self._thread.start()
+        except (ValueError, TypeError, RuntimeError) as exc:
+            self._error(exc)
+
+    @Slot(object)
+    def _point_completed(self, observation):
+        if self._replay_identity == (
+                self.cases.currentRow(), self.steps.currentRow()):
+            self.detail.setPlainText(
+                json.dumps(observation, ensure_ascii=False, indent=2,
+                           sort_keys=True))
+        self.status.setText(
+            "Étape " + str(observation["step"]) + " : " +
+            observation["status"] + " (headless ; non certifié)")
+
     @Slot()
     def _thread_done(self):
         self._worker = None
         self._thread = None
-        self.run_button.setEnabled(True)
-        self.close_button.setEnabled(True)
+        self._set_busy(False)
 
     def export_report(self):
         if self._batch is None:
