@@ -2,7 +2,9 @@
 
 This is one deliberately limited, original 4x4 headless action arena. Its
 ActionRuntime remains a capability within the single GameSession save, not a
-new game/project format. Action loot is NOT awarded to Campaign until R50.C.
+new game/project format. Only once-only replay-verified R26 coins enter
+Campaign.gold through PlayerController.route_action_settle; arbitrary loot
+remains isolated pending a separately certified conversion policy.
 """
 from __future__ import annotations
 
