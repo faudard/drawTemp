@@ -115,6 +115,66 @@ def edit_breakpoints(layout, breakpoints):
     return check_layout(draft)
 
 
+def edit_gauge_bindings(layout, widget_id, current_path, maximum_path):
+    """Change two typed numeric read-only bindings as ONE validated edit."""
+    if current_path not in FIELDS or FIELDS[current_path] != "int":
+        raise UiLayoutError("R51: gauge current binding must be a known integer")
+    if maximum_path not in FIELDS or FIELDS[maximum_path] != "int":
+        raise UiLayoutError("R51: gauge maximum binding must be a known integer")
+    draft = check_layout(layout)
+    node, _parent = _locate(draft["root"], widget_id)
+    if node is None or node["type"] != "gauge":
+        raise UiLayoutError("R51: selected widget is not a gauge")
+    node["binding"] = {"path": current_path, "type": "int"}
+    node["max_binding"] = {"path": maximum_path, "type": "int"}
+    return check_layout(draft)
+
+
+def edit_focus_order(layout, focus_order):
+    """Replace the keyboard order exactly; R51.A rejects missing/duplicate IDs."""
+    draft = check_layout(layout)
+    draft["focus_order"] = deepcopy(focus_order)
+    return check_layout(draft)
+
+
+def move_focus(layout, widget_id, direction):
+    """Move one button within focus order, regardless of visual tree nesting."""
+    if direction not in ("up", "down"):
+        raise UiLayoutError("R51: unknown focus direction")
+    draft = check_layout(layout)
+    focus = draft["focus_order"]
+    if widget_id not in focus:
+        raise UiLayoutError("R51: selected widget is not a focusable button")
+    index = focus.index(widget_id)
+    target = index + (-1 if direction == "up" else 1)
+    if not 0 <= target < len(focus):
+        raise UiLayoutError("R51: button already at focus edge")
+    focus[index], focus[target] = focus[target], focus[index]
+    return check_layout(draft)
+
+
+def next_focus(layout, current_id=None, *, reverse=False, enabled=None):
+    """Deterministic focus successor, skipping actions disallowed by Player.
+
+    Does not change gameplay or save state; Qt Quick applies the returned ID.
+    """
+    draft = check_layout(layout)
+    order = draft["focus_order"]
+    if enabled is not None:
+        if type(enabled) not in (set, frozenset, tuple, list):
+            raise UiLayoutError("R51: permitted focus IDs must be a collection")
+        allowed = set(enabled)
+        if any(type(k) is not str for k in allowed):
+            raise UiLayoutError("R51: invalid permitted focus identifier")
+        order = [key for key in order if key in allowed]
+    if not order:
+        return None
+    if current_id not in order:
+        return order[-1] if reverse else order[0]
+    step = -1 if reverse else 1
+    return order[(order.index(current_id) + step) % len(order)]
+
+
 def editor_sample(layout, width):
     """Deterministic, visibly labelled DESIGN SAMPLE, never a GameSession.
 
