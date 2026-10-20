@@ -271,13 +271,17 @@ def publish_pack(directory, archive, *, publisher, declaration, confirm=False):
             if not path.is_file() or sha256(path.read_bytes()).hexdigest() != report.archive_sha256:
                 _fail("stored_pack_changed", "Stored archive digest does not match")
         else:
+            created = False
             try:
                 with path.open("xb") as sink:
+                    created = True
                     sink.write(data)
                     sink.flush()
                     os.fsync(sink.fileno())
             except Exception:
-                path.unlink(missing_ok=True)
+                # Never delete a concurrent writer's pre-existing archive.
+                if created:
+                    path.unlink(missing_ok=True)
                 raise
         document["packs"].append(entry)
         _store_index(root, document)
