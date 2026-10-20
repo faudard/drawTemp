@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PySide6.QtWidgets import QApplication
-    from drawtemp.studio.system_design_qt import SystemDesignerDialog
+    from drawtemp.studio.system_design_qt import SystemDesignerDialog, _parse_amount_text
     QT = True
 except ImportError:
     QT = False
@@ -48,6 +48,29 @@ class SystemDesignerQtTests(unittest.TestCase):
         session.redo()
         self.assertIn(EXTENSION,
                       session.snapshot().to_dict()["project"]["extensions"])
+        dlg.close()
+
+    def test_multiport_parser_and_graph_edit_with_immediate_validation(self):
+        self.assertEqual(
+            _parse_amount_text("ore:2, ingot:3", {"ore", "ingot"}),
+            {"ore": 2, "ingot": 3})
+        for malformed in ("ore:2,ore:3", "missing:1", "ore:-2", "ore:True",
+                          "ore:1001", "ore:2:1", "", "ore:1,"):
+            with self.subTest(malformed=malformed), self.assertRaises(ValueError):
+                _parse_amount_text(malformed, {"ore", "ingot"})
+        content, project = scene_fixture()
+        session = AuthoringSession(content, project)
+        dlg = SystemDesignerDialog(session)
+        dlg.document = system_spec()
+        dlg.refresh()
+        self.assertEqual(dlg.lists["producers"].count(), 2)
+        dlg._commit_row("producers", {
+            "id": "smelter", "inputs": "ore:3",
+            "outputs": "ingot:2", "interval": 2}, 0)
+        self.assertEqual(dlg.document["producers"][0]["inputs"], {"ore": 3})
+        self.assertEqual(dlg.document["producers"][0]["outputs"], {"ingot": 2})
+        dlg.preview()
+        self.assertIn("ore:", dlg.report.toPlainText())
         dlg.close()
 
     def test_stale_editor_cannot_override_new_revision(self):
