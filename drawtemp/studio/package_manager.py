@@ -17,6 +17,7 @@ from pathlib import Path
 from drawtemp.assets.packs import RECEIPT_NAMESPACE, verify_installed_packs
 from drawtemp.sdk.authoring import AuthoringPlan, AuthoringSession
 from sporebound.assets import AssetRegistry
+from drawtemp.studio.package_upgrade_recovery import require_no_pending_upgrade
 
 MAX_AUDIT_NODES = 100_000
 
@@ -43,6 +44,7 @@ def _project_root(value):
 def _read_snapshot(editor, root):
     if not isinstance(editor, AuthoringSession):
         _fail("invalid_editor", "Use the canonical AuthoringSession")
+    require_no_pending_upgrade(root)
     current = editor.snapshot().to_dict()
     project = current["project"]
     issues = verify_installed_packs(root, project)
