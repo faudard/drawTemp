@@ -130,6 +130,16 @@ class ModdedProjectPreflightTests(unittest.TestCase):
         self.assertFalse(absent["ready_for_player_preview"])
         self.assertIn("invalid_project_files", " ".join(absent["errors"]))
 
+    def test_nonfinite_json_fails_with_explicit_diagnostic(self):
+        directory, registry, docs, archives, pins, scope = (
+            self.installed_project("tactical"))
+        source = directory / "game.json"
+        source.write_text('{"version": NaN}', encoding="utf-8")
+        result = inspect_modded_project(
+            source, registry, expected_pins=pins, managed_namespaces=scope)
+        self.assertFalse(result["ready_for_player_preview"])
+        self.assertIn("Non-finite JSON", " ".join(result["errors"]))
+
     def test_detects_content_swap_during_asset_preflight(self):
         directory, registry, docs, archives, pins, scope = (
             self.installed_project("tactical"))
