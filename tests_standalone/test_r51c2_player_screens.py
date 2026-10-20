@@ -99,6 +99,33 @@ class R51C2ScreenTests(unittest.TestCase):
             player.choose("enter")
             self.assertFalse(authored_screen(player, "DIALOGUE", 800)["available"])
 
+    def test_broken_authored_dialogue_never_hides_canonical_story(self):
+        for defect in ("no_text", "no_advance", "wrong_intent"):
+            with self.subTest(defect=defect):
+                content, project = reference_project()
+                make_project(content, project)
+                layout = project.extensions[NAMESPACE]["data"]["layouts"]["dialogue"]
+                if defect == "no_text":
+                    layout["root"]["children"][3] = {
+                        "id": "dialogue_text", "type": "text",
+                        "text": "Texte fictif"}
+                elif defect == "no_advance":
+                    layout["root"]["children"][-1] = {
+                        "id": "main_action", "type": "text", "text": "Suite"}
+                    layout["focus_order"] = []
+                else:
+                    layout["root"]["children"][-1]["action"] = "menu.quit"
+                project.validate(content)
+                with TemporaryDirectory() as folder:
+                    player = PlayerController(content, project, "main", folder)
+                    player.new_game()
+                    before = player.session.recording()
+                    result = authored_screen(player, "DIALOGUE", 800)
+                    self.assertFalse(result["available"])
+                    self.assertIn("classic Player", result["error"])
+                    self.assertEqual(player.state()["screen"], "dialogue")
+                    self.assertEqual(player.session.recording(), before)
+
     def test_multiline_dialogue_advance_reuses_R1_and_autosave(self):
         from sporebound.narrative_r42 import migrate_story_v1, set_dialogue_lines
         project = migrate_story_v1(self.project, self.content)
