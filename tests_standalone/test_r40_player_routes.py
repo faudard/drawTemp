@@ -87,8 +87,14 @@ class R40PlayerRoutesTests(unittest.TestCase):
             self.assertEqual([row["id"] for row in initial["routes"]],
                              ["to_ruins", "high_gate"])
             self.assertFalse(initial["routes"][1]["available"])
-            player.explore_move(1, 0)
-            player.explore_interact("waystone")
+            with self.assertRaises(ValueError):
+                player.explore_move(1, 0)
+            with self.assertRaises(ValueError):
+                player.explore_interact("waystone")
+            for _ in range(8):
+                player.platform_step(move=1)
+            self.assertIn("to_ruins",
+                          player.state()["platform"]["state"]["available_routes"])
             player.route_transition("to_ruins")
             exits = player.state()["routes"]
             self.assertEqual([row["id"] for row in exits],
