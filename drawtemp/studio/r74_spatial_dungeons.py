@@ -347,7 +347,7 @@ def prepare_spatial_dungeons(controller: AssistedDungeonController,
         controller.prepare_selection(proposal)
     original = controller.session.snapshot().to_dict()
     ids = tuple(f"{prefix}_multi_{i}" for i in range(1, 4))
-    campaign = prefix + "_trilogy"
+    campaign = prefix + "_multi_trilogy"
     if set(ids) & {r["id"] for r in original["content"]["missions"]}:
         raise DungeonAssistError("duplicate_mission", "Mission already exists")
     if campaign in {r["id"] for r in original["project"]["campaigns"]}:
