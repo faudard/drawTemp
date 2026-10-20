@@ -281,16 +281,16 @@ class Simulation:
                         edge["source"] == session.route_scene and
                         edge["destination"] == link["destination"] and
                         set(edge["requires"]) <= session._metroidvania_abilities())
-                    authored = (session.project.extensions.get("drawtemp.physics", {})
-                                .get("data", {}).get("scenes", {})
-                                .get(session.route_scene, {}))
-                    physical_routes = {row["route"]
-                                       for row in authored.get("colliders", [])
-                                       if "route" in row}
-                    if link["id"] in physical_routes:
-                        available = (available and session._platform is not None
-                                     and link["id"] in
-                                     session._platform.available_routes())
+            # A physical portal remains unavailable until a real fixed-tick
+            # R32 command places the player inside its trigger rectangle.
+            authored = (session.project.extensions.get("drawtemp.physics", {})
+                        .get("data", {}).get("scenes", {})
+                        .get(session.route_scene, {}))
+            physical_routes = {row["route"] for row in
+                               authored.get("colliders", []) if "route" in row}
+            if link["id"] in physical_routes:
+                available = (available and session._platform is not None
+                             and link["id"] in session._platform.available_routes())
             destination = link['destination']
             title = (session.project.exploration[destination]['title']
                      if destination in session.project.exploration
