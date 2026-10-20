@@ -954,6 +954,60 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ColumnLayout {
+                            objectName: "r41-campaign-equipment"
+                            visible: root.playerData.party.enabled &&
+                                     root.playerData.screen === "exploration"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "ÉQUIPEMENT RPG · STOCK DE CAMPAGNE"
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            ComboBox {
+                                id: r41EquipHero
+                                objectName: "r41-gear-hero"
+                                Layout.fillWidth: true
+                                model: root.playerData.party.heroes || []
+                                textRole: "name"
+                                valueRole: "id"
+                                Accessible.name: "Compagnon à équiper"
+                            }
+                            Repeater {
+                                model: root.playerData.gear.inventory || []
+                                Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-equip-" + modelData.id
+                                    text: "Équiper " + modelData.name +
+                                          " (" + modelData.count + " en stock)"
+                                    enabled: !root.inputLocked &&
+                                             r41EquipHero.currentValue &&
+                                             modelData.count > 0
+                                    onClicked: player.equipHero(r41EquipHero.currentValue,
+                                                                 modelData.id)
+                                }
+                            }
+                            Repeater {
+                                model: ["weapon", "armor", "accessory"]
+                                Button {
+                                    Layout.fillWidth: true
+                                    property var equipment:
+                                        (root.playerData.party.equipment || {})[
+                                            r41EquipHero.currentValue] || ({})
+                                    property string currentItem:
+                                        equipment[modelData] || ""
+                                    text: modelData + ": " + currentItem +
+                                          (currentItem ? " · Retirer" : " —")
+                                    enabled: !root.inputLocked &&
+                                             r41EquipHero.currentValue &&
+                                             currentItem !== ""
+                                    onClicked: player.unequipHero(r41EquipHero.currentValue,
+                                                                   modelData)
+                                }
+                            }
+                        }
                         Label {
                             visible: renderer.characterOutfits.length > 1
                             text: "TENUE · aperçu visuel (non sauvegardé)"
