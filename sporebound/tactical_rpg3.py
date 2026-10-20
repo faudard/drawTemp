@@ -92,4 +92,7 @@ def authored_rules_for_document(data):
     from .logic_variables import has_logic_variables, install_logic_variable_rules
     if has_logic_variables(data):
         rules = install_logic_variable_rules(rules)
+    from .logic_vertical_objective import has_slice_objective, install_slice_objective
+    if has_slice_objective(data):
+        rules = install_slice_objective(rules)
     return rules
