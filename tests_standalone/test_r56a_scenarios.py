@@ -49,6 +49,7 @@ class R56GameplayQATests(unittest.TestCase):
         self.assertEqual(report["status"], "failed")
         self.assertEqual(report["counterexample"]["category"], "invariant")
         self.assertEqual(report["counterexample"]["step"], 2)
+        self.assertEqual([x["step"] for x in report["trace"]], [0, 1])
         self.assertEqual(report["counterexample"]["prefix"], doc["steps"])
         self.assertFalse(report["replay_verified"])
 
