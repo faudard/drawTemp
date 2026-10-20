@@ -31,7 +31,7 @@ def starter_survival(scene):
         "tools": [{"id": "axe", "durability": 12}],
         "nodes": [
             {"id": "forest", "scene": scene, "item": "wood", "stock": 20,
-             "yield": 1, "tool": "axe", "wear": 1, "energy_cost": 4, "cold": 8},
+             "yield": 1, "tool": None, "wear": 0, "energy_cost": 4, "cold": 8},
             {"id": "quarry", "scene": scene, "item": "stone", "stock": 20,
              "yield": 1, "tool": None, "wear": 0, "energy_cost": 5, "cold": 0},
             {"id": "bush", "scene": scene, "item": "berries", "stock": 20,
