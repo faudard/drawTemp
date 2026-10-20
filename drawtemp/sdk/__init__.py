@@ -12,12 +12,13 @@ SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
     "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
-    "massive-simulation.v1", "semantic-vcs.v1", "modding-declarative.v1",
+    "massive-simulation.v1", "semantic-vcs.v1", "modding-declarative.v1", "modding-preflight.v1",
 })
 
 _PUBLIC = {
     "ModError": "modding",
     "ModRegistry": "modding",
+    "inspect_modded_project": "mod_preflight",
     "validate_mod_manifest": "modding",
     "read_mod_manifest": "modding",
     "SemanticMergeError": "r24g_semantic_vcs",
