@@ -78,6 +78,34 @@ automatiquement les cycles. L'intégration dans toutes les boucles Player,
 l'UX finale, la gestion des inventaires externes et les performances restent
 à qualifier.
 
+## Canvas Qt interactif — lot R55.B.2
+
+Le Studio R55 dispose de nœuds sélectionnables et déplaçables : un clic sur
+un nœud ouvre ses propriétés dans l'inspecteur synchronisé, tandis que
+**Modifier la sélection** ouvre les champs typés existants. Déplacer un nœud
+avec la souris ou les flèches déplace les liaisons à l'écran.
+
+La création de liens se fait par **sortie verte → entrée bleue**, ou avec
+**Relier des nœuds…** au clavier. Chaque liaison est normalisée par le
+module headless `system_design_graph.edit_link` : ressource → atelier
+(entrée), atelier → ressource (sortie), ressource → marchand/quête.
+Une quantité bornée est demandée pour les liaisons d'atelier. Une référence
+introuvable, un type de port incompatible, une quantité invalide ou un cycle
+bloque le changement sans modifier le brouillon existant. Supprimer une
+liaison ne peut pas détruire le dernier port obligatoire d'une recette.
+
+**Annuler/Rétablir (brouillon)** et Ctrl+Z/Ctrl+Shift+Z restaurent les
+modifications de ressources, de connexions et de disposition graphique, avec
+un historique borné à 50 étapes. **Appliquer au projet** constitue ensuite
+une transaction unique dans `AuthoringSession`; son Undo/Redo global
+continue de fonctionner normalement.
+
+**Portée** : les positions des nœuds sont une aide visuelle locale à
+l'éditeur, et ne font pas partie du schéma économique versionné. Elles ne
+sont donc pas persistées après fermeture ; aucun déplacement graphique ne
+modifie le gameplay ni la sauvegarde de partie. Les connecteurs sont
+créés par deux clics, pas encore par glisser-déposer continu.
+
 ## Vertical slice VS-55 proposé et testable
 
 ```sh
@@ -94,6 +122,7 @@ ressource/récompense supplémentaire après rechargement.
 
 ```sh
 python -m unittest tests_standalone.test_r55_system_design -v
+python -m unittest tests_standalone.test_r55_graph_links -v
 python -m unittest tests_standalone.test_r55_player_sdk -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_r55_system_design_gui -v
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --reference
