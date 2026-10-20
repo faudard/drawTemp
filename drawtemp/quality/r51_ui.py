@@ -105,3 +105,28 @@ def assert_ui_bundle_identity(project, manifest_ui):
     if audit["errors"]:
         raise ExportError("R51 Player capabilities no longer supported: " +
                           "; ".join(audit["errors"]))
+
+
+
+def main(argv=None):
+    """Read-only audit for automation and author triage; no certification."""
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="DrawTemp R51 UI Player compatibility")
+    parser.add_argument("--project", type=Path, required=True,
+                        help="Canonical *.game.json file")
+    args = parser.parse_args(argv)
+    try:
+        project = json.loads(args.project.read_text(encoding="utf-8"))
+        result = ui_export_audit(project)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        result = {"present": False, "sha256": "", "screens": [],
+                  "errors": [str(exc)], "warnings": []}
+    print(json.dumps({"schema": 1, "kind": "r51-ui-capability-audit", **result},
+                     ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if not result["errors"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
