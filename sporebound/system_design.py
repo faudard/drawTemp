@@ -269,6 +269,7 @@ class SystemEconomy:
                         and merchant is not None and command["scene"] == merchant["scene"]
                         and command["action"] in ("buy", "sell")
                         and _integer(command["quantity"], 1, 99)
+                        and type(command["tick"]) is int
                         and command["tick"] == replay.tick,
                         "Invalid or duplicate R55 trade receipt")
                 price = (merchant["buy_price"] if command["action"] == "buy"
@@ -285,6 +286,7 @@ class SystemEconomy:
                 require(set(command) == {"kind", "id", "tick"}
                         and _id(command["id"]) and command["id"] in replay.quests
                         and command["id"] not in replay.fulfilled
+                        and type(command["tick"]) is int
                         and command["tick"] == replay.tick,
                         "Invalid or duplicate R55 quest receipt")
                 replay._room()
