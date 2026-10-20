@@ -265,6 +265,40 @@ class GameSession:
         from .ai_boss_director import preview_boss_director
         return preview_boss_director(self.battle, director)
 
+    def ai_boss_replay_audit(self, director_id, *, command_budget=512):
+        """R37.E3 certified preview from actual, bounded official Battle replay.
+
+        No separate command history, simulated phase progression or write.
+        A mismatch in tactical state OR boss signals fails closed.
+        """
+        require(type(command_budget) is int
+                and 1 <= command_budget <= 512,
+                "R37 boss audit requires a 1..512 command budget")
+        current = self.ai_boss_preview(director_id)
+        require(self.battle is not None
+                and len(self.battle.commands) <= command_budget,
+                "R37 boss audit exceeds its bounded command budget")
+        from .engine import Battle
+        from .ai_boss_director import preview_boss_director
+        director = next(row for row in
+                        self._advanced_ai.spec["boss_directors"]
+                        if row["id"] == director_id)
+        restored = Battle.replay(self.battle.recording(), rules=self.rules)
+        require(restored.digest() == self.battle.digest(),
+                "R37 boss audit found CT state replay divergence")
+        reproduced = preview_boss_director(restored, director)
+        require(current == reproduced,
+                "R37 boss audit found telegraph/phase divergence")
+        return {
+            "version": 1, "director_id": director_id,
+            "mission": self.battle.mission.id,
+            "battle_digest": self.battle.digest(),
+            "preview_digest": current["digest"],
+            "commands_checked": len(self.battle.commands),
+            "verified": True,
+            "phase_events": deepcopy(current["observed_phase_events"]),
+        }
+
     def ai_squad_preview(self, squad_id):
         """R37.D3 — direct same-scene radio sharing and role proposals only.
 
