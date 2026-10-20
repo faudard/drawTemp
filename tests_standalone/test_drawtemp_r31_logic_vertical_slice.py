@@ -254,8 +254,10 @@ class ReferenceJourneyTests(unittest.TestCase):
             self.assertEqual(save["kind"], "game_session")
             save["digest"] = "0" * 64
             file.write_text(json.dumps(save), encoding="utf-8")
-            with self.assertRaises(Exception):
+            from drawtemp.sdk.simulation import SimulationError
+            with self.assertRaises(SimulationError) as raised:
                 game.load(1)
+            self.assertEqual(raised.exception.code, "invalid_save")
             self.assertEqual(game.session.recording(), before)
             self.assertEqual(json.loads(file.read_text())["digest"], "0" * 64)
             self.assertEqual(game._store(1).inspect().primary, "invalid")
