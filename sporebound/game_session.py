@@ -499,6 +499,11 @@ class GameSession:
         context = self.ai_decision_context(actor_id)
         require(context["mode"] == "realtime",
                 "CT memory writes require a future encounter-scoped adapter")
+        require(type(changes) is dict and not (
+                set(changes) & {
+                    "squad_source", "squad_signal",
+                    "last_known_scene", "observation_kind"}),
+                "R37 sensor and squad provenance must come from observation APIs")
         return self._advanced_ai.remember(actor_id, changes,
                                           tick=context["tick"])
 
