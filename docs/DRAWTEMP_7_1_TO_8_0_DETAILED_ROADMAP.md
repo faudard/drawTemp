@@ -212,6 +212,18 @@
 
 **Gate R36 :** créer une animation attaque / esquive / impact / mort dans le Studio et la voir identique dans Player action et dans les usages tactiques compatibles, avec hitboxes exactes et profilage matériel sans faux vert offscreen.
 
+**Suivi incrémental R36.A (non certifiant) :** [contrôleur d'animation versionné, édition dans le Studio et tests de déterminisme](drawtemp7/R36A_ANIMATION_CONTROLLER.md). L'intégration visuelle Player, les hitboxes de gameplay et les gates GPU restent ouverts.
+
+**Suivi incrémental R36.B1 (non certifiant) :** [effets cosmétiques bornés déclenchés par événements R26 committés, overlay Qt Quick et scrubbing de contrôle](drawtemp7/R36B_COMMITTED_FX.md). Les systèmes de particules configurables, la lumière 2D, le contact précis hitbox/impact et la certification GPU ne sont pas couverts.
+
+**Suivi incrémental R36.B2 (non certifiant) :** [timeline de marqueurs visuels versionnée, édition R1/Qt, particules CPU bornées et éclairage 2D approximatif](drawtemp7/R36B2_TIMELINE_PARTICLES_LIGHTING.md). Les contacts précis R32, le rendu GPU et l'éclairage avec occlusion restent ouverts.
+
+**Suivi incrémental R36.B3 (non certifiant) :** [liaison optionnelle des Animation Controllers aux acteurs R26, diagnostic de contacts AABB R32 et masque d'occlusion par cases](drawtemp7/R36B3_ACTOR_COLLISION_OCCLUSION.md). La parité tactique/plateforme, les hitboxes de combat et les ombres GPU restent ouvertes.
+
+**Suivi incrémental R36.C1 (non certifiant) :** [rendu des vrais sprites PNG R28 via le résolveur R4/R3 existant, atlas/pivots, cache borné et télémétrie CPU p95/p99](drawtemp7/R36C1_SPRITES_CPU_PROFILE.md). Les tests GPU sur matériel, la parité Studio/Player et l'export avec droits vérifiés restent ouverts.
+
+**Suivi incrémental R36.C2 (non certifiant) :** [audit de provenance/licences R36 raccordé au préflight strict R15, 12 candidats de captures Qt Studio/Player et revue humaine via le contrat R14.5](drawtemp7/R36C2_EXPORT_VISUAL_GATES.md). La capture réelle, l'approbation indépendante des goldens et les benchmarks GPU restent ouverts tant que les runners n'ont pas exécuté les gates.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.

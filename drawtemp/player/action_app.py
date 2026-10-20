@@ -7,6 +7,7 @@ is explicitly selected.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 import time
@@ -14,9 +15,10 @@ import time
 from drawtemp.player.action_clock import ActionStepClock
 from drawtemp.player.action_controller import ActionPlayerController, demo_scene
 from drawtemp.render.iso_scene import scene_from_action
+from drawtemp.render.r36_frame_budget import R36FrameBudget
 
 
-def create_bridge(controller, renderer):
+def create_bridge(controller, renderer, *, profiling=False):
     """A QObject adapter; imported lazily to preserve headless Python installs."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -27,6 +29,8 @@ def create_bridge(controller, renderer):
             super().__init__()
             self.controller = controller
             self.renderer = renderer
+            self.telemetry = R36FrameBudget() if profiling else None
+            self._last_profile_tick = -1
             self._clock = ActionStepClock()
             self._last_ns = time.monotonic_ns()
             self._pending_dodge = False
@@ -42,8 +46,34 @@ def create_bridge(controller, renderer):
             from sporebound.action_runtime import SCALE
             target = (hero["pos"][0] / SCALE - .5,
                       hero["pos"][1] / SCALE - .5)
-            self.renderer.replace_scene(
-                scene_from_action(self.controller.runtime), follow_world=target)
+            scene = scene_from_action(
+                self.controller.runtime,
+                animation_frames=(self.controller.animation.frames()
+                                  if self.controller.animation is not None else None))
+            # Pure optical diagnostic: geometry is the authored R26 wall grid.
+            # Lighting cannot alter the committed rules engine or collision.
+            from drawtemp.render.cell_lighting import project_cell_lighting
+            lights = self.controller.state()["vfx"]["lights"]
+            if lights:
+                scene["light_cells"] = project_cell_lighting(
+                    self.controller.scene, lights)
+            submit_start_ns = time.perf_counter_ns() if self.telemetry else None
+            self.renderer.replace_scene(scene, follow_world=target)
+            if self.telemetry is not None:
+                view = self.controller.state()
+                tick = self.controller.runtime.tick
+                if tick < self._last_profile_tick:
+                    self.telemetry.reset()
+                self._last_profile_tick = tick
+                items = self.renderer.items
+                self.telemetry.record(
+                    tick=tick, duration_ns=time.perf_counter_ns() - submit_start_ns,
+                    items=len(items),
+                    actors=sum(1 for row in items if row["kind"] == "actor"),
+                    particles=len(view["vfx"]["particles"]),
+                    lights=len(view["vfx"]["lights"]),
+                    fx=min(96, len(view["fx"]) + len(view["animation_cues"])),
+                )
             self.stateChanged.emit()
 
         def _resync(self):
@@ -135,7 +165,18 @@ def main(argv=None):
                         help="Instantiate offscreen UI and stop before gameplay")
     parser.add_argument("--save-dir", type=Path,
                         default=Path.home() / ".drawtemp" / "action-preview")
+    parser.add_argument("--content", type=Path,
+                        help="Canonical Content JSON for --animation-project")
+    parser.add_argument("--animation-project", type=Path,
+                        help="Validated GameProject JSON containing R28/R36 animation assets")
+    parser.add_argument("--profile-r36", type=Path,
+                        help="Write opt-in CPU render-submit telemetry at Player exit")
+    parser.add_argument("--hero-controller",
+                        help="Existing R36 Animation Controller bound to the action hero")
     args = parser.parse_args(argv)
+    if any((args.content, args.animation_project, args.hero_controller)) and not all(
+            (args.content, args.animation_project, args.hero_controller)):
+        parser.error("--content, --animation-project and --hero-controller are required together")
     try:
         from PySide6.QtCore import QTimer, QUrl
         from PySide6.QtGui import QGuiApplication
@@ -145,14 +186,44 @@ def main(argv=None):
         return 2
 
     app = QGuiApplication([sys.argv[0]])
-    controller = ActionPlayerController(
-        demo_scene(), save_path=args.save_dir / "action.json")
+    animation_project = None
+    if args.animation_project is not None:
+        from sporebound.model import Content
+        from sporebound.game_project import GameProject
+        try:
+            animation_project = GameProject.load(
+                args.animation_project, Content.load(args.content))
+        except (OSError, ValueError, TypeError) as exc:
+            print("R36 animation project rejected: " + str(exc), file=sys.stderr)
+            return 2
+    try:
+        controller = ActionPlayerController(
+            demo_scene(), save_path=args.save_dir / "action.json",
+            animation_project=animation_project,
+            animation_bindings=({"hero": args.hero_controller}
+                                if args.hero_controller else None))
+    except (ValueError, TypeError) as exc:
+        print("R36 hero binding rejected: " + str(exc), file=sys.stderr)
+        return 2
     # The exact same R3 projection/controller handles Studio, tactical Player
     # and this opt-in action Player. The Qt delegate is projection-specific.
     from drawtemp.render.qt_viewport import make_controller
+    # The R4 resolver/atlas is also the only R36 image path. Missing user
+    # assets become per-actor placeholder diagnostics, not gameplay failure.
+    assets = None
+    if animation_project is not None:
+        from drawtemp.assets.r36_runtime import R36PresentationAssets
+        try:
+            assets = R36PresentationAssets.for_project(
+                animation_project, args.animation_project)
+        except (OSError, RuntimeError, ValueError) as exc:
+            print("R36 asset resolver rejected: " + str(exc), file=sys.stderr)
+            return 2
     renderer = make_controller(scene_from_action(controller.runtime),
-                               atlas_url="", projection_mode="top_down")
-    bridge = create_bridge(controller, renderer)
+                               atlas_url="", projection_mode="top_down",
+                               assets=assets)
+    bridge = create_bridge(controller, renderer,
+                           profiling=args.profile_r36 is not None)
     engine = QQmlApplicationEngine()
     renderer.attach_engine(engine)
     engine.rootContext().setContextProperty("renderer", renderer)
@@ -165,7 +236,12 @@ def main(argv=None):
     window = engine.rootObjects()[0]
     if args.smoke:
         QTimer.singleShot(0, app.quit)
-    return app.exec()
+    code = app.exec()
+    if args.profile_r36 is not None and bridge.telemetry is not None:
+        args.profile_r36.write_text(
+            json.dumps(bridge.telemetry.report(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8")
+    return code
 
 
 if __name__ == "__main__":

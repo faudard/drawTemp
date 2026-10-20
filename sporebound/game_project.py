@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R36: reject invalid controllers and dangling R28 animation IDs on load.
+        from .animation_graph import controllers_from_project
+        controllers_from_project(self)
+        from .animation_timeline import timelines_from_project
+        timelines_from_project(self)
         from .logic_campaign_bridge import validate_bridge
         validate_bridge(self, content)
         # R38.2: optional authored prefab instance provenance, validated on load.
