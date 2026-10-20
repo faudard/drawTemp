@@ -44,6 +44,7 @@ class TeamReviewDialog(QDialog):
         self._notes_head = None
         self._tasks_head = None
         self._tasks = ()
+        self._threads = ()
         self._reviewed_node = None
 
         outer = QVBoxLayout(self)
@@ -124,10 +125,19 @@ class TeamReviewDialog(QDialog):
         self.note_text.setPlaceholderText("Commentaire de revue (publication explicite)")
         self.note_text.setMaximumHeight(75)
         note_row.addWidget(self.note_text, 4)
-        self.note_button = QPushButton("Commenter")
+        self.thread_combo = QComboBox()
+        self.thread_combo.setObjectName("r78-note-thread")
+        self.thread_combo.addItem("Nouvelle discussion", 0)
+        self.thread_combo.setAccessibleName("Discussion sélectionnée")
+        note_row.addWidget(self.thread_combo)
+        self.note_button = QPushButton("Commenter / répondre")
         self.note_button.setObjectName("r78-post-note")
         self.note_button.clicked.connect(self.post_note)
         note_row.addWidget(self.note_button)
+        self.thread_button = QPushButton("Résoudre / rouvrir")
+        self.thread_button.setObjectName("r78-toggle-thread")
+        self.thread_button.clicked.connect(self.toggle_thread)
+        note_row.addWidget(self.thread_button)
         layout.addLayout(note_row)
 
         review_row = QHBoxLayout()
@@ -202,7 +212,8 @@ class TeamReviewDialog(QDialog):
         layout.addWidget(done)
 
         enabled = self.role in ("owner", "editor", "reviewer")
-        for button in (self.note_button, self.review_button, self.task_button):
+        for button in (self.note_button, self.thread_button,
+                       self.review_button, self.task_button):
             button.setEnabled(enabled)
         self.task_update_button.setEnabled(enabled)
         self._populate_history()
@@ -306,6 +317,7 @@ class TeamReviewDialog(QDialog):
     def refresh(self, *_):
         self.notes_table.setRowCount(0)
         self.tasks_table.setRowCount(0)
+        self._threads = ()
         if self.board is None or self._node_id() is None:
             return None
         try:
@@ -317,6 +329,23 @@ class TeamReviewDialog(QDialog):
             self._tasks = tasks
             rows = [(thread, note) for thread in notes for note in thread["comments"]]
             self.notes_table.setRowCount(len(rows))
+            chosen_thread = self.thread_combo.currentData()
+            self.thread_combo.blockSignals(True)
+            self.thread_combo.clear()
+            self.thread_combo.addItem("Nouvelle discussion", 0)
+            try:
+                target = self.board._anchor(self.path_edit.text())
+            except ValueError:
+                target = None
+            self._threads = tuple(t for t in notes if t["anchor"] == target)
+            for thread in self._threads:
+                self.thread_combo.addItem(
+                    f"#{thread['id']} — {'résolu' if thread['resolved'] else 'ouvert'}",
+                    thread["id"])
+            index = self.thread_combo.findData(chosen_thread)
+            if index >= 0:
+                self.thread_combo.setCurrentIndex(index)
+            self.thread_combo.blockSignals(False)
             for i, (thread, note) in enumerate(rows):
                 for j, value in enumerate((
                         f"#{thread['id']} ({thread['anchor']})",
@@ -362,10 +391,22 @@ class TeamReviewDialog(QDialog):
         text = self.note_text.toPlainText()
         result = self._write(lambda: self.board.note(
             self.actor, node_id=self._node_id(), path=self.path_edit.text(),
-            expected_head=self._notes_head, text=text), note=True)
+            expected_head=self._notes_head, text=text,
+            thread=self.thread_combo.currentData() or 0), note=True)
         if result:
             self.note_text.clear()
         return result
+
+    def toggle_thread(self):
+        selected = self.thread_combo.currentData()
+        thread = next((row for row in self._threads if row["id"] == selected), None)
+        if thread is None:
+            self.status.setText("Sélectionner une discussion avant de changer son état.")
+            return None
+        kind = "reopen" if thread["resolved"] else "resolve"
+        return self._write(lambda: self.board.note(
+            self.actor, node_id=self._node_id(), path=self.path_edit.text(),
+            expected_head=self._notes_head, kind=kind, thread=selected), note=True)
 
     def post_review(self):
         return self._write(lambda: self.board.review(
