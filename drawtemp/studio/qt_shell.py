@@ -37,6 +37,18 @@ from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
 from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
+from drawtemp.studio.r49_experience import (
+    OperationTimings, audit_command_bindings, measure_studio, resolve_shortcuts,
+)
+from drawtemp.studio.r49_workspaces import (
+    FOCUS_REGIONS, WorkspaceFocusMemory, focus_settings_key,
+)
+from drawtemp.studio.r49_inspector_integrity import (
+    reference_audit, problems_for_selection,
+)
+from drawtemp.studio.r49_playtest import (
+    EditorReturnContext, PlaytestRun, TERMINAL,
+)
 from drawtemp.studio.r18_onboarding import (
     GUIDE_UI, STEP_IDS, journey_steps, next_step, normalize_completed, project_key,
 )
@@ -46,7 +58,7 @@ DEFAULT_SHORTCUTS = {
     "save": "Ctrl+S", "open": "Ctrl+O", "undo": "Ctrl+Z", "redo": "Ctrl+Shift+Z",
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
     "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2", "new": "Ctrl+Shift+N",
+    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+Shift+N",
     "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
     "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
@@ -172,6 +184,17 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self.pages = {}
         self.commands = {}
+        self.r49_timings = OperationTimings()
+        self._r49_audit = None
+        self._r49_navigating = False
+        self._r49_reference_cache = None
+        self._r49_reference_key = None
+        self._r49_playtest = PlaytestRun()
+        self._r49_player_process = None
+        self._r49_focus = WorkspaceFocusMemory({
+            name: self.settings.value(focus_settings_key(name))
+            for name in WORKSPACES
+        })
         self.plugins = StudioPluginRegistry()
         self._plugin_docks = {}
         self._plugin_fields = {}
@@ -183,6 +206,9 @@ class StudioWindow(QMainWindow):
                     self.settings.value("theme", "dark"),
                     int(self.settings.value("scale", 100)))
         self._build()
+        # Track meaningful focus changes only inside the active workspace or
+        # the shared docks. No QWidget pointers are written to QSettings.
+        QApplication.instance().focusChanged.connect(self._r49_on_focus_changed)
         self._restore_layout()
         self.refresh()
         self.watch = QTimer(self)
@@ -385,6 +411,11 @@ class StudioWindow(QMainWindow):
         self.references.setWordWrap(True)
         self.references.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.references)
+        self.reference_issues_label = QLabel("")
+        self.reference_issues_label.setWordWrap(True)
+        self.reference_issues_label.setAccessibleName(
+            "Diagnostic des références du ou des éléments sélectionnés")
+        layout.addWidget(self.reference_issues_label)
         layout.addWidget(QLabel("Références croisées — double-cliquer pour naviguer"))
         self.links = QListWidget()
         self.links.setAccessibleName("Références entrantes et sortantes")
@@ -401,6 +432,10 @@ class StudioWindow(QMainWindow):
             "Diagnostics", "r2-problems-dock", self.problems, Qt.BottomDockWidgetArea)
 
     def _action(self, key, label, callback):
+        if key in self.commands:
+            raise ValueError("Duplicate Studio command registration: " + key)
+        if not callable(callback):
+            raise ValueError("Studio command has no callable handler: " + key)
         action = QAction(label, self)
         shortcut = self.settings.value("shortcuts/" + key, DEFAULT_SHORTCUTS.get(key, ""))
         if shortcut:
@@ -419,6 +454,11 @@ class StudioWindow(QMainWindow):
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
         self._action("playtest", "Jouer / Playtest", self.playtest)
+        self._action("stop_playtest", "Arrêter le playtest", self.stop_playtest)
+        self._action("return_playtest", "Revenir à l'édition testée",
+                     self.return_to_playtest_editor)
+        self._action("playtest_report", "Diagnostics du dernier playtest…",
+                     self.show_playtest_report)
         self._action("export", "Exporter le Player…", self.export_player)
         self._action("preferences", "Préférences…", self.open_preferences)
         self._action("undo", "Annuler", self.undo)
@@ -427,19 +467,38 @@ class StudioWindow(QMainWindow):
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
+        self._action("r49_references", "Vérifier les références du projet…",
+                     self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
         self._action("focus_inspector", "Inspecter la sélection",
                      lambda: (self.name_edit or self.resource_view).setFocus())
+        self._action("focus_workspace", "Revenir au contenu de l’atelier",
+                     self.focus_workspace)
         for identifier in WORKSPACES:
             action = self._action(
                 "go_" + identifier, "Atelier : " + LABELS[identifier],
                 lambda _checked=False, key=identifier: self.navigate(key))
             action.setCheckable(True)
+        # Detect persisted conflicting shortcuts, keeping the first registered
+        # action functional. Settings stay intact until the user rebinds them.
+        requested = {key: action.shortcut().toString()
+                     for key, action in self.commands.items()}
+        effective, collisions = resolve_shortcuts(requested)
+        for collision in collisions:
+            self.commands[collision.key].setShortcut(QKeySequence())
+            self.problems.addItem(
+                "R49: raccourci en conflit pour " + collision.key +
+                " (déjà affecté à " + collision.owner + ") ; désactivé.")
+        self._r49_audit = audit_command_bindings(self.commands, workspaces=WORKSPACES)
+        for issue in self._r49_audit.issues:
+            self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
@@ -450,8 +509,10 @@ class StudioWindow(QMainWindow):
         for key in ("save", "save_as"):
             file_menu.addAction(self.commands[key])
         file_menu.addSeparator()
-        for key in ("playtest", "export"):
+        for key in ("playtest", "stop_playtest", "return_playtest",
+                    "playtest_report", "export"):
             file_menu.addAction(self.commands[key])
+        self._sync_playtest_commands()
         edit_menu = self.menuBar().addMenu("&Édition")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
@@ -479,10 +540,13 @@ class StudioWindow(QMainWindow):
         review_branch.triggered.connect(self._semantic_merge_dialog)
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["r49_metrics"])
+        tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
@@ -591,6 +655,15 @@ class StudioWindow(QMainWindow):
         if self.session.revision != revision:
             self.refresh()
 
+    def open_living_economy(self):
+        """R45.B editor uses the one canonical session and its R1 undo history."""
+        from drawtemp.studio.living_economy_qt import LivingEconomyDialog
+        revision = self.session.revision
+        dialog = LivingEconomyDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
     def open_logic_graph(self):
         """R31.B logic graphs share the Studio R1 owner, never a second project."""
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
@@ -600,6 +673,23 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != initial_revision:
             self.refresh()
+
+    def open_r49_metrics(self):
+        """Read-only process-local UI observations; never a GPU benchmark."""
+        summary = self.r49_timings.summary()
+        lines = ["R49.A — mesures observées localement (non certifiantes)"]
+        for operation, stats in summary.items():
+            lines.append(
+                f"{operation}: n={stats['count']} "
+                f"p50={stats['p50_ms']:.3f} ms "
+                f"p95={stats['p95_ms']:.3f} ms "
+                f"p99={stats['p99_ms']:.3f} ms "
+                f"échecs non interceptés={stats['failures_observed']}")
+        if not summary:
+            lines.append("Aucune mesure disponible dans cette session.")
+        lines.append("Aucune collecte externe ; données non persistées. "
+                     "Ne remplace pas les tests hardware/UX.")
+        QMessageBox.information(self, "R49 • Mesures UX locales", "\n".join(lines))
 
     def open_scale_dashboard(self):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
@@ -689,7 +779,13 @@ class StudioWindow(QMainWindow):
                        lambda: self.reference_filter.setCurrentIndex(2))
         menu.exec(self.resource_view.viewport().mapToGlobal(point))
 
+    @measure_studio("studio.refresh")
     def refresh(self):
+        # Other-workshop callbacks must not silently destroy unsaved property
+        # widgets. A stale draft stays visible until explicitly discarded.
+        if self._edited_fields:
+            self._validate_inspector_draft()
+            return
         snapshot = self.session.snapshot()
         selected_keys = {r.key for r in self._selected}
         self._resource_by_key = {r.key: r for r in resources(snapshot)}
@@ -787,6 +883,13 @@ class StudioWindow(QMainWindow):
                 key = tuple(identity.split("|", 2))
                 if key in self._resource_by_key:
                     selected.append(self._resource_by_key[key])
+        # A programmatic selection change may arrive despite the disabled
+        # resource view. Keep the old draft and canonical resource identities.
+        if (self._edited_fields and
+                {r.key for r in selected} != {r.key for r in self._selected}):
+            self.inspector_error.setText(
+                "Terminez ou ignorez la saisie avant de changer de sélection.")
+            return
         # An active relation filter retains its original selection even when
         # the anchor is itself hidden by the filtered result set.
         if selected:
@@ -803,12 +906,16 @@ class StudioWindow(QMainWindow):
         for label in self._property_error_labels.values():
             label.clear()
         if not self._edited_fields:
+            self.resource_view.setEnabled(True)
             self.inspector_error.setText("")
             self.pending_label.setText("")
             self.apply_button.setEnabled(False)
             self.discard_button.setEnabled(False)
             return False
         self.discard_button.setEnabled(True)
+        # A staged multi-property edit belongs to the original resource IDs.
+        # Disable switching the selection until apply/discard is explicit.
+        self.resource_view.setEnabled(False)
         if self.session.revision != self._inspector_revision:
             self.inspector_error.setText(
                 "Le projet a changé pendant la saisie. Ignorez les modifications "
@@ -847,6 +954,7 @@ class StudioWindow(QMainWindow):
 
     def discard_inspector_changes(self):
         """Explicitly discard only staged widgets; never undo R1 content."""
+        self._edited_fields.clear()
         self.refresh()
 
     def _show_inspector(self):
@@ -854,6 +962,7 @@ class StudioWindow(QMainWindow):
         snapshot = self.session.snapshot()
         self._inspector_revision = snapshot.revision
         self._edited_fields = set()
+        self.resource_view.setEnabled(True)
         self.property_widgets.clear()
         self._property_error_labels.clear()
         self.name_edit = None
@@ -867,6 +976,7 @@ class StudioWindow(QMainWindow):
             str(len(chosen)) + " ressource(s) sélectionnée(s)" if chosen else
             "Sélectionnez une ressource dans l'explorateur")
         self.links.clear()
+        self.reference_issues_label.clear()
         if not chosen:
             self.references.setText("Aucune sélection")
             return
@@ -936,8 +1046,80 @@ class StudioWindow(QMainWindow):
                         title + " : " + other.title + " (" + other.family + ")",
                         other.key, edge.path)
                     self.links.addItem(item)
+            audit = self._r49_integrity(snapshot)
+            broken = problems_for_selection(audit, chosen)
+            if broken:
+                self.reference_issues_label.setText(
+                    str(len(broken)) + " référence(s) introuvable(s) dans cette sélection.")
+                for problem in broken:
+                    item = self._link_item("⚠ " + problem.summary,
+                                           problem.source.key, problem.path)
+                    self.links.addItem(item)
+            elif audit.truncated:
+                self.reference_issues_label.setText(
+                    "Analyse partielle : certaines références restent non vérifiées.")
+            else:
+                self.reference_issues_label.setText(
+                    "Aucune référence introuvable dans cette sélection.")
+            if audit.truncated:
+                self.reference_issues_label.setText(
+                    self.reference_issues_label.text() +
+                    " Analyse incomplète (limite de sécurité atteinte).")
         except (InspectorError, ValueError) as exc:
             self.inspector_error.setText(str(exc))
+
+    def _r49_integrity(self, snapshot=None):
+        """One bounded audit per canonical session revision, with no sidecar."""
+        snapshot = snapshot or self.session.snapshot()
+        key = (id(self.session), snapshot.revision)
+        if key != self._r49_reference_key:
+            self._r49_reference_cache = reference_audit(snapshot)
+            self._r49_reference_key = key
+        return self._r49_reference_cache
+
+    def inspect_references(self):
+        """Explore broken typed references and jump to their real source."""
+        audit = self._r49_integrity()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Intégrité des références — R49")
+        layout = QVBoxLayout(dialog)
+        text = (str(len(audit.problems)) + " référence(s) introuvable(s).")
+        if audit.truncated:
+            text += " Résultat incomplet : limite de sécurité atteinte."
+        elif audit.passed:
+            text += " Aucun problème dans les champs typés reconnus."
+        message = QLabel(text)
+        message.setWordWrap(True)
+        layout.addWidget(message)
+        listing = QListWidget()
+        listing.setAccessibleName("Références introuvables et sources")
+        for problem in audit.problems:
+            listing.addItem(self._link_item(problem.summary,
+                                            problem.source.key, problem.path))
+        layout.addWidget(listing)
+        open_source = QPushButton("Afficher la source")
+        open_source.setEnabled(bool(audit.problems))
+        layout.addWidget(open_source)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dialog.reject)
+        layout.addWidget(close)
+
+        def jump(item):
+            if item is None:
+                return
+            identity = item.data(Qt.UserRole)
+            dialog.accept()
+            if identity:
+                self.focus_resource(tuple(identity))
+
+        listing.itemActivated.connect(jump)
+        listing.itemDoubleClicked.connect(jump)
+        open_source.clicked.connect(lambda: jump(listing.currentItem()))
+        if listing.count():
+            listing.setCurrentRow(0)
+        dialog.resize(680, 390)
+        dialog.exec()
+        return audit
 
     def _link_item(self, title, identity, path):
         from PySide6.QtWidgets import QListWidgetItem
@@ -970,6 +1152,7 @@ class StudioWindow(QMainWindow):
                        for key in self._edited_fields}
             edit_properties(self.session, self._selected, updates,
                             expected_revision=self._inspector_revision)
+            self._edited_fields.clear()
             self.refresh()
             return True
         except (AuthoringError, InspectorError, ValueError) as exc:
@@ -1033,24 +1216,39 @@ class StudioWindow(QMainWindow):
                 if row >= 0:
                     child.campaign.setCurrentIndex(row)
 
+    @measure_studio("studio.navigate")
     def navigate(self, identifier):
         host = workspace_host(identifier)
-        if identifier == "actors" and "database" in self._models:
-            database = self._models["database"]
-            database.tree.setCurrentItem(database.tree.topLevelItem(1))
-        if host not in self.pages:
-            try:
-                self._make_workspace(host)
-            except Exception as exc:
-                self.report_error(exc)
-                return
-        if identifier == "construction":
-            self.pages["construction"] = self.pages["maps"]
-        if identifier in ("maps", "construction"):
-            # R6 shares the exact viewport and authoring session of R5.
-            self._models["maps"].mode.setCurrentIndex(
-                1 if identifier == "construction" else 0)
-        self._activate(identifier)
+        if self._edited_fields and identifier != self._active_workspace:
+            self.statusBar().showMessage(
+                "Terminez ou ignorez les propriétés en cours avant de changer d'atelier.")
+            self.inspector_error.setText(
+                "Saisie non appliquée : Appliquer ou Ignorer pour changer d'atelier.")
+            return False
+        self._r49_on_focus_changed(None, QApplication.focusWidget())
+        # Qt may move focus automatically during setCurrentWidget. Do not let
+        # those transient focus events replace a user's saved preference.
+        self._r49_navigating = True
+        try:
+            if identifier == "actors" and "database" in self._models:
+                database = self._models["database"]
+                database.tree.setCurrentItem(database.tree.topLevelItem(1))
+            if host not in self.pages:
+                try:
+                    self._make_workspace(host)
+                except Exception as exc:
+                    self.report_error(exc)
+                    return
+            if identifier == "construction":
+                self.pages["construction"] = self.pages["maps"]
+            if identifier in ("maps", "construction"):
+                # R6 shares the exact viewport and authoring session of R5.
+                self._models["maps"].mode.setCurrentIndex(
+                    1 if identifier == "construction" else 0)
+            self._activate(identifier)
+            self._r49_restore_focus(identifier)
+        finally:
+            self._r49_navigating = False
         if identifier == "maps":
             self._guide_mark("map")
         elif identifier == "actors":
@@ -1063,6 +1261,91 @@ class StudioWindow(QMainWindow):
             self.commands["go_" + name].setChecked(name == identifier)
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
+    def _r49_on_focus_changed(self, _old, current):
+        """Observe only the active page or docks; ignore menus and dialogs."""
+        if current is None or not self.isVisible() or self._r49_navigating:
+            return
+        page = self.pages.get(self._active_workspace)
+        if page is None:
+            return
+        if current is self.search or self.search.isAncestorOf(current):
+            region = "search"
+        elif (current is self.resource_view or
+              self.resource_view.isAncestorOf(current)):
+            region = "resources"
+        elif (current is self.inspector_dock or
+              self.inspector_dock.isAncestorOf(current)):
+            region = "inspector"
+        elif (current is self.problems or self.problems.isAncestorOf(current)):
+            region = "diagnostics"
+        elif current is page or page.isAncestorOf(current):
+            region = "workspace"
+        else:
+            return
+        if self._r49_focus.remember(self._active_workspace, region):
+            self.settings.setValue(focus_settings_key(self._active_workspace),
+                                   region)
+
+    def _r49_focus_candidate(self, region):
+        """Return a visible, enabled focus target; never instantiate pages."""
+        if region == "workspace":
+            page = self.pages.get(self._active_workspace)
+            if page is None:
+                return None
+            current = page.focusWidget()
+            if (current is not None and current.isVisibleTo(self) and
+                    current.isEnabled() and current.focusPolicy() != Qt.NoFocus):
+                return current
+            if (page.isVisibleTo(self) and page.isEnabled() and
+                    page.focusPolicy() != Qt.NoFocus):
+                return page
+            for child in page.findChildren(QWidget):
+                if (child.isVisibleTo(self) and child.isEnabled() and
+                        child.focusPolicy() != Qt.NoFocus):
+                    return child
+            return None
+        if region == "search":
+            candidate = self.search
+        elif region == "resources":
+            candidate = self.resource_view
+        elif region == "inspector":
+            candidate = self.name_edit or self.links
+        elif region == "diagnostics":
+            candidate = self.problems
+        else:
+            return None
+        return candidate if (candidate is not None and candidate.isVisibleTo(self)
+                             and candidate.isEnabled() and
+                             candidate.focusPolicy() != Qt.NoFocus) else None
+
+    def _r49_restore_focus(self, workspace):
+        """Restore a semantic focus area only when previously observed."""
+        if self._r49_focus.preferred(workspace) is None:
+            return False
+        available = {
+            region for region in FOCUS_REGIONS
+            if self._r49_focus_candidate(region) is not None
+        }
+        target = self._r49_focus.resolve(workspace, available)
+        if target is None:
+            return False
+        widget = self._r49_focus_candidate(target)
+        if widget is None:
+            return False
+        widget.setFocus(Qt.OtherFocusReason)
+        return True
+
+    def focus_workspace(self):
+        """Keyboard command: return from toolbar/docks to active editor."""
+        widget = self._r49_focus_candidate("workspace")
+        if widget is None:
+            self.statusBar().showMessage(
+                "Aucun contrôle activable dans cet atelier.")
+            return False
+        widget.setFocus(Qt.ShortcutFocusReason)
+        return True
+
+    @measure_studio("studio.workspace_init")
     def _make_workspace(self, identifier):
         if identifier in ("database", "actors") and "database" in self._models:
             child = self._models["database"]
@@ -1087,6 +1370,11 @@ class StudioWindow(QMainWindow):
             from drawtemp.studio.r28d_workflow_qt import R28DWorkspace
             child = R28DWorkspace(self.session)
             child.updated.connect(self.refresh)
+            # The guided R49.C2 path delegates to the existing supervised
+            # Player and native export controls. It never launches a second
+            # Qt process or creates a secondary GameProject.
+            child.first_scene.playtestRequested.connect(self.playtest)
+            child.first_scene.exportRequested.connect(self.export_player)
         elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
@@ -1143,6 +1431,13 @@ class StudioWindow(QMainWindow):
         play = QPushButton("Playtest du projet enregistré")
         play.clicked.connect(self.playtest)
         panel.addWidget(play)
+        stop = QPushButton("Arrêter le playtest en cours")
+        stop.clicked.connect(self.stop_playtest)
+        panel.addWidget(stop)
+        # These buttons use the same actions, keeping their state synchronized.
+        self._r49_publication_play = play
+        self._r49_publication_stop = stop
+        self._sync_playtest_commands()
         export = QPushButton("Vérifier et exporter le Player…")
         export.clicked.connect(self.export_player)
         panel.addWidget(export)
@@ -1561,6 +1856,8 @@ class StudioWindow(QMainWindow):
             page.setParent(None)
             page.deleteLater()
         self._models.clear()
+        self._r49_reference_cache = None
+        self._r49_reference_key = None
         self._selected = ()
         self._reference_anchor = ()
         self.reference_filter.setCurrentIndex(0)
@@ -1572,6 +1869,7 @@ class StudioWindow(QMainWindow):
         # A loaded project is proof of a completed open/create action.
         self._guide_switch_document(path)
 
+    @measure_studio("studio.open")
     def open_path(self, path):
         if not self._confirm_leave():
             return False
@@ -1597,6 +1895,8 @@ class StudioWindow(QMainWindow):
         return True
 
     def new_project_template(self):
+        if self._r49_playtest.active:
+            return False
         from drawtemp.export.templates import TEMPLATES
         kind, accepted = QInputDialog.getItem(
             self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
@@ -1618,6 +1918,8 @@ class StudioWindow(QMainWindow):
 
     def new_document(self):
         """R22: use the canonical CreatorDialog and shared R1 session."""
+        if self._r49_playtest.active:
+            return False
         from drawtemp.studio.r15_creator import CreatorDialog
         dialog = CreatorDialog(self)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
@@ -1626,6 +1928,8 @@ class StudioWindow(QMainWindow):
 
     def new_project(self):
         """R28: guided multi-genre flow without a second Studio session."""
+        if self._r49_playtest.active:
+            return False
         from drawtemp.studio.genre_wizard_qt import GenreProjectWizard
         dialog = GenreProjectWizard(self)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
@@ -1633,6 +1937,10 @@ class StudioWindow(QMainWindow):
         return self.open_path(dialog.created_content_path)
 
     def save_document(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Enregistrement indisponible pendant un playtest en cours.")
+            return False
         try:
             if self.content_path is None:
                 return self.save_document_as()
@@ -1646,6 +1954,8 @@ class StudioWindow(QMainWindow):
             return False
 
     def save_document_as(self):
+        if self._r49_playtest.active:
+            return False
         path, _ = QFileDialog.getSaveFileName(
             self, "Enregistrer Content et GameProject",
             "jeanne.json", "Content JSON (*.json)")
@@ -1667,30 +1977,230 @@ class StudioWindow(QMainWindow):
             return False
 
     def _saved_for_player(self):
-        if self.content_path is None or self.session.snapshot().dirty:
+        if self._edited_fields:
+            self.inspector_error.setText(
+                "Appliquez ou ignorez les propriétés avant le playtest.")
+            return False
+        if (self.content_path is None or self.session.snapshot().dirty or
+                not self.content_path.is_file()):
             return self.save_document()
         return True
 
+    def _sync_playtest_commands(self):
+        active = self._r49_playtest.active
+        self.commands["playtest"].setEnabled(not active)
+        self.commands["stop_playtest"].setEnabled(active)
+        self.commands["playtest_report"].setEnabled(
+            self._r49_playtest.phase != "idle")
+        context = self._r49_playtest.context
+        can_return = (not active and
+                      self._r49_playtest.phase in TERMINAL and
+                      context is not None and
+                      context.matches(self.session, self.content_path))
+        self.commands["return_playtest"].setEnabled(can_return)
+        for key in ("new", "new_project", "new_template", "open",
+                    "save", "save_as", "export"):
+            self.commands[key].setEnabled(not active)
+        if hasattr(self, "_r49_publication_play"):
+            self._r49_publication_play.setEnabled(not active)
+            self._r49_publication_stop.setEnabled(active)
+
     def playtest(self):
+        """Supervise one local Player; True means launch requested, not passed."""
+        if self._r49_playtest.active:
+            self.statusBar().showMessage("Un Player est déjà en cours.")
+            return False
         if not self._saved_for_player():
             return False
+        context = EditorReturnContext(
+            workspace=self._active_workspace,
+            resource_keys=tuple(resource.key for resource in self._selected),
+            focus_region=self._r49_focus.preferred(self._active_workspace),
+            document_path=str(self.content_path.resolve(strict=False)),
+            session_identity=id(self.session),
+        )
+        self._r49_playtest.begin(context)
+        process = QProcess(self)
+        self._r49_player_process = process
+        process.setProcessChannelMode(QProcess.SeparateChannels)
+        process.started.connect(self._on_playtest_started)
+        process.readyReadStandardOutput.connect(self._read_playtest_output)
+        process.readyReadStandardError.connect(self._read_playtest_output)
+        process.errorOccurred.connect(self._on_playtest_error)
+        process.finished.connect(self._on_playtest_finished)
+        self._sync_playtest_commands()
+        self.statusBar().showMessage("Démarrage du Player Qt demandé…")
+        # Program and arguments come only from the Studio. Project data must
+        # never supply a command, shell script or replacement executable.
         try:
-            started, _pid = QProcess.startDetached(
-                sys.executable, ["-m", "drawtemp.player.qt_app",
-                                 "--content", str(self.content_path)])
-            if not started:
-                raise OSError("Le processus Player Qt n'a pas démarré.")
-        except (OSError, RuntimeError) as exc:
-            self.report_error(exc)
+            self._start_player_process(process)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self._r49_playtest.failed_to_start(str(exc))
+            self.problems.addItem("R49.B3 : lancement refusé : " + str(exc)[:300])
+            self._cleanup_player_process()
+            self._sync_playtest_commands()
             return False
-        self.statusBar().showMessage("Player Qt lancé : " + str(self.content_path))
-        # A successful Player launch against a clean, persisted pair proves
-        # that the pair has been saved, even if it was opened from disk.
-        self._guide_mark("save")
-        self._guide_mark("playtest")
+        return True
+
+    def _start_player_process(self, process):
+        """Only Studio-owned arguments; override in CI with a harmless child."""
+        process.start(
+            sys.executable,
+            ["-m", "drawtemp.player.qt_app", "--content", str(self.content_path)],
+        )
+
+    def _read_playtest_output(self):
+        process = self._r49_player_process
+        if process is None:
+            return
+        for channel, reader in (
+            ("stdout", process.readAllStandardOutput),
+            ("stderr", process.readAllStandardError),
+        ):
+            chunk = bytes(reader())
+            if chunk:
+                self._r49_playtest.append(channel, chunk)
+
+    def _on_playtest_started(self):
+        if self._r49_playtest.started():
+            self.statusBar().showMessage(
+                "Player en cours — retour et diagnostics après fermeture.")
+            # Only the OS process start is known here, not a successful test.
+            self._guide_mark("save")
+            self._sync_playtest_commands()
+
+    def _on_playtest_error(self, error):
+        process = self._r49_player_process
+        if process is None:
+            return
+        message = process.errorString()
+        if error == QProcess.FailedToStart:
+            self._r49_playtest.failed_to_start(message)
+            self.problems.addItem("R49.B3 : démarrage Player impossible : " + message[:300])
+            self.statusBar().showMessage("Playtest non démarré : " + message[:180])
+            self._cleanup_player_process()
+            self._sync_playtest_commands()
+            return
+        self._r49_playtest.note_error(message)
+
+    def _on_playtest_finished(self, code, status):
+        if self._r49_player_process is None:
+            return
+        self._read_playtest_output()
+        self._r49_playtest.finish(code, crashed=(status == QProcess.CrashExit))
+        success = self._r49_playtest.successful
+        label = ("Playtest terminé (code 0)" if success else
+                 "Playtest interrompu" if self._r49_playtest.phase == "stopped"
+                 else "Playtest en échec (code " + str(code) + ")")
+        self.statusBar().showMessage(label + " — retour à l'éditeur disponible.")
+        self.problems.addItem("R49.B3 : " + label)
+        if not success:
+            errors = self._r49_playtest.stream("stderr").strip()
+            if errors:
+                self.problems.addItem("R49.B3 stderr : " + errors[-300:])
+        self._cleanup_player_process()
+        if success:
+            # Reaching process exit 0 proves only a completed process,
+            # not which game mechanics or vertical slice were exercised.
+            self._guide_mark("playtest")
+        self._sync_playtest_commands()
+        # No automatic navigation while the author may be editing elsewhere.
+        # The explicit "Revenir à l'édition testée" command restores context.
+
+    def _cleanup_player_process(self):
+        process = self._r49_player_process
+        self._r49_player_process = None
+        if process is not None:
+            process.deleteLater()
+
+    def stop_playtest(self):
+        """Ask the local Player to exit, then kill if it ignores termination."""
+        process = self._r49_player_process
+        if process is None or not self._r49_playtest.request_stop():
+            return False
+        self.statusBar().showMessage("Arrêt du Player demandé…")
+        self._sync_playtest_commands()
+        process.terminate()
+        QTimer.singleShot(
+            2500,
+            lambda: (process.kill() if self._r49_player_process is process and
+                     process.state() != QProcess.NotRunning else None),
+        )
+        return True
+
+    def return_to_playtest_editor(self):
+        """Explicit return to previous workspace, resource IDs and focus."""
+        context = self._r49_playtest.context
+        if (self._r49_playtest.active or
+                self._r49_playtest.phase not in TERMINAL or
+                context is None or not context.matches(self.session, self.content_path)):
+            self.statusBar().showMessage("Contexte du playtest indisponible.")
+            return False
+        if self._edited_fields:
+            self.statusBar().showMessage(
+                "Appliquez ou ignorez les propriétés avant de revenir.")
+            return False
+        if self.navigate(context.workspace) is False:
+            return False
+        restored = 0
+        if context.resource_keys:
+            for identity in context.resource_keys:
+                if restored == 0:
+                    if not self.focus_resource(identity):
+                        continue
+                    restored += 1
+                else:
+                    for row in range(self.resource_model.rowCount()):
+                        parent = self.resource_model.item(row)
+                        for j in range(parent.rowCount()):
+                            item = parent.child(j)
+                            if tuple(item.data(Qt.UserRole).split("|", 2)) != identity:
+                                continue
+                            index = self.proxy.mapFromSource(item.index())
+                            if index.isValid():
+                                self.resource_view.selectionModel().select(
+                                    index, QItemSelectionModel.Select |
+                                    QItemSelectionModel.Rows)
+                                restored += 1
+        target = (self._r49_focus_candidate(context.focus_region)
+                  if context.focus_region else None)
+        if target is not None:
+            target.setFocus(Qt.ShortcutFocusReason)
+        elif not context.resource_keys:
+            self.focus_workspace()
+        if restored != len(context.resource_keys):
+            self.statusBar().showMessage(
+                "Retour partiel : des ressources ont changé ou disparu.")
+        else:
+            self.statusBar().showMessage(
+                "Contexte Studio restauré — le Player n'a pas modifié le projet.")
+        return True
+
+    def show_playtest_report(self):
+        """Read-only process diagnostics, bounded in memory and not uploaded."""
+        if self._r49_playtest.phase == "idle":
+            return False
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Diagnostics du playtest — R49")
+        layout = QVBoxLayout(dialog)
+        report = QPlainTextEdit()
+        report.setObjectName("r49-playtest-report")
+        report.setAccessibleName("Code de sortie et diagnostics locaux du Player")
+        report.setReadOnly(True)
+        report.setPlainText(self._r49_playtest.report())
+        layout.addWidget(report)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close)
+        dialog.resize(690, 440)
+        dialog.exec()
         return True
 
     def export_player(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Attendez la fin du Player avant de lancer l'export.")
+            return False
         if not self._saved_for_player():
             return False
         from drawtemp.studio.r15_creator import CreatorDialog
@@ -1725,6 +2235,16 @@ class StudioWindow(QMainWindow):
             self.set_scale(int(scale.currentText()))
 
     def _confirm_leave(self):
+        if self._r49_playtest.active:
+            self.statusBar().showMessage(
+                "Terminez le Player avant de fermer ou de changer de projet.")
+            return False
+        if self._edited_fields:
+            self.inspector_error.setText(
+                "Propriétés en cours : appliquez-les ou ignorez-les avant de quitter.")
+            self.statusBar().showMessage(
+                "Terminez l'édition dans l'inspecteur avant de fermer ou changer de projet.")
+            return False
         if not self.session.snapshot().dirty:
             return True
         choice = QMessageBox.warning(
@@ -1752,6 +2272,11 @@ class StudioWindow(QMainWindow):
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/docks", self.saveState(1))
         self.settings.sync()
+        try:
+            QApplication.instance().focusChanged.disconnect(
+                self._r49_on_focus_changed)
+        except (RuntimeError, TypeError):
+            pass
         event.accept()
 
 

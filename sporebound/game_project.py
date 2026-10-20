@@ -118,6 +118,11 @@ class GameProject:
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
         from .logic_campaign_bridge import validate_bridge
         validate_bridge(self, content)
+        # R51.A: opt-in UI layouts share the canonical GameProject extension.
+        # Validation runs at load/authoring time; legacy manifests are untouched.
+        from .ui_layout_r51 import NAMESPACE as UI_NAMESPACE, validate_ui_catalog
+        if UI_NAMESPACE in self.extensions:
+            validate_ui_catalog(self.extensions[UI_NAMESPACE]["data"])
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
@@ -171,7 +176,8 @@ class GameProject:
             validate_living_world(
                 self.extensions[EXTENSION]["data"],
                 set(self.exploration) | set(content.missions),
-                exploration=self.exploration)
+                exploration=self.exploration,
+                item_ids=set(content.equipment))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes

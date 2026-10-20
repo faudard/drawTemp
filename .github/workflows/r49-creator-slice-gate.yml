@@ -1,0 +1,69 @@
+name: DrawTemp R49.C1 Creator Slice Gate
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r49_creator_gate.py'
+      - 'tests_standalone/test_r49_creator_gate.py'
+      - 'docs/drawtemp5/R49C1_CREATOR_GATE.md'
+      - 'docs/DRAWTEMP_8_1_TO_9_0_DETAILED_ROADMAP_R41_R50.md'
+      - '.github/workflows/r49-creator-slice-gate.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/quality/r49_creator_gate.py'
+      - 'tests_standalone/test_r49_creator_gate.py'
+      - 'docs/drawtemp5/R49C1_CREATOR_GATE.md'
+      - '.github/workflows/r49-creator-slice-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  r49-creator-slice:
+    name: R49.C1 author / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical DrawTemp engine
+        run: python -m pip install -e .
+      - name: R49.C1 authoring slice and release policy
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_r49_creator_gate
+          tests_standalone.test_r28_creator_workflow
+          tests_standalone.test_drawtemp5_r15_creator
+          tests_standalone.test_drawtemp5_r15
+      - name: Create real canonical headless creator report
+        run: >-
+          python -m drawtemp.quality.r49_creator_gate
+          --output r49-evidence
+          --revision ${{ github.sha }}
+          --genre srpg
+          --profile-samples 3
+      - name: Validate explicit NO_GO policy and created files
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_r49_creator_gate
+      - name: Compile gate and regression suite
+        run: >-
+          python -m compileall -q
+          drawtemp/quality/r49_creator_gate.py
+          tests_standalone/test_r49_creator_gate.py
+      - name: Publish non-certifying evidence index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r49-c1-headless-${{ matrix.os }}
+          path: r49-evidence/report.json
+          if-no-files-found: ignore
+          retention-days: 7
