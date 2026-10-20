@@ -87,6 +87,13 @@ ApplicationWindow {
     // Window-level shortcuts remain active when buttons have keyboard focus.
     // Popups disable gameplay actions; QML never mutates tactical rules.
     Shortcut {
+        objectName: "r57-keyboard-options"
+        sequence: "F10"
+        enabled: !optionsPopup.opened && !recoveryPopup.opened &&
+                 !recoveryErrorPopup.opened && !Boolean(root.playerData.cinematic.id)
+        onActivated: optionsPopup.open()
+    }
+    Shortcut {
         sequence: root.binding("explore_up")
         enabled: root.playerData.screen === "exploration" && !root.inputLocked
         onActivated: player.exploreMove(0, -1)
@@ -300,6 +307,7 @@ ApplicationWindow {
                 color: root.muted
             }
             Button {
+                id: playerOptionsButton
                 objectName: "r57-open-options"
                 text: "Options"
                 Accessible.name: "Ouvrir les options et réglages d’accessibilité"
@@ -2278,8 +2286,17 @@ ApplicationWindow {
         objectName: "r57-a11y-options"
         modal: true
         focus: true
-        // Keyboard focus starts on the language selector when Options opens.
+        property var returnFocus: null
+        // Restore the former keyboard target instead of losing focus after Esc.
+        onAboutToShow: returnFocus = root.activeFocusItem
         onOpened: languageSelect.forceActiveFocus()
+        onClosed: {
+            if (returnFocus && returnFocus.forceActiveFocus)
+                returnFocus.forceActiveFocus()
+            else
+                playerOptionsButton.forceActiveFocus()
+            returnFocus = null
+        }
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 36, 570)
         height: Math.min(root.height - 40, 690)
@@ -2301,6 +2318,12 @@ ApplicationWindow {
             }
             Label {
                 text: "Préférences conservées indépendamment de vos sauvegardes."
+                color: root.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            Label {
+                text: "F10 : ouvrir les options · Tab / Maj+Tab : parcourir · Échap : fermer"
                 color: root.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -2473,7 +2496,9 @@ ApplicationWindow {
                 visible: text.length > 0
             }
             Button {
+                objectName: "r57-options-close"
                 text: "Fermer"
+                Accessible.name: "Fermer les options du Player"
                 Layout.alignment: Qt.AlignRight
                 onClicked: optionsPopup.close()
             }
