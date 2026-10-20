@@ -174,6 +174,13 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             controller.explore_interact("exit")
             self.assertTrue(controller.state()["exploration"]["completed"])
             self.assertEqual(controller.state()["screen"], "exploration")
+            controller.save(1)
+            before = controller.session.recording()
+            controller.title()
+            controller.load(1)
+            self.assertEqual(controller.session.recording(), before)
+            self.assertTrue(controller.state()["exploration"]["completed"])
+            self.assertEqual(controller.state()["screen"], "exploration")
             with self.assertRaises(SimulationError):
                 controller.world_transition("to_grove")
             for dx, dy in ((-1, 0), (0, -1)):

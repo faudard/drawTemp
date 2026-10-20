@@ -6,6 +6,7 @@ on:
       - 'sporebound/world_graph44.py'
       - 'sporebound/game_project.py'
       - 'sporebound/game_session.py'
+      - 'sporebound/exploration.py'
       - 'drawtemp/sdk/simulation.py'
       - 'drawtemp/studio/world_atlas_*.py'
       - 'drawtemp/studio/qt_shell.py'
@@ -18,6 +19,9 @@ on:
     branches: [master]
     paths:
       - 'sporebound/world_graph44.py'
+      - 'sporebound/exploration.py'
+      - 'sporebound/game_session.py'
+      - 'drawtemp/sdk/simulation.py'
       - 'drawtemp/player/**'
       - 'drawtemp/studio/world_atlas_*.py'
       - 'examples/r44_five_valleys.py'
@@ -49,6 +53,7 @@ jobs:
           sporebound/world_graph44.py
           sporebound/game_project.py
           sporebound/game_session.py
+          sporebound/exploration.py
           drawtemp/sdk/simulation.py
           drawtemp/player/controller.py
           drawtemp/player/qt_app.py
