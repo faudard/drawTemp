@@ -9,7 +9,7 @@ import unittest
 
 from drawtemp.quality.r56_lab import (
     KIND, build_suite, capture_case, diff_batches, inspect_case,
-    read_report, read_suite, run_batch, save_json, validate_suite,
+    read_report, read_suite, run_batch, save_json, validate_suite, main,
 )
 from drawtemp.sdk.r40_starters import create_starter_pair
 from sporebound.game_session import GameSession
@@ -113,6 +113,25 @@ class QALabHeadlessTests(unittest.TestCase):
             source.write_text('{"kind":NaN}', encoding="utf-8")
             with self.assertRaises(ValueError):
                 read_suite(source)
+
+    def test_cli_outputs_identical_batch_and_refuses_source_overwrite(self):
+        content, project, suite = fixture()
+        clean = build_suite([suite["cases"][0]])
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "suite.json"
+            output = root / "out.json"
+            save_json(source, clean)
+            result = main(["--suite", str(source), "--revision", SHA,
+                           "--report", str(output)])
+            self.assertEqual(result, 0)
+            cli = read_report(output)
+            api = run_batch(clean, content, project, revision=SHA)
+            self.assertEqual(cli, api)
+            self.assertEqual(main(["--suite", str(source), "--revision", SHA,
+                                   "--report", str(source)]), 2)
+            self.assertEqual(main(["--suite", str(source), "--revision",
+                                   "b" * 40]), 2)
 
     def test_invalid_links_duplicates_and_oversized_batches_fail_closed(self):
         _, _, suite = fixture()
