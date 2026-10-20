@@ -60,7 +60,7 @@ class ClassicEncounter:
     choose the weakest remaining party member (ID tie-break). No RNG or timer.
     """
     def __init__(self, encounter_id, config, party, content, inventory,
-                 hero_progress=None):
+                 hero_progress=None, combo_specs=None):
         self.id = encounter_id
         self.scene = config["scene"]
         self.reward_gold = config["reward_gold"]
@@ -73,6 +73,20 @@ class ClassicEncounter:
         require(not set(party).intersection(config["enemies"]),
                 "R41 actor identity collision")
         self.skills = deepcopy(content.skills)
+        require(combo_specs is None or type(combo_specs) is list,
+                "Invalid R53 RPG combo catalogue")
+        self.combo_specs = {}
+        for spec in (combo_specs or []):
+            require(type(spec) is dict and set(spec) == {
+                "id", "members", "modes", "skills"}
+                and type(spec["id"]) is str
+                and spec["id"] not in self.combo_specs
+                and "RPG_TURN" in spec["modes"]
+                and set(spec["members"]) <= set(self.party)
+                and spec["members"][0] in self.party,
+                "Invalid R53 encounter combo contract")
+            self.combo_specs[spec["id"]] = deepcopy(spec)
+        self._combo_skip = set()
         self.actors = {}
         for uid in (*party, *config["enemies"]):
             template = (heroes if uid in party else enemies)[uid]
@@ -149,6 +163,9 @@ class ClassicEncounter:
             if actor["hp"] > 0:
                 # Guard absorbs hits until this actor acts again.
                 actor["guard"] = False
+                if actor["id"] in self._combo_skip:
+                    self._combo_skip.remove(actor["id"])
+                    continue
                 return
         require(False, "R41 turn order has no living actors")
 
@@ -159,6 +176,50 @@ class ClassicEncounter:
         if target["guard"]:
             amount = max(1, (amount + 1) // 2)
         target["hp"] = max(0, target["hp"] - amount)
+
+    def _apply_skill(self, actor, target, skill_id):
+        """Use the exact existing R41 damage/healing resolution for combos."""
+        require(type(skill_id) is str and skill_id in actor["skills"]
+                and skill_id in self.skills, "Unavailable RPG_TURN skill")
+        skill = self.skills[skill_id]
+        require(0 <= skill.cost <= actor["mp"], "Insufficient MP")
+        require(skill.effects and all(
+            effect.kind in ("damage", "heal") for effect in skill.effects),
+            "Unsupported R41 skill effect (requires R43)")
+        ally = skill.target in ("ally", "self")
+        require(skill.target in ("ally", "self", "enemy")
+                and (actor["team"] == target["team"]) == ally
+                and (skill.target != "self" or target is actor)
+                and target["hp"] > 0,
+                "Invalid RPG_TURN skill target")
+        actor["mp"] -= skill.cost
+        for effect in skill.effects:
+            if effect.kind == "damage":
+                require(not ally, "Healing targets cannot receive damage spells")
+                self._hit(actor, target, effect.power, magical=skill.magical)
+            else:
+                require(ally, "Enemy-target spells cannot heal allies")
+                target["hp"] = min(target["max_hp"],
+                                   target["hp"] + max(0, effect.power))
+
+    def available_combos(self):
+        """Only executable now: current initiator plus living, ready helpers."""
+        if self.result:
+            return []
+        current = self._current()["id"]
+        available = []
+        for ident, spec in sorted(self.combo_specs.items()):
+            if spec["members"][0] != current:
+                continue
+            if all(hero in self.actors
+                   and self.actors[hero]["hp"] > 0
+                   and hero not in self._combo_skip
+                   and spec["skills"][hero] in self.actors[hero]["skills"]
+                   and self.skills[spec["skills"][hero]].cost
+                       <= self.actors[hero]["mp"]
+                   for hero in spec["members"]):
+                available.append(ident)
+        return available
 
     def _act(self, command, *, enemy=False):
         require(type(command) is dict and type(command.get("kind")) is str,
@@ -187,31 +248,39 @@ class ClassicEncounter:
                         "Attack requires a live enemy")
                 self._hit(actor, target)
             elif kind == "skill":
-                require(set(command) == {"kind", "actor", "target", "skill"}
-                        and type(command.get("skill")) is str
-                        and command["skill"] in actor["skills"]
-                        and command["skill"] in self.skills,
-                        "Unavailable RPG_TURN skill")
-                skill = self.skills[command["skill"]]
-                require(0 <= skill.cost <= actor["mp"], "Insufficient MP")
-                require(skill.effects and all(
-                    e.kind in ("damage", "heal") for e in skill.effects),
-                    "Unsupported R41 skill effect (requires R43)")
-                ally = skill.target in ("ally", "self")
-                require(skill.target in ("ally", "self", "enemy")
-                        and (actor["team"] == target["team"]) == ally
-                        and (skill.target != "self" or target is actor)
-                        and target["hp"] > 0,
-                        "Invalid RPG_TURN skill target")
-                actor["mp"] -= skill.cost
-                for effect in skill.effects:
-                    if effect.kind == "damage":
-                        require(not ally, "Healing targets cannot receive damage spells")
-                        self._hit(actor, target, effect.power, magical=skill.magical)
+                require(set(command) == {"kind", "actor", "target", "skill"},
+                        "Invalid RPG_TURN skill command")
+                self._apply_skill(actor, target, command["skill"])
+            elif kind == "combo":
+                require(not enemy
+                        and set(command) == {"kind", "actor", "target", "combo"}
+                        and type(command["combo"]) is str
+                        and command["combo"] in self.available_combos()
+                        and target["team"] == "enemy" and target["hp"] > 0,
+                        "R53 combo not available on this actor's turn")
+                spec = self.combo_specs[command["combo"]]
+                # Preflight all costs and effects before changing any participant.
+                for uid in spec["members"]:
+                    performer = self.actors[uid]
+                    native = self.skills[spec["skills"][uid]]
+                    require(performer["hp"] > 0
+                            and native.target == "enemy"
+                            and bool(native.effects)
+                            and all(e.kind == "damage" for e in native.effects)
+                            and 0 <= native.cost <= performer["mp"],
+                            "R53 combo requires living heroes and supported native skills")
+                for uid in spec["members"]:
+                    performer = self.actors[uid]
+                    native_skill = spec["skills"][uid]
+                    if target["hp"] > 0:
+                        self._apply_skill(performer, target, native_skill)
                     else:
-                        require(ally, "Enemy-target spells cannot heal allies")
-                        target["hp"] = min(target["max_hp"],
-                                           target["hp"] + max(0, effect.power))
+                        # A previous participant finished the target. The
+                        # remaining committed helpers still pay their MP cost;
+                        # never re-target or resurrect a defeated enemy.
+                        performer["mp"] -= self.skills[native_skill].cost
+                # Helpers contribute this activation and skip their next turn.
+                self._combo_skip.update(spec["members"][1:])
             elif kind == "item":
                 require(not enemy
                         and set(command) == {"kind", "actor", "target", "item"}
@@ -250,11 +319,15 @@ class ClassicEncounter:
         return self.view()
 
     def view(self):
-        return {"id": self.id, "scene": self.scene, "round": self.round,
+        view = {"id": self.id, "scene": self.scene, "round": self.round,
                 "active": None if self.result else self._current()["id"],
                 "order": list(self.order), "result": self.result,
                 "actors": deepcopy(list(self.actors.values())),
                 "inventory": deepcopy(self.inventory)}
+        if self.combo_specs:
+            view["combos"] = self.available_combos()
+            view["combo_skip"] = sorted(self._combo_skip)
+        return view
 
     def recording(self):
         return {"version": VERSION, "id": self.id,
@@ -265,7 +338,7 @@ class ClassicEncounter:
 
     @classmethod
     def replay(cls, recording, *, encounter_id, config, party, content,
-               hero_progress=None):
+               hero_progress=None, combo_specs=None):
         require(type(recording) is dict
                 and set(recording) == {"version", "id", "party",
                                        "start_inventory", "commands", "view"}
@@ -277,7 +350,8 @@ class ClassicEncounter:
                 and len(recording["commands"]) <= MAX_COMMANDS,
                 "Malformed RPG_TURN encounter checkpoint")
         result = cls(encounter_id, config, party, content,
-                     recording["start_inventory"], hero_progress=hero_progress)
+                     recording["start_inventory"], hero_progress=hero_progress,
+                     combo_specs=combo_specs)
         for action in recording["commands"]:
             result.command(action)
         require(result.recording() == recording,

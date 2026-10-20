@@ -203,6 +203,21 @@ class Simulation:
             return None
         return freeze(self._session.party_state())
 
+    def party_hybrid_state(self, *, expected_revision=None):
+        """Read detached R53 routed party status; no extra mutable authority."""
+        self._check_revision(expected_revision, "party_hybrid_state")
+        if self._session._party_orchestration is None or not self._session.scene_router.enabled:
+            return None
+        return freeze(self._session.party_hybrid_state())
+
+    def party_switch_leader(self, hero_id, *, expected_revision=None):
+        return self._apply("party_switch_leader", hero_id,
+                           expected_revision=expected_revision)
+
+    def party_set_formation(self, slots, *, expected_revision=None):
+        return self._apply("party_set_formation", slots,
+                           expected_revision=expected_revision)
+
     def party_recruit(self, hero_id, *, expected_revision=None):
         """R41 session-owned transactional recruitment with revision guard."""
         return self._apply("party_recruit", hero_id,

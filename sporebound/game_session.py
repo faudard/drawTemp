@@ -97,6 +97,13 @@ class GameSession:
         config = (party["data"]["campaigns"].get(campaign_id)
                   if party is not None else None)
         self._classic_party = ClassicParty(config) if config is not None else None
+        from .party_orchestration import PartyOrchestration
+        orchestration = (party["data"].get("orchestration")
+                         if config is not None else None)
+        self._party_orchestration = (PartyOrchestration(orchestration, config,
+                                                             campaign_id=campaign_id,
+                                                             campaigns=party["data"]["campaigns"])
+                                     if orchestration is not None else None)
         # Only initial new-game construction seeds these items. Loaded saves
         # replace Campaign through verified replay, never replenish stock.
         if config is not None:
@@ -266,8 +273,85 @@ class GameSession:
         self._party_edit_allowed()
         candidate = deepcopy(self._classic_party)
         candidate.set_active(hero_ids)
-        self._classic_party = candidate
+        orchestration = (deepcopy(self._party_orchestration)
+                         if self._party_orchestration is not None else None)
+        if orchestration is not None:
+            orchestration.activate(candidate.active)
+        self._classic_party, self._party_orchestration = candidate, orchestration
         return self.party_state()
+
+    def party_orchestration_state(self, *, combat="RPG_TURN"):
+        """Detached leader/formation and available cooperative capability IDs."""
+        require(self._party_orchestration is not None,
+                "R53 orchestration is not configured")
+        state = self._party_orchestration.snapshot()
+        state["eligible_combos"] = self._party_orchestration.eligible_combos(combat)
+        state["pause_policy"] = self._party_orchestration.pause_policy
+        return state
+
+    def party_hybrid_state(self):
+        """R53.C: read-only cross-mode projection from three canonical owners.
+
+        Campaign has no persistent per-hero HP/MP. Such values are reported
+        only during an actual RPG or CT encounter; never synthesize them on
+        exploration or pretend they survived a mode transition.
+        """
+        require(self._party_orchestration is not None and self.scene_router.enabled,
+                "R53 hybrid view needs routed party orchestration")
+        mode = self.mode
+        require(mode in ("campaign", "rpg", "battle"),
+                "R53 hybrid projection does not support multi-front battles")
+        authored = self._party_orchestration.snapshot()
+        if mode == "rpg":
+            live = {a["id"]: a for a in self._rpg_encounter.view()["actors"]
+                    if a["team"] == "party"}
+            phase = "RPG_TURN"
+        elif mode == "battle":
+            live = {u.id: u for u in self.battle.units if u.team == "player"}
+            phase = "TACTICAL_CT"
+        else:
+            live = {}
+            phase = ("EXPLORATION" if self.route_scene in self.project.exploration
+                     else "ROUTE_TRANSIT")
+        rows = []
+        for uid, slot in zip(authored["active"], authored["formation"]):
+            actor = live.get(uid)
+            rows.append({
+                "id": uid, "leader": uid == authored["leader"],
+                "formation": slot,
+                "xp": self.progress.heroes[uid].xp,
+                "hp": actor["hp"] if mode == "rpg" and actor is not None
+                      else actor.hp if actor is not None else None,
+                "mp": actor["mp"] if mode == "rpg" and actor is not None
+                      else actor.mp if actor is not None else None,
+                "vitals_source": phase if actor is not None else "unavailable",
+            })
+        return {
+            "phase": phase, "scene": self.route_scene,
+            "history": list(self.route_history),
+            "members": rows,
+            "campaign_inventory": deepcopy(self.progress.inventory),
+            "campaign_gold": self.progress.gold,
+            "party_pause_policy": self._party_orchestration.pause_policy,
+            "active_combos": (self._rpg_encounter.available_combos()
+                              if mode == "rpg" else []),
+        }
+
+    def party_switch_leader(self, hero_id):
+        self._party_edit_allowed()
+        require(self._party_orchestration is not None, "R53 orchestration disabled")
+        candidate = deepcopy(self._party_orchestration)
+        candidate.switch_leader(hero_id)
+        self._party_orchestration = candidate
+        return self.party_orchestration_state()
+
+    def party_set_formation(self, slots):
+        self._party_edit_allowed()
+        require(self._party_orchestration is not None, "R53 orchestration disabled")
+        candidate = deepcopy(self._party_orchestration)
+        candidate.set_formation(slots)
+        self._party_orchestration = candidate
+        return self.party_orchestration_state()
 
     def rpg_available(self):
         """Discover only eligible, authored RPG encounters (no implicit routing)."""
@@ -302,7 +386,9 @@ class GameSession:
         candidate = ClassicEncounter(
             encounter_id, config, self._classic_party.active,
             self.content, self.progress.inventory,
-            hero_progress=self.progress.heroes)
+            hero_progress=self.progress.heroes,
+            combo_specs=(self._party_orchestration.rpg_combo_specs()
+                         if self._party_orchestration is not None else None))
         self._rpg_encounter = candidate
         return self.rpg_state()
 
@@ -1818,6 +1904,10 @@ class GameSession:
             data["living_world"] = self._living_world.snapshot()
         if self._classic_party is not None:
             data["classic_party"] = self._classic_party.snapshot()
+        if self._party_orchestration is not None:
+            require(self._party_orchestration.active == self._classic_party.active,
+                    "R53 active group differs from R41 active roster")
+            data["party_orchestration"] = self._party_orchestration.snapshot()
         if self._rpg_encounter is not None:
             require(self.progress.inventory == self._rpg_encounter.inventory,
                     "R41 checkpoint inventory diverges from canonical Campaign")
@@ -1856,7 +1946,7 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"classic_party", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
+        require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
                              "scene_realtime", "scene_platform", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
@@ -1923,6 +2013,14 @@ class GameSession:
             session._classic_party.restore(data["classic_party"])
             require(set(session._classic_party.members) <= set(session.progress.heroes),
                     "Party recruitment has no canonical HeroProgress")
+        if session._party_orchestration is None:
+            require("party_orchestration" not in data,
+                    "Unexpected R53 state in unconfigured GameSession")
+        else:
+            require("party_orchestration" in data,
+                    "Missing R53 state from enabled GameSession")
+            session._party_orchestration.restore(
+                data["party_orchestration"], session._classic_party)
         if session._systems is not None:
             require(all(session.progress.story_flags.get(
                 session._systems.quests[quest_id]["flag"]) is True
@@ -1961,7 +2059,9 @@ class GameSession:
                 data["rpg_encounter"], encounter_id=encounter_id,
                 config=spec, party=session._classic_party.active,
                 content=session.content,
-                hero_progress=session.progress.heroes)
+                hero_progress=session.progress.heroes,
+                combo_specs=(session._party_orchestration.rpg_combo_specs()
+                             if session._party_orchestration is not None else None))
             require(session._rpg_encounter.inventory == session.progress.inventory,
                     "R41 replay inventory disagrees with canonical Campaign")
         else:

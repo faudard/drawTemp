@@ -380,6 +380,10 @@ def create_bridge(controller, renderer):
             self.invoke(self.controller.claim_rpg_quest)
 
         @Slot(str)
+        def switchPartyLeader(self, hero_id):
+            self.invoke(self.controller.switch_party_leader, hero_id)
+
+        @Slot(str)
         def togglePartyMember(self, hero_id):
             """R41.B1: same canonical Simulation transaction as headless Player."""
             self.invoke(self.controller.toggle_party_member, hero_id)

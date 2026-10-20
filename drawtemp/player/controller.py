@@ -213,6 +213,15 @@ class PlayerController:
         self.session.party_set_active(selected, expected_revision=state.revision)
         return self._changed()
 
+    def switch_party_leader(self, hero_id):
+        """R53 campaign-only leader switch with R1 revision and autosave."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Leader changes require idle exploration")
+        self.session.party_switch_leader(hero_id,
+                                         expected_revision=state.revision)
+        return self._changed()
+
     def recruit_party_member(self, hero_id):
         """Add a recruitable hero through GameSession, never a UI-only roster."""
         state = self._current()
@@ -242,10 +251,12 @@ class PlayerController:
         if view["result"]:
             raise ValueError("Encounter already finished")
         action = {"kind": kind, "actor": view["active"]}
-        if kind in ("attack", "item", "skill"):
+        if kind in ("attack", "item", "skill", "combo"):
             action["target"] = target
         if kind == "skill":
             action["skill"] = skill
+        if kind == "combo":
+            action["combo"] = skill
         if kind == "item":
             action["item"] = "potion"
         self.session.rpg_action(action, expected_revision=state.revision)
@@ -869,6 +880,9 @@ class PlayerController:
         base["missions"] = list(snapshot.missions)
         base["rpg_available"] = list(self.session.rpg_available(
             expected_revision=snapshot.revision))
+        hybrid = self.session.party_hybrid_state(
+            expected_revision=snapshot.revision)
+        base["r53_hybrid"] = thaw(hybrid) if hybrid is not None else {}
         base["route_links"] = list(thaw(self.session.route_destinations(
             expected_revision=snapshot.revision)))
         quest = self.session.rpg_quest_state(expected_revision=snapshot.revision)

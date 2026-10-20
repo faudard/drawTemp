@@ -490,6 +490,7 @@ class StudioWindow(QMainWindow):
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
+        self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
         self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
         self._action("r44_atlas", "R44 • World Atlas 2.0…", self.open_world_atlas)
         self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
@@ -579,6 +580,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r41_party"])
+        tools_menu.addAction(self.commands["r53_composer"])
         tools_menu.addAction(self.commands["r41_encounter"])
         tools_menu.addAction(self.commands["r44_atlas"])
         tools_menu.addAction(self.commands["r37_ai"])
@@ -825,6 +827,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.party_qt import PartyStudioDialog
         revision = self.session.revision
         dialog = PartyStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_r53_composer(self):
+        """R53.B reuses the single R1 Studio authoring transaction/history."""
+        from drawtemp.studio.party_orchestration_qt import R53PartyComposerDialog
+        revision = self.session.revision
+        dialog = R53PartyComposerDialog(self.session, parent=self)
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != revision:
@@ -2109,7 +2121,9 @@ class StudioWindow(QMainWindow):
             return False
         from drawtemp.export.templates import TEMPLATES
         labels = [("R41 • RPG classique — Le relais du village"
-                   if key == "classic_rpg" else key) for key in TEMPLATES]
+                   if key == "classic_rpg" else
+                   "R53 • Hybride RPG / tactique CT — Le relais"
+                   if key == "hybrid_r53" else key) for key in TEMPLATES]
         selected, accepted = QInputDialog.getItem(
             self, "Nouveau projet", "Modèle", labels, 0, False)
         if not accepted:

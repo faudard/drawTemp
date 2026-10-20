@@ -760,10 +760,12 @@ ApplicationWindow {
                 if (root.inputLocked || root.playerData.rpg.result) return
                 var kind = r41Action.currentValue || "attack"
                 if (kind === "skill" && !r41Skill.currentText) return
+                if (kind === "combo" && r53Combo.count === 0) return
                 if (kind === "item" && !(root.playerData.rpg.inventory.potion > 0)) return
                 if (kind !== "guard" && kind !== "flee" && r41Target.count === 0) return
                 player.rpgAction(kind, r41Target.currentValue || "",
-                                 kind === "skill" ? r41Skill.currentText : "")
+                                 kind === "skill" ? r41Skill.currentText :
+                                 (kind === "combo" ? r53Combo.currentText : ""))
             }
             function cycleTarget(delta) {
                 if (r41Target.count > 0)
@@ -796,6 +798,13 @@ ApplicationWindow {
                 sequence: "F"
                 enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
                 onActivated: r41Action.currentIndex = 4
+            }
+            Shortcut {
+                sequence: "C"
+                enabled: rpgBattle.visible && !root.inputLocked &&
+                         !root.playerData.rpg.result &&
+                         (root.playerData.rpg.combos || []).length > 0
+                onActivated: r41Action.currentIndex = 5
             }
             Shortcut {
                 sequence: "Ctrl+Left"
@@ -861,7 +870,8 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Action : A attaque · G garde · S compétence · I potion · F fuite"
+                text: "Action : A attaque · G garde · S compétence · I potion · F fuite" +
+                      ((root.playerData.rpg.combos || []).length ? " · C combo" : "")
                 color: root.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -877,7 +887,9 @@ ApplicationWindow {
                     { "label": "Compétence", "kind": "skill" },
                     { "label": "Potion", "kind": "item" },
                     { "label": "Fuir", "kind": "flee" }
-                ]
+                ].concat((root.playerData.rpg.combos || []).length ? [
+                    { "label": "Combo coopératif", "kind": "combo" }
+                ] : [])
                 textRole: "label"
                 valueRole: "kind"
                 enabled: !root.playerData.rpg.result
@@ -895,6 +907,28 @@ ApplicationWindow {
                 visible: r41Action.currentValue === "skill"
                 enabled: !root.playerData.rpg.result && count > 0
                 Accessible.name: "Compétence du héros actif"
+            }
+            Label {
+                text: "Combo coopératif · plusieurs héros dépensent leurs PM"
+                color: root.muted
+                wrapMode: Text.WordWrap
+                visible: r41Action.currentValue === "combo"
+            }
+            ComboBox {
+                id: r53Combo
+                objectName: "r53-rpg-combo-picker"
+                Layout.fillWidth: true
+                model: root.playerData.rpg.combos || []
+                visible: r41Action.currentValue === "combo"
+                enabled: !root.playerData.rpg.result && count > 0
+                Accessible.name: "Combo coopératif exécutable au tour actuel"
+            }
+            Label {
+                text: "Partenaires en récupération : " +
+                      (root.playerData.rpg.combo_skip || []).join(", ")
+                color: root.muted
+                visible: (root.playerData.rpg.combo_skip || []).length > 0
+                Layout.fillWidth: true
             }
             Label {
                 text: "Cible · Ctrl+← / Ctrl+→ pour changer"
@@ -920,6 +954,7 @@ ApplicationWindow {
                          (r41Action.currentValue === "guard" ||
                           r41Action.currentValue === "flee" ||
                           (r41Target.count > 0 &&
+                           (r41Action.currentValue !== "combo" || r53Combo.count > 0) &&
                            (r41Action.currentValue !== "item" ||
                             root.playerData.rpg.inventory.potion > 0)))
                 onClicked: rpgBattle.submit()
@@ -1128,6 +1163,27 @@ ApplicationWindow {
                                 font.bold: true
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
+                            }
+                            Label {
+                                visible: ((root.playerData.r53_hybrid || {}).members || []).length > 0
+                                text: "R53 · Leader et formation"
+                                color: root.gold
+                                Accessible.description: text
+                            }
+                            Repeater {
+                                model: (root.playerData.r53_hybrid || {}).members || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r53-leader-" + modelData.id
+                                    text: (modelData.leader ? "★ Leader · " :
+                                           "Choisir comme leader · ") + modelData.id +
+                                          " · " + modelData.formation
+                                    enabled: !root.inputLocked && !modelData.leader
+                                    Accessible.name: modelData.leader ?
+                                        "Leader actuel " + modelData.id :
+                                        "Désigner " + modelData.id + " comme leader"
+                                    onClicked: player.switchPartyLeader(modelData.id)
+                                }
                             }
                             Repeater {
                                 model: root.playerData.party.recruitable || []
