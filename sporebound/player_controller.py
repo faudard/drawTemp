@@ -218,6 +218,36 @@ class PlayerController:
     def explore_wait(self):
         return self._apply(self.session.explore_wait)
 
+    def route_realtime_state(self):
+        """Read-only routed free-movement view; no implicit state mutation."""
+        require(self.session is not None, "No campaign loaded")
+        return self.session.route_realtime_state()
+
+    def route_realtime_step(self, dx=0, dy=0):
+        """Commit one deterministic R25 exploration tick to the Player slot."""
+        return self._apply(self.session.route_realtime_step, dx, dy)
+
+    def route_transition(self, link_id):
+        """Commit R25 scene navigation, including real CT start, as one intent."""
+        return self._apply(self.session.route_transition, link_id)
+
+    def route_action_state(self):
+        """Read-only R26 action-combat state on a routed authored scene."""
+        require(self.session is not None, "No campaign loaded")
+        return self.session.route_action_state()
+
+    def route_action_step(self, command):
+        """Persist one R26 combat tick into the canonical Player checkpoint."""
+        return self._apply(self.session.route_action_step, command)
+
+    def route_action_settle(self, link_id):
+        """Commit replay-proven R26 rewards and its route in one Player slot."""
+        return self._apply(self.session.route_action_settle, link_id)
+
+    def route_abandon_ct(self, link_id):
+        """Abandon active CT and return to exploration as one saved command."""
+        return self._apply(self.session.route_abandon_ct, link_id)
+
     def explore_actor(self, actor_id, action):
         return self._apply(self.session.explore_actor, actor_id, action)
 

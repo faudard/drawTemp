@@ -102,7 +102,14 @@ Item {
             }
             Rectangle {
                 anchors.fill: parent
-                visible: projected.actor
+                visible: projected.tile && row.lightShade !== undefined
+                color: "#07121b"
+                opacity: row.lightShade === undefined ? 0 : row.lightShade
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: projected.actor && !(spriteLoader.item &&
+                                               spriteLoader.item.status === Image.Ready)
                 radius: width / 2
                 color: row.alive ? (row.team === "player" ? "#f1ca75" : "#d06561")
                                  : "#685558"
@@ -117,6 +124,41 @@ Item {
                     font.pixelSize: Math.max(10, 20 * projected.unit)
                     text: row.team === "player" ? "★" : "●"
                 }
+            }
+            // R36.C1: the exact same R4/R3 PNG atlas crop contract used by
+            // IsoViewport. The animation frame comes from committed ticks.
+            // Keep the old silhouette when art is missing or decoder fails.
+            // Do not create an Image texture loader for every terrain tile.
+            // Only actor delegates that have validated R28 art instantiate it.
+            Loader {
+                id: spriteLoader
+                active: projected.actor && !!row.imageUrl
+                sourceComponent: Component {
+                    Image {
+                        readonly property real spriteScale: Math.min(
+                            1.5, 64 / Math.max(1, row.frameWidth || 0, row.frameHeight || 0))
+                        source: row.imageUrl
+                        sourceClipRect: Qt.rect(row.atlasX, row.atlasY,
+                                                row.frameWidth, row.frameHeight)
+                        width: row.frameWidth * projected.unit * spriteScale
+                        height: row.frameHeight * projected.unit * spriteScale
+                        x: projected.width / 2 - row.pivotX * projected.unit * spriteScale
+                        y: projected.height / 2 - row.pivotY * projected.unit * spriteScale
+                        fillMode: Image.Stretch
+                        smooth: false
+                        asynchronous: false
+                        cache: true
+                    }
+                }
+            }
+            // Pose label stays visible whether the actor has artwork or not.
+            Text {
+                visible: projected.actor && !!row.animationState
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: projected.height + 2 * projected.unit
+                text: row.animationState || ""
+                color: "#fff4cf"
+                font.pixelSize: Math.max(8, 10 * projected.unit)
             }
             Rectangle {
                 anchors.fill: parent

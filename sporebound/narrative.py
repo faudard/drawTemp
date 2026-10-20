@@ -98,6 +98,11 @@ def _effect(effect, content):
 def validate_story(raw, content, campaigns):
     """Strict authoring validation, no mutation and no unbounded scene chains."""
     require(isinstance(raw, dict), 'Story must be an object')
+    if raw.get('schema_version') == 2:
+        # R42.A annotations are opt-in; the R9 projection remains the only
+        # condition/effect evaluator and all historical story digests survive.
+        from .narrative_r42 import validate_story_v2
+        return validate_story_v2(raw, content, campaigns)
     if not raw:
         require(not any(event.get('after_choice')
                         for mission in content.missions.values()
@@ -269,9 +274,26 @@ class StoryBook:
     def initialize(self, progress, campaign_id):
         if progress.story_started:
             require(progress.story_digest == self.digest, 'Story definition differs from saved campaign')
+            if self.raw.get('schema_version') == 2:
+                from .narrative_state_r42 import verify_state
+                from .narrative_playback_r42 import validate_cursor
+                verify_state(self.raw, progress)
+                validate_cursor(progress)
             return
         require(not progress.story_digest or progress.story_digest == self.digest,
                 'Story definition differs from saved campaign')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_state_r42 import initialize_state
+            from .narrative_playback_r42 import initialize_cursor
+            # Both initializers act on a disposable progress object on normal
+            # new-game paths. Preflight reserved cursor collision first.
+            from .narrative_playback_r42 import CURSOR
+            require(CURSOR not in progress.story_flags,
+                    'R42 cursor collides with a pre-existing flag')
+            require(len(progress.story_flags) + len(self.raw.get('state', [])) + 1 <= 1000,
+                    'R42 state and cursor exceed Campaign flag budget')
+            initialize_state(self.raw, progress)
+            initialize_cursor(progress)
         progress.story_started = True
         progress.story_digest = self.digest
         # A legacy saved campaign with finished missions does not restart an intro.
@@ -303,6 +325,10 @@ class StoryBook:
         """Apply one validated choice to a copy; no partial story mutations."""
         scene = self.active_scene(progress)
         require(scene is not None, 'No active story scene')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_playback_r42 import current_line
+            require(current_line(progress, scene)['complete'],
+                    'Read all dialogue lines before choosing')
         selected = next((c for c in self.choices(progress) if c['id'] == choice_id), None)
         require(selected is not None, 'Choice is unavailable')
         updated = deepcopy(progress)
@@ -346,4 +372,9 @@ class StoryBook:
         updated.story_history.append({'scene': scene['id'], 'choice': selected['id']})
         require(len(updated.story_history) <= 10000, 'Too many narrative decisions')
         updated.story_pending = selected.get('next_scene', '')
+        if self.raw.get('schema_version') == 2:
+            from .narrative_state_r42 import verify_state
+            from .narrative_playback_r42 import reset_cursor
+            verify_state(self.raw, updated)
+            reset_cursor(updated)
         return updated

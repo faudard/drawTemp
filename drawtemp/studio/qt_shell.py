@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
     QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -487,8 +487,17 @@ class StudioWindow(QMainWindow):
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
+        self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
+        self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
+        self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
+        self._action("r44_atlas", "R44 • World Atlas 2.0…", self.open_world_atlas)
+        self._action("r37_ai", "Advanced AI Studio R37…", self.open_behavior_trees)
+        self._action("r37_sensor", "Perception & Navigation R37.D…", self.open_ai_sensors)
+        self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
+        self._action("r37_boss", "Boss & AI Director R37.E…", self.open_ai_bosses)
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
@@ -565,12 +574,21 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["r42_narrative"])
         tools_menu.addAction(self.commands["global_search"])
         tools_menu.addAction(self.commands["r38_prefabs"])
         tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r41_party"])
+        tools_menu.addAction(self.commands["r53_composer"])
+        tools_menu.addAction(self.commands["r41_encounter"])
+        tools_menu.addAction(self.commands["r44_atlas"])
+        tools_menu.addAction(self.commands["r37_ai"])
+        tools_menu.addAction(self.commands["r37_sensor"])
+        tools_menu.addAction(self.commands["r37_squad"])
+        tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -740,6 +758,46 @@ class StudioWindow(QMainWindow):
         if self.session.revision != revision:
             self.refresh()
 
+    def open_ai_bosses(self):
+        """R37.E boss phase presentation over existing Content R8 triggers."""
+        from drawtemp.studio.ai_boss_qt import BossDirectorDialog
+        revision = self.session.revision
+        dialog = BossDirectorDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_ai_squads(self):
+        """R37.D3 role and radio assignment, with the canonical R1 history."""
+        from drawtemp.studio.ai_squad_qt import AISquadDialog
+        initial = self.session.revision
+        dialog = AISquadDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial:
+            self.refresh()
+
+    def open_ai_sensors(self):
+        """R37.D sensor design uses the canonical R1 editor history."""
+        from drawtemp.studio.ai_sensor_qt import AISensorDialog
+        initial = self.session.revision
+        dialog = AISensorDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial:
+            self.refresh()
+
+    def open_behavior_trees(self):
+        """R37.C tree editor uses the existing R1 authoring history."""
+        from drawtemp.studio.ai_tree_qt import BehaviorTreeDialog
+        original = self.session.revision
+        dialog = BehaviorTreeDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != original:
+            self.refresh()
+
     def open_living_world(self):
         """R35 world schedules: use the one authoritative R1 editor history."""
         from drawtemp.studio.living_world_qt import LivingWorldDialog
@@ -754,6 +812,44 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.living_economy_qt import LivingEconomyDialog
         revision = self.session.revision
         dialog = LivingEconomyDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_world_atlas(self):
+        """R44.B region and portal editor; shared R1 history and save."""
+        from drawtemp.studio.world_atlas_qt import WorldAtlasDialog
+        prior = self.session.revision
+        WorldAtlasDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_party_studio(self):
+        """R41.B uses the same canonical authoring history as every workspace."""
+        from drawtemp.studio.party_qt import PartyStudioDialog
+        revision = self.session.revision
+        dialog = PartyStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_r53_composer(self):
+        """R53.B reuses the single R1 Studio authoring transaction/history."""
+        from drawtemp.studio.party_orchestration_qt import R53PartyComposerDialog
+        revision = self.session.revision
+        dialog = R53PartyComposerDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_encounter_studio(self):
+        """R41.B2 shares the original R1 transactional Studio state."""
+        from drawtemp.studio.encounter_qt import EncounterStudioDialog
+        revision = self.session.revision
+        dialog = EncounterStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
@@ -794,6 +890,16 @@ class StudioWindow(QMainWindow):
         lines.append("Aucune collecte externe ; données non persistées. "
                      "Ne remplace pas les tests hardware/UX.")
         QMessageBox.information(self, "R49 • Mesures UX locales", "\n".join(lines))
+
+    def open_narrative_studio(self):
+        """R42.B: canonical narrative editor bound to this Studio session."""
+        from drawtemp.studio.narrative_qt_r42 import NarrativeStudioDialog
+        prior = self.session.revision
+        dialog = NarrativeStudioDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != prior:
+            self.refresh()
 
     def open_exploration_lab(self):
         """Read-only R77.B R26 scene explorer; no AuthoringSession edits."""
@@ -1472,8 +1578,14 @@ class StudioWindow(QMainWindow):
             return
         if identifier == "minigames":
             from drawtemp.studio.r28e_minigames_qt import MiniGameGallery
-            child = MiniGameGallery()
-            child.openRequested.connect(self.open_path)
+            from drawtemp.studio.r50b_catalog_qt import R50CatalogWidget
+            child = QTabWidget()
+            historical = MiniGameGallery()
+            historical.openRequested.connect(self.open_path)
+            child.addTab(historical, "Mini-jeux R28")
+            creator_catalog = R50CatalogWidget()
+            creator_catalog.openRequested.connect(self.open_path)
+            child.addTab(creator_catalog, "Catalogue R50 (NO-GO)")
         elif identifier == "profiles":
             from drawtemp.studio.profile_editor_qt import ProfileEditorWidget
             child = ProfileEditorWidget(self.session)
@@ -2027,10 +2139,15 @@ class StudioWindow(QMainWindow):
         if self._r49_playtest.active:
             return False
         from drawtemp.export.templates import TEMPLATES
-        kind, accepted = QInputDialog.getItem(
-            self, "Nouveau projet", "Modèle", list(TEMPLATES), 0, False)
+        labels = [("R41 • RPG classique — Le relais du village"
+                   if key == "classic_rpg" else
+                   "R53 • Hybride RPG / tactique CT — Le relais"
+                   if key == "hybrid_r53" else key) for key in TEMPLATES]
+        selected, accepted = QInputDialog.getItem(
+            self, "Nouveau projet", "Modèle", labels, 0, False)
         if not accepted:
             return
+        kind = selected if selected in TEMPLATES else TEMPLATES[labels.index(selected)]
         parent = QFileDialog.getExistingDirectory(
             self, "Dossier parent du projet")
         if not parent:
