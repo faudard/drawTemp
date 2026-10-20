@@ -1,6 +1,6 @@
-# R74.A–C2 — Assisted dungeon proposals, Qt review and spatial R34/R5 parity
+# R74.A–C3 — Assisted dungeons, spatial topology and tactical Player validation
 
-**Status: R74.A–B plus an incremental R74.C1 implementation on the feature branch; CI, physical Player walkthrough and clean-machine export not yet certified.**
+**Status: R74.A–C2 plus R74.C3 headless Player validation on the feature branch; tests have not been confirmed by a running CI job, and native release is NOT certified.**
 
 This increment composes the existing R34 deterministic room-graph solver and
 prefab matcher with the existing R34.C authoring transaction; it **does not**
@@ -223,14 +223,92 @@ python -m unittest tests_standalone.test_drawtemp_r74_spatial_dungeons -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r74_assist_qt -v
 ```
 
+## R74.C3 — Three real tactical dungeon playthroughs and export preflight
+
+After creating three R34 proposals, choose **R74.C3 • Tester 3 donjons
+Player**. This opt-in operation first prepares the entire R74.C2 spatial
+trilogy in an isolated canonical authoring session. It then:
+
+1. Checks every R34 encounter allocation before creating **real tactical
+   enemy units** on the corresponding R5 room grid. Supported scope is
+   **1..6 enemy units per mission, at most 2 per room**. Zero cannot be
+   advertised as faithful: canonical R1 requires at least one enemy, so
+   the operation refuses instead of silently adding a guardian. Excess
+   budgets fail closed instead of being truncated.
+2. Checks that each R34 room with loot has a canonical R27 **chest**
+   with `25 × room.loot` gold, and that every materialized chest
+   corresponds to a genuine source room. The evidence lists actual units,
+   spawn coordinates, chest economy and source seeds.
+3. Replays the physical R27 key/door/goal/exit witness as **real
+   GameSession tactical commands**, without teleporting, skipping CT,
+   bypassing collisions, or fabricating mission victories. It groups
+   consecutive witness walk steps only when the canonical Battle says
+   the destination is currently reachable, interleaves legitimate enemy
+   activations and requires victory for **all three** linked missions.
+   `GameSession.recording` and `from_recording` are compared after each
+   stage to prove canonical replay of campaign progress.
+4. Saves a **disposable temporary pair** of generated Content/Project
+   documents and runs R15 `preflight(require_licenses=True)`. The
+   temporary files are removed automatically; the user's current project
+   and disk files remain untouched. A failed preflight blocks application.
+5. Presents GameSession reports, seed/provenance, encountered unit counts
+   and R15 diagnostics in the Qt dialog. **Créer 3 donjons testés…** uses
+   a separate **default-No confirmation**. Successful consent applies one
+   canonical, Undo/Redo-compatible authoring transaction. The Studio
+   still requires an explicit disk save.
+
+Headless API:
+
+```python
+from drawtemp.studio.r74_player_validation import (
+    prepare_r74_player_candidate, apply_r74_player_candidate,
+)
+
+review = prepare_r74_player_candidate(assistant, suggestions, prefix="r74p")
+assert review.gameplay["completed"]   # reached after REAL tactical victories
+assert review.export_preflight["passed"]
+print(review.to_dict()["gameplay"]["stages"])
+# Only after the author approves:
+transition = apply_r74_player_candidate(assistant, review)
+```
+
+### Verification and certification limits
+
+The tests are intended to exercise `GameSession` (true engine commands),
+save/open, R15 strict rights/content preflight and fail-closed native
+export in the absence of executable/release evidence:
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r74_player_validation -v
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r74_assist_qt -v
+```
+
+**None of these statements replace successfully executed test results**.
+An R15 preflight is **not** a native release package. R74.C3 never creates
+a fake Player binary, reports `native_player_export_certified=false`,
+and does not imply that Qt GUI, rendering, GPU, visual goldens, physical
+hardware or clean-machine native builds were validated. On an unsupported
+or failing deterministic encounter, the generator returns an explicit error
+rather than silently certifying gameplay. Source asset usage remains subject
+to real licensing evidence; R74.A refuses unverified external bound prefabs.
+
+### Release closure (further work)
+
+- Execute headless and Qt cross-platform CI with actual jobs and inspect logs.
+- Run a full live, onscreen Player walkthrough with the final asset pipeline.
+- Produce separately built native executables on target platforms and pass
+  R14/R15/R39 strict provenance, rights, clean-machine and relocation checks.
+- Verify input accessibility, performance, combat balance and packaging for
+  games with real large asset packs and multiplayer/network variants.
+
 ## Next R74 increments
 
 - **R74.B:** implemented in this branch, pending evidence and CI.
 - **R74.C2:** implemented on the dedicated follow-up branch; awaits executed
   cross-platform tests, real Player checks and integration review.
-- **R74.C3:** complete all three dungeons in a real Player session with
-  authored combat/puzzle progression, save/reload and canonical export, then
-  run on-screen, GPU, clean-machine and licensed-asset certification gates.
+- **R74.C3:** opt-in bounded GameSession multi-stage replay, encounter and
+  chest parity plus R15 strict preflight implemented. Actual CI results,
+  visual/native runtime and release bundle evidence remain outstanding.
 
 Run headless regressions:
 

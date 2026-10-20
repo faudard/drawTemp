@@ -26,6 +26,9 @@ from drawtemp.studio.package_manager import (
 from drawtemp.studio.package_upgrades import (
     PackageUpgradeError, preview_package_upgrade, apply_package_upgrade,
 )
+from drawtemp.studio.package_upgrade_recovery import (
+    PackageRecoveryError, read_pending_upgrade, acknowledge_pending_upgrade,
+)
 
 
 class PackageManagerDialog(QDialog):
@@ -82,6 +85,10 @@ class PackageManagerDialog(QDialog):
         self.remove_button.setObjectName("r58-remove")
         self.remove_button.clicked.connect(self.remove_selected)
         actions.addWidget(self.remove_button)
+        self.recovery_button = QPushButton("Reprise après interruption…")
+        self.recovery_button.setObjectName("r58-recovery")
+        self.recovery_button.clicked.connect(self.recover_selected)
+        actions.addWidget(self.recovery_button)
         refresh_button = QPushButton("Actualiser")
         refresh_button.clicked.connect(self.refresh)
         actions.addWidget(refresh_button)
@@ -97,6 +104,7 @@ class PackageManagerDialog(QDialog):
         self.details.clear()
         self.remove_button.setEnabled(False)
         self.upgrade_button.setEnabled(False)
+        self.recovery_button.setEnabled(self.project_root is not None)
         self.install_button.setEnabled(self.project_root is not None)
         if self.project_root is None:
             self.status.setText("Enregistrez le projet avant de gérer les packages.")
@@ -131,9 +139,9 @@ class PackageManagerDialog(QDialog):
     def _select(self):
         report = self._selected_report()
         self.remove_button.setEnabled(bool(report and report["removable"]))
-        # R58.B2 upgrades one isolated pack only: legacy receipts cannot
-        # establish safe reverse dependencies for a multi-pack project.
-        self.upgrade_button.setEnabled(bool(report and len(self.reports) == 1))
+        # R58.B3 allows leaf upgrades only when all reverse pins are proven;
+        # the backend still validates every archive and reference.
+        self.upgrade_button.setEnabled(bool(report and report["upgradable"]))
         if report is None:
             self.details.clear()
             return
@@ -141,6 +149,9 @@ class PackageManagerDialog(QDialog):
             "id": report["id"], "version": report["version"],
             "asset_ids": report["asset_ids"], "files": report["files"],
             "used_by": report["used_by"],
+            "direct_dependencies": report["direct_dependencies"],
+            "reverse_dependencies_verified": report["reverse_dependencies_verified"],
+            "upgrade_allowed": report["upgradable"],
             "blocked": not report["removable"],
             "on_remove": "Les fichiers physiques sont conservés pour Undo.",
             "rights_verified": False,
@@ -149,6 +160,38 @@ class PackageManagerDialog(QDialog):
     def _error(self, error):
         self.status.setText(str(error))
         QMessageBox.warning(self, "Package refusé", str(error))
+
+    def recover_selected(self):
+        if self.project_root is None:
+            return
+        try:
+            status = read_pending_upgrade(self.project_root)
+            if status is None:
+                self.status.setText("Aucune interruption de mise à jour détectée.")
+                return
+            summary = (
+                "Mise à jour interrompue : " + status["id"] + "\n" +
+                status["from_version"] + " → " + status["to_version"] + "\n" +
+                "État des fichiers :\n" +
+                "\n".join("• " + row["state"] + " : " + row["path"]
+                          for row in status["files"]) +
+                "\n\nLe journal sera clôturé SANS supprimer aucun fichier. "
+                "Les répertoires incomplets doivent être examinés "
+                "manuellement ; aucune réparation automatique ne sera faite.\n\n"
+                "Avez-vous vérifié la situation et voulez-vous acquitter "
+                "explicitement ce journal ?"
+            )
+            answer = QMessageBox.question(
+                self, "Reprise R58 — inspection sans suppression",
+                summary, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return
+            acknowledge_pending_upgrade(
+                self.project_root, self.session,
+                expected_sha256=status["journal_sha256"])
+            self.refresh()
+        except (PackageRecoveryError, PackageManagerError, ValueError, OSError) as exc:
+            self._error(exc)
 
     def install_selected(self):
         if self.project_root is None:
@@ -198,7 +241,7 @@ class PackageManagerDialog(QDialog):
 
     def upgrade_selected(self):
         report = self._selected_report()
-        if report is None or self.project_root is None or len(self.reports) != 1:
+        if report is None or self.project_root is None or not report["upgradable"]:
             return
         archive, _ = QFileDialog.getOpenFileName(
             self, "Nouvelle version R24.C (ou archive de retour arrière)", "",

@@ -120,6 +120,37 @@ class QtPackageManagerTests(unittest.TestCase):
         self.assertEqual(self.session.revision, 3)
 
 
+    def test_interrupted_upgrade_qt_requires_explicit_acknowledgement(self):
+        from drawtemp.assets.packs import install_pack
+        from drawtemp.studio.package_upgrades import preview_package_upgrade
+        from drawtemp.studio.package_upgrade_recovery import (
+            begin_upgrade_journal, read_pending_upgrade,
+        )
+        from drawtemp.sdk.simulation import thaw
+
+        source = make_source(self.root / "source-old", make_manifest())
+        old_pack = publish_pack(source, self.root / "old.rpack")
+        install_pack(old_pack, self.session, self.root)
+        new_doc = make_manifest()
+        new_doc["version"] = "1.1.0"
+        new_source = make_source(self.root / "source-new", new_doc)
+        new_file = self.root / "new.rpack"
+        new_pack = publish_pack(new_source, new_file)
+        planned = preview_package_upgrade(
+            self.session, self.root, new_file, expected_sha256=new_pack.sha256)
+        begin_upgrade_journal(self.root, planned, thaw(planned._manifest))
+        dialog = PackageManagerDialog(
+            self.session, content_path=self.content_path)
+        self.assertIn("Audit refusé", dialog.status.text())
+        self.assertTrue(dialog.recovery_button.isEnabled())
+        with patch("drawtemp.studio.package_manager_qt.QMessageBox.question",
+                   return_value=QMessageBox.Yes):
+            dialog.recover_selected()
+        self.assertIsNone(read_pending_upgrade(self.root))
+        self.assertEqual(dialog.table.rowCount(), 1)
+        self.assertEqual(self.session.revision, 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()

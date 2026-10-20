@@ -17,6 +17,7 @@ from pathlib import Path
 from drawtemp.assets.packs import RECEIPT_NAMESPACE, verify_installed_packs
 from drawtemp.sdk.authoring import AuthoringPlan, AuthoringSession
 from sporebound.assets import AssetRegistry
+from drawtemp.studio.package_upgrade_recovery import require_no_pending_upgrade
 
 MAX_AUDIT_NODES = 100_000
 
@@ -43,6 +44,7 @@ def _project_root(value):
 def _read_snapshot(editor, root):
     if not isinstance(editor, AuthoringSession):
         _fail("invalid_editor", "Use the canonical AuthoringSession")
+    require_no_pending_upgrade(root)
     current = editor.snapshot().to_dict()
     project = current["project"]
     issues = verify_installed_packs(root, project)
@@ -107,9 +109,16 @@ def installed_package_usage(editor, project_root):
         own_ids = frozenset(receipt["asset_ids"])
         own_paths = frozenset(row["path"] for row in receipt["files"])
         blockers = []
-        if len(installed) > 1:
-            # R24.C receipts have no dependency list; do not guess.
+        complete_graph = all("dependencies" in row for row in installed)
+        if len(installed) > 1 and not complete_graph:
+            # Unknown historical R24.C dependency edges: never guess.
             blockers.append("other-installed-pack-dependencies-unrecorded")
+        if complete_graph:
+            blockers.extend(
+                "required-by:" + other["id"]
+                for other in installed if other["id"] != pack_id
+                for dep in other["dependencies"] if dep["id"] == pack_id
+            )
         for kind, slots in sorted(assets["bindings"].items()):
             for slot, asset_id in sorted(slots.items()):
                 if asset_id in own_ids:
@@ -136,6 +145,18 @@ def installed_package_usage(editor, project_root):
             "files": sorted(own_paths),
             "used_by": sorted(set(blockers)),
             "removable": not blockers,
+            "reverse_dependencies_verified": complete_graph,
+            "direct_dependencies": (
+                deepcopy(receipt["dependencies"])
+                if "dependencies" in receipt else None
+            ),
+            "upgradable": (
+                len(installed) == 1 or
+                (complete_graph and not any(
+                    dep["id"] == pack_id for other in installed
+                    if other["id"] != pack_id for dep in other["dependencies"]
+                ))
+            ),
             "file_policy": "retain-for-undo",
             "rights_verified": False,
         })

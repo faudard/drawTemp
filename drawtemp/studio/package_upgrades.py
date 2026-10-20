@@ -29,6 +29,9 @@ from drawtemp.studio.package_manager import (
     _walk_refs,
 )
 from sporebound.assets import AssetRegistry
+from drawtemp.studio.package_upgrade_recovery import (
+    require_no_pending_upgrade, begin_upgrade_journal, clear_upgrade_journal,
+)
 
 _MAX_DIFF = 512
 
@@ -136,19 +139,36 @@ def _safe_existing(root, manifest, relative):
 
 def _snapshot_and_pack(editor, root, pack_id):
     snapshot, installed = _read_snapshot(editor, root)
-    # Legacy receipts lack reverse dependency edges: a multi-pack upgrade
-    # could silently break another pack's exact version/digest pin.
-    if len(installed) != 1:
-        _reject("dependency_unknown", "R58.B2 requires exactly one installed pack")
-    current = installed[0]
-    if current["id"] != pack_id:
+    current = next((row for row in installed if row["id"] == pack_id), None)
+    if current is None:
         _reject("unknown_package", "Selected installed pack does not match archive")
+    if len(installed) > 1:
+        # Multi-pack upgrades are safe only if every receipt records complete
+        # dependency provenance AND no dependent pins the selected version.
+        if any("dependencies" not in row for row in installed):
+            _reject("dependency_unknown",
+                    "Legacy receipt prevents safe multi-pack version change")
+        users = sorted(row["id"] for row in installed
+                       if row["id"] != pack_id and any(
+                           dep["id"] == pack_id for dep in row["dependencies"]))
+        if users:
+            _reject("dependency_in_use",
+                    "Existing package pins the old version: " + ", ".join(users))
     return snapshot, current
 
 
 def _check_compatibility(snapshot, current, manifest):
-    if manifest["dependencies"]:
-        _reject("dependency_unknown", "Isolated upgrades cannot introduce dependencies")
+    # R58.B3: existing dependencies must remain EXACTLY pinned. A change
+    # would require a new multi-package migration transaction and new proofs.
+    original = current.get("dependencies")
+    if original is None:
+        if manifest["dependencies"]:
+            _reject("dependency_unknown",
+                    "Legacy receipt cannot prove former package dependencies")
+    elif sorted(original, key=lambda dep: dep["id"]) != sorted(
+            manifest["dependencies"], key=lambda dep: dep["id"]):
+        _reject("dependency_migration_required",
+                "Cannot change dependency version/digest during isolated upgrade")
     assets = AssetRegistry(snapshot["project"].get("assets") or None).to_dict()
     old_ids = frozenset(current["asset_ids"])
     current_entries = {row["id"]: row for row in assets["entries"] if row["id"] in old_ids}
@@ -183,6 +203,7 @@ def preview_package_upgrade(
 ):
     """Read-only diff; no filesystem writes, no editing or implicit grant."""
     root = _project_root(project_root)
+    require_no_pending_upgrade(root)
     if type(expected_sha256) is not str or len(expected_sha256) != 64 or any(
             c not in "0123456789abcdef" for c in expected_sha256):
         _reject("invalid_pin", "Supply an independently verified lowercase SHA-256")
@@ -304,6 +325,7 @@ def apply_package_upgrade(preview, editor, project_root):
     if not isinstance(preview, PackageUpgradePreview):
         _reject("invalid_preview", "Expected versioned upgrade preview")
     root = _project_root(project_root)
+    require_no_pending_upgrade(root)
     snapshot, old = _snapshot_and_pack(editor, root, preview.package_id)
     if (snapshot["revision"] != preview.source_revision or
             _snapshot_digest(snapshot) != preview.source_digest or
@@ -323,6 +345,12 @@ def apply_package_upgrade(preview, editor, project_root):
         _reject("stale_preview", "Version directory appeared/disappeared since preview")
     created_dir = None
     created_files = []
+    marker_sha = None
+    if not reuse:
+        # Durable intent BEFORE filesystem writes. On process termination the
+        # marker survives and blocks any subsequent package edit pending
+        # explicit inspection; no files are silently deleted on startup.
+        marker_sha = begin_upgrade_journal(root, preview, manifest)
     try:
         if not reuse:
             created_dir, created_files = _create_new_version(root, manifest, raw)
@@ -339,8 +367,24 @@ def apply_package_upgrade(preview, editor, project_root):
                 _snapshot_digest(editor.snapshot().to_dict()) != preview.source_digest):
             _reject("stale_preview", "Editor changed during installation")
         # No documents are saved; the preexisting on-disk project stays valid.
-        return editor.apply(preview._edit)
+        transition = editor.apply(preview._edit)
     except BaseException:
-        if created_dir is not None:
-            _cleanup(created_dir, created_files)
+        # Editor.apply is the single document transaction. If an exception
+        # occurred AFTER the editor advanced, deleting the newly written
+        # resources would corrupt that live project. Preserve bytes and the
+        # journal for explicit recovery rather than guessing rollback safety.
+        editor_unchanged = (
+            editor.revision == preview.source_revision and
+            _snapshot_digest(editor.snapshot().to_dict()) == preview.source_digest
+        )
+        if editor_unchanged:
+            if created_dir is not None:
+                _cleanup(created_dir, created_files)
+            if marker_sha is not None:
+                clear_upgrade_journal(root, expected_sha256=marker_sha)
         raise
+    if marker_sha is not None:
+        # If this final unlink fails, the edit has succeeded but the persistent
+        # marker remains, so further package operations fail closed.
+        clear_upgrade_journal(root, expected_sha256=marker_sha)
+    return transition

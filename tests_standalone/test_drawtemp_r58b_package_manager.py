@@ -115,11 +115,31 @@ class PackageManagerTests(unittest.TestCase):
         self.assertIn("shared-path:outside-pack-alias", report["used_by"])
         self.assert_blocked("package_in_use")
 
-    def test_other_packages_block_unprovable_dependency_removal(self):
+    def test_two_proven_independent_packages_can_remove_a_leaf(self):
         self.install("forest-pack")
         self.install("second-pack")
         reports = self.reports()
-        self.assertEqual([row["id"] for row in reports], ["forest-pack", "second-pack"])
+        self.assertEqual([row["id"] for row in reports],
+                         ["forest-pack", "second-pack"])
+        self.assertTrue(all(row["reverse_dependencies_verified"] for row in reports))
+        self.assertTrue(all(row["removable"] for row in reports))
+        plan = preview_package_removal(self.editor, self.root, "forest-pack")
+        apply_package_removal(plan, self.editor, self.root)
+        self.assertEqual([row["id"] for row in self.reports()], ["second-pack"])
+        self.editor.undo()
+        self.assertEqual(len(self.reports()), 2)
+
+    def test_mixed_legacy_receipts_refuse_unproven_multi_pack_removal(self):
+        self.install("forest-pack")
+        def strip_provenance(project):
+            project["extensions"]["org.drawtemp.resourcepacks"]["data"]["packs"][0].pop(
+                "dependencies")
+            return project
+        self.editor.apply(self.editor.preview_project(
+            strip_provenance, kind="legacy-fixture"))
+        self.install("second-pack")
+        reports = self.reports()
+        self.assertFalse(any(row["reverse_dependencies_verified"] for row in reports))
         self.assertTrue(all(
             "other-installed-pack-dependencies-unrecorded" in row["used_by"]
             for row in reports))
