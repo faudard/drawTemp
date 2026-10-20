@@ -6,14 +6,14 @@ tant que les preuves physiques/tri-OS/UX/Player ne sont pas disponibles.
 
 ## Frontières
 
-- **Source unique** : \`GameProject.extensions["org.drawtemp.ui"]\` (enveloppe R24
-  \`schema_version: 1\` et données \`version: 1\`). Aucun sidecar de HUD,
-  aucun champ ajouté à \`GameSession\`, \`Campaign\` ou \`Content\`.
-- **Affichage uniquement** : \`sporebound.ui_layout_r51.project_layout()\`
-  accepte une \`GameSession\` canonique et, si requis, un \`BattleFrame\`
+- **Source unique** : `GameProject.extensions["org.drawtemp.ui"]` (enveloppe R24
+  `schema_version: 1` et données `version: 1`). Aucun sidecar de HUD,
+  aucun champ ajouté à `GameSession`, `Campaign` ou `Content`.
+- **Affichage uniquement** : `sporebound.ui_layout_r51.project_layout()`
+  accepte une `GameSession` canonique et, si requis, un `BattleFrame`
   canonique. Aucune lecture par introspection et aucune action de combat.
-- **Édition transactionnelle** : \`LayoutAuthoring\` passe par
-  \`AuthoringSession.preview_project/apply\`, donc vérification des références,
+- **Édition transactionnelle** : `LayoutAuthoring` passe par
+  `AuthoringSession.preview_project/apply`, donc vérification des références,
   révisions obsolètes, Undo/Redo et modifications atomiques.
 - **Inertie stricte** : boutons = intentions de commande en liste blanche,
   jamais du Python/QML/JS, et ne sont pas exécutés par R51.A. Le routage
@@ -25,7 +25,7 @@ tant que les preuves physiques/tri-OS/UX/Player ne sont pas disponibles.
 
 ## Structure de données v1
 
-\`\`\`json
+```json
 {
   "schema_version": 1,
   "data": {
@@ -51,24 +51,24 @@ tant que les preuves physiques/tri-OS/UX/Player ne sont pas disponibles.
     }
   }
 }
-\`\`\`
+```
 
 L'objet ci-dessus est la valeur du namespace
-\`GameProject.extensions["org.drawtemp.ui"]\`, **pas un projet complet**.
+`GameProject.extensions["org.drawtemp.ui"]`, **pas un projet complet**.
 
-Widgets acceptés : \`row\`, \`column\` (conteneurs), \`text\`,
-\`gauge\` (deux bindings numériques), \`button\` (libellé + intention).
+Widgets acceptés : `row`, `column` (conteneurs), `text`,
+`gauge` (deux bindings numériques), `button` (libellé + intention).
 Chaque écran possède au maximum 64 widgets, profondeur 8, 8 breakpoints,
 12 écrans par projet ; largeur entière valide de 1 à 16 384 unités logiques.
-Les breakpoints sont ordonnés et commencent à zéro. \`focus_order\` doit
-couvrir exactement les boutons, une fois chacun; un écran \`MENU\` ne peut
+Les breakpoints sont ordonnés et commencent à zéro. `focus_order` doit
+couvrir exactement les boutons, une fois chacun; un écran `MENU` ne peut
 pas être vide d'actions.
 
-Bindings en lecture seule et typés : \`session.campaign_id\`,
-\`session.scene_id\`, \`session.seed\`, \`combat.title\`,
-\`combat.objective\`, \`combat.phase\`, \`combat.focus\`,
-\`combat.selection\`, \`combat.active_hp\`, \`combat.active_max_hp\`.
-Les champs \`combat.*\` absents du contexte ne deviennent **pas** des zéros
+Bindings en lecture seule et typés : `session.campaign_id`,
+`session.scene_id`, `session.seed`, `combat.title`,
+`combat.objective`, `combat.phase`, `combat.focus`,
+`combat.selection`, `combat.active_hp`, `combat.active_max_hp`.
+Les champs `combat.*` absents du contexte ne deviennent **pas** des zéros
 inventés : la projection est refusée. Aucun chemin personnalisé ne traverse
 des attributs d'objet. Les données gameplay restent celles de GameSession et
 BattleFrame.
@@ -83,7 +83,7 @@ BattleFrame.
   ou action inconnu => refus. Les limites de taille des extensions R24
   s'appliquent également.
 - Aucun moteur de rendu Qt, WYSIWYG, manette ou action exécutable n'est livré
-  ici. Les éléments \`columns\`/focus sont des **données de présentation**,
+  ici. Les éléments `columns`/focus sont des **données de présentation**,
   pas des preuves d'accessibilité ou de rendu responsive réel.
 - Les textes sont des chaînes de données ; R51.B devra les échapper dans
   le renderer et ne jamais les interpréter comme QML/HTML/JS.
@@ -91,13 +91,13 @@ BattleFrame.
 
 ## Validation ciblée
 
-\`\`\`sh
+```sh
 python -m unittest -v tests_standalone.test_r51a_ui_layout
 python -m unittest -v tests_standalone.test_r25_foundation tests_standalone.test_player_hud_layout_r710
-\`\`\`
+```
 
-Couvert : round-trip \`GameProject\`, compatibilité des projets v1 historiques,
-enregistrement/replay \`GameSession\`, bindings et breakpoints, erreurs
+Couvert : round-trip `GameProject`, compatibilité des projets v1 historiques,
+enregistrement/replay `GameSession`, bindings et breakpoints, erreurs
 fail-closed, absence de mutation du combat, transactions, suppression,
 Undo/Redo, preview périmée.
 
