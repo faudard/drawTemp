@@ -212,20 +212,22 @@ class PlayerController:
         """
         self._require_cinematic_completed()
         snapshot = self._current()
-        if not self.session.platform_state(expected_revision=snapshot.revision):
+        previous = self.session.platform_state(
+            expected_revision=snapshot.revision)
+        if previous is None:
             raise ValueError("No active R32 platform scene")
+        was_terminal = (previous["state"].get("boss", {}).get("defeated", False) or
+                        previous["state"].get("boss", {}).get("player_defeated", False))
         self.session.platform_step(move, jump, attack,
                                    expected_revision=snapshot.revision)
         self._pending_target = None
         self.forecast = ""
         self.message = ""
         now = self.session.snapshot()
-        if (now.revision % 60 == 0 or
-                any(self.session.platform_state(
-                    expected_revision=now.revision)["state"]["boss"][status]
-                    for status in ("defeated", "player_defeated")
-                    if "boss" in self.session.platform_state(
-                        expected_revision=now.revision)["state"])):
+        after = self.session.platform_state(expected_revision=now.revision)
+        boss = after["state"].get("boss", {})
+        terminal = boss.get("defeated", False) or boss.get("player_defeated", False)
+        if now.revision % 60 == 0 or (terminal and not was_terminal):
             self._checkpoint()
         return self.state()
 
