@@ -246,6 +246,25 @@ class GameSession:
                 "R37 suspicion must be an integer in 0..3")
         return value
 
+    def ai_boss_preview(self, director_id):
+        """R37.E: project-authored presentation of an actual CT boss encounter.
+
+        No second phase counter, no imaginary reinforcements and no implicit
+        execution. Battle remains authoritative for all triggers/telegraphs.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        catalog = self._advanced_ai.spec.get("boss_directors", [])
+        require(type(director_id) is str, "Invalid R37 director ID")
+        director = next((row for row in catalog
+                         if row["id"] == director_id), None)
+        require(director is not None, "Unknown R37 boss director")
+        require(self.mode == "battle" and self.battle is not None
+                and self.battle.mission.id == director["mission"],
+                "R37 boss director requires its own active CT encounter")
+        from .ai_boss_director import preview_boss_director
+        return preview_boss_director(self.battle, director)
+
     def ai_squad_preview(self, squad_id):
         """R37.D3 — direct same-scene radio sharing and role proposals only.
 
