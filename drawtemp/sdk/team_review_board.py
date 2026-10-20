@@ -248,6 +248,14 @@ class TeamReviewBoard:
     def _node(self, identity):
         return self.graph.node(identity)
 
+    @staticmethod
+    def _anchor(path):
+        # The R48 helper expects a diff *field* path. The review UI can
+        # also deliberately attach a note/task to a document root.
+        if path in ("/content", "/project"):
+            return path
+        return anchor_from_path(path)
+
     def _verified_events(self):
         rows = self.tasks.events()
         for row in rows:
@@ -275,7 +283,7 @@ class TeamReviewBoard:
              text="", kind="comment", thread=0):
         self._role(actor, contribute=True)
         node = self._node(node_id)
-        anchor = anchor_from_path(path)
+        anchor = self._anchor(path)
         return self.notes.append(node, expected_head=expected_head, anchor=anchor,
                                  author=actor, text=text, kind=kind, thread=thread)
 
@@ -296,7 +304,7 @@ class TeamReviewBoard:
         node = self._node(node_id)
         return self.tasks.append(
             expected_head=expected_head, kind="create", node=node,
-            anchor=anchor_from_path(path), actor=actor, title=title,
+            anchor=self._anchor(path), actor=actor, title=title,
             assignee=assignee, release=release)
 
     def change_task(self, actor, *, task_id, expected_head,
@@ -329,7 +337,7 @@ class TeamReviewBoard:
         node = self._node(node_id)
         return self.tasks.append(
             expected_head=expected_head, kind="review", node=node,
-            anchor=anchor_from_path(path), actor=actor, title=summary,
+            anchor=self._anchor(path), actor=actor, title=summary,
             status=decision)
 
     def decisions(self, actor, *, node_id=None):
