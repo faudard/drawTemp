@@ -182,6 +182,14 @@ class Simulation:
         return self._apply("party_set_active", hero_ids,
                            expected_revision=expected_revision)
 
+    def rpg_quest_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_quest_state")
+        state = self._session.rpg_quest_state()
+        return freeze(state) if state is not None else None
+
+    def rpg_claim_quest(self, *, expected_revision=None):
+        return self._apply("rpg_claim_quest", expected_revision=expected_revision)
+
     def rpg_available(self, *, expected_revision=None):
         self._check_revision(expected_revision, "rpg_available")
         return freeze(self._session.rpg_available())
