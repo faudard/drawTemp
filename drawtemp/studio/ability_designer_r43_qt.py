@@ -217,6 +217,12 @@ class AbilityDesignerDialog(QDialog):
         self.lab_button = QPushButton("Balance Lab — puissance brute (sans runtime)")
         self.lab_button.clicked.connect(self.preview_balance)
         right_layout.addWidget(self.lab_button)
+        self.native_target_button = QPushButton(
+            "Ciblage natif CT — ouvrir la carte R3…")
+        self.native_target_button.setAccessibleName(
+            "Inspecter portée, ligne de vue et zone CT dans le viewport R3")
+        self.native_target_button.clicked.connect(self.open_native_target)
+        right_layout.addWidget(self.native_target_button)
 
         bottom = QHBoxLayout()
         self.preview_button = QPushButton("Prévisualiser sans modifier")
@@ -395,6 +401,26 @@ class AbilityDesignerDialog(QDialog):
         self._load_effect(index)
         self._invalidate()
         return True
+
+    def open_native_target(self):
+        """No GameSession writes; only a detached R43 native Battle projection."""
+        if self.draft is None:
+            return False
+        try:
+            self._gather()
+            from drawtemp.sdk.ability_contracts import compile_ct_skill
+            from drawtemp.studio.ability_targeting_r43_qt import NativeTargetingDialog
+            compile_ct_skill(self.draft.document)
+            NativeTargetingDialog(
+                self.session, self.draft.document, parent=self).exec()
+            return True
+        except (AbilityError, AuthoringError, ValueError, KeyError,
+                TypeError, RuntimeError) as exc:
+            self.apply_button.setEnabled(False)
+            self.report.setPlainText(
+                "Ciblage CT refusé : " + getattr(exc, "code", "invalid") +
+                " — " + str(exc))
+            return False
 
     def preview_balance(self):
         if self.draft is None:
