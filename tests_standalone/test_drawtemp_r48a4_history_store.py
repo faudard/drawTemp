@@ -93,8 +93,7 @@ class HistoryStoreTests(unittest.TestCase):
             self.store.load()
         self.assertEqual(caught.exception.code, "invalid_digest")
         with self.assertRaises(HistoryStoreError):
-            self.store.save(self.graph, expected_digest=self.store.inspect()
-                            if False else "0" * 64)
+            self.store.save(self.graph, expected_digest="0" * 64)
         self.assertEqual(self.path.read_bytes(), altered)
 
     def test_rehashed_forged_node_still_refused(self):
