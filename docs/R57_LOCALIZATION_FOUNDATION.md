@@ -1,4 +1,4 @@
-# R57.A / R57.B — Localization & Translation Studio (incremental)
+# R57.A / R57.B / R57.C — Localization, Translation Studio & Accessibility (incremental)
 
 ## Scope in this PR
 
@@ -40,13 +40,50 @@ Player: the presentation-only Qt bridge loads the sidecar for authored content,
 projects title/subtitle and scene/choice labels, and provides a language picker
 under **Options** (FR/EN and two pseudo-locales). Language switching does not
 touch the deterministic gameplay simulation. An invalid sidecar is rejected
-rather than silently executed. Changes to language are **session-local** in
-this increment; persistent settings belong to R57.C.
+rather than silently executed. The selected language now persists through the R57.C presentation-only
+accessibility file. Pseudo-languages are development/QA aids, not human
+translations.
+
+## R57.C — persisted accessible Player presentation
+
+R57.C extends the Qt Player with an independent "r57-accessibility.json"
+beside (but never inside) player-preferences.json and the campaign checkpoint
+slots. It saves language, 100–200 % subtitle scale, reduce_motion and
+reduce_flashes using a strict v1 document with validation, atomic replacement,
+and retained .invalid evidence before replacing corrupt input.
+
+- Player Options offers the FR/EN/pseudo-language selector, caption slider,
+  reduced battle animation and reduced cinematic flashes. Existing R12 text
+  scaling/high-contrast preferences remain supported with their **unchanged**
+  v1 schema.
+- Dialogue and cinematics scale their caption text, with exposed Accessible
+  names; the Options popup explicitly focuses the language control on open,
+  using native Qt Quick Tab / Shift+Tab traversal.
+- Canonical R12 animation events and cinematic clocks are unchanged. The
+  view-only projection removes clips when reduce_motion is enabled; strips
+  "camera_shake" and "light" metadata and suppresses fade overlays when the
+  appropriate toggle is enabled. This reduces the effects explicitly handled
+  here, **not every effect produced by future renderers**.
+- The deterministic contrast audit in drawtemp.quality.r57_a11y checks six
+  fixed text/background palette pairs with WCAG 2.x luminance/contrast maths.
+  It deliberately cannot assess changing images, translucency, actual font
+  sizes or dynamic/third-party visual widgets.
+- A Qt QTest keyboard smoke exercises Translation Studio search and selection;
+  a Player Qt bridge test checks persistence without any gameplay revision
+  change. The GitHub CI matrix runs these and legacy R12 preference checks.
+
+A physical gamepad driver, complete controller-only traversal, native assistive
+technologies (NVDA/Orca/VoiceOver), actual visual contrast/focus review and
+photosensitivity testing with real hardware are **not certified** here. The
+Qt 6.8 packaged dependency does not guarantee a cross-platform Gamepad API;
+do not report controller support without a tested input backend. The global
+R57 gate remains NO-GO.
 
 ## Manual validation
 
-    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests -v
-    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m unittest tests_standalone.test_drawtemp5_r57 -v
+    python -m unittest tests_standalone.test_drawtemp5_r57.R57CatalogTests tests_standalone.test_drawtemp5_r57c.R57CAccessibilityTests tests_standalone.test_drawtemp5_r12_preferences -v
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m unittest tests_standalone.test_drawtemp5_r57 tests_standalone.test_drawtemp5_r57c -v
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --reference
 
 GitHub Actions adds headless and Qt-offscreen jobs on Ubuntu, Windows and
 macOS. Offscreen jobs cannot certify real GPU rendering, voice navigation,
@@ -55,10 +92,11 @@ screen readers or gamepads.
 ## Remaining gates (NO-GO)
 
 R57.A still needs broad string-extraction coverage and migrations for all
-legacy editors. R57.B still needs visual context linked to all asset types,
-actual subtitle sizing and keyboard test sessions. R57.C still needs
-persistent Player language/preferences, focus/contrast audits, flash/shake
-reduction, controller-only walkthroughs, assistive technology and real
-hardware evidence. **VS-57 / full R57 remains NO-GO** until one complete
+legacy editors. R57.B still needs visual context linked to all asset types
+and full Studio keyboard test sessions. R57.C now has partial automated
+preferences, subtitle sizing, focus and contrast proof, and targeted visual
+effect reductions; it still needs a complete controller input backend,
+native focus/contrast auditing, photosensitivity review, assistive
+technologies and real hardware evidence. **VS-57 / full R57 remains NO-GO** until one complete
 narrative act is available in two human-checked languages plus pseudo-locale,
 with a verified no-mouse Player/Studio walkthrough.
