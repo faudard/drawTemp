@@ -12,6 +12,7 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 import os
+import stat
 from pathlib import Path
 import tempfile
 
@@ -140,15 +141,23 @@ class LocalHistoryStore:
             raise HistoryStoreError("unsafe_path", "Invalid archive path")
 
     def _read(self):
-        if self.path.is_symlink():
-            raise HistoryStoreError("unsafe_path", "History archive must not be a symlink")
-        if not self.path.exists():
+        if self.path.parent.resolve() != self.path.parent or self.path.is_symlink():
+            raise HistoryStoreError("unsafe_path", "Symlinked history paths are refused")
+        flags = os.O_RDONLY
+        if hasattr(os, "O_BINARY"):
+            flags |= os.O_BINARY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            fd = os.open(self.path, flags)
+        except FileNotFoundError:
             return None
-        if not self.path.is_file():
-            raise HistoryStoreError("unsafe_path", "Expected a regular history archive")
-        if self.path.stat().st_size > MAX_ARCHIVE:
-            raise HistoryStoreError("size_limit", "History archive exceeds 64 MiB")
-        with self.path.open("rb") as handle:
+        with os.fdopen(fd, "rb") as handle:
+            metadata = os.fstat(handle.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise HistoryStoreError("unsafe_path", "Expected a regular history archive")
+            if metadata.st_size > MAX_ARCHIVE:
+                raise HistoryStoreError("size_limit", "History archive exceeds 64 MiB")
             raw = handle.read(MAX_ARCHIVE + 1)
         if len(raw) > MAX_ARCHIVE:
             raise HistoryStoreError("size_limit", "History archive exceeds 64 MiB")
