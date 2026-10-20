@@ -738,6 +738,10 @@ class PlayerController:
             base["party"] = {
                 "enabled": True, "active": list(party["active"]),
                 "capacity": config["max_active"],
+                "equipment": {
+                    uid: dict(progress["heroes"][uid]["equipment"])
+                    for uid in party["members"]
+                },
                 "recruitable": [
                     {"id": uid, "name": next(
                         (unit.name for mission in self.content.missions.values()
