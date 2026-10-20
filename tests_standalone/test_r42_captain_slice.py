@@ -76,6 +76,15 @@ class CaptainLoyaltySliceR42Tests(unittest.TestCase):
         self.assertEqual(loaded.recording(), before)
         self.assertEqual(loaded.progress.story_flags['r42_c_main_ending'],
                          'alliance')
+        # The quest is not a paper flag: start the *real* canonical CT Battle.
+        battle = loaded.start_mission(QUEST_MISSION)
+        self.assertEqual(battle.mission.id, QUEST_MISSION)
+        self.assertEqual(loaded.mode, 'battle')
+        in_battle = loaded.recording()
+        self.assertEqual(
+            GameSession.from_recording(in_battle, self.content,
+                                       self.project).recording(),
+            in_battle)
 
     def test_exile_is_reachable_and_does_not_unlock_quest(self):
         game = self.play(['accuse', 'silence', 'avoid', 'exile', 'finish'])
