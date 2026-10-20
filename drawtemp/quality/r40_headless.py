@@ -113,27 +113,72 @@ def _adventure(content, project):
 
 
 def _metroidvania(content, project):
+    """Original R33 ability -> actual R32 gate -> two-phase boss victory."""
     graph = project.extensions["drawtemp.metroidvania"]["data"]
     proof = analyze_metroidvania(graph, scene_ids=project.exploration)
-    if not (proof["complete"] and proof["safe"]
-            and proof["goal_reachable"]):
-        raise AssertionError("Abstract ability graph is not safe")
-    witness = [step["room"] for step in proof["witness"]]
-    if witness != ["arrival", "r40_ruins", "arrival", "r40_citadel"]:
-        raise AssertionError("Double-jump dependency witness changed")
-    # Existing R25 routes are narrative interactions only. Never claim
-    # that the R33 capability pickup powers physical R32 jumping.
+    if not (proof["complete"] and proof["safe"] and proof["goal_reachable"]):
+        raise AssertionError("R33 abstract dependency proof failed")
+    if [step["room"] for step in proof["witness"]] != [
+            "arrival", "r40_ruins", "arrival", "r40_citadel"]:
+        raise AssertionError("R33 physical route witness drifted")
     session = GameSession.new(content, project, "main", seed=17)
-    _arrive_at_waystone(session)
-    session.route_transition("to_ruins")
-    _arrive_at_waystone(session)
+    if any(row["id"] == "to_citadel" for row in project.scene_routes["links"]):
+        raise AssertionError("Metroidvania still has the direct bypass")
+    try:
+        session.route_transition("high_gate")
+    except RuleError:
+        pass
+    else:
+        raise AssertionError("Physical high portal bypassed")
+    for _ in range(8):
+        session.route_platform_step(move=1)
+    session.route_platform_travel("to_ruins")
+    session.route_platform_step(move=1)
+    if session.progress.story_flags.get("r33_pickup_feather") is not True:
+        raise AssertionError("Physical R33 feather was not collected")
     session = _restore(session, content, project)
-    session.route_transition("to_citadel")
+    for _ in range(8):
+        session.route_platform_step(move=1)
+    session.route_platform_travel("back_to_village")
+    if session.route_platform_state().get("air_jumps_left") != 1:
+        raise AssertionError("R33 ability did not unlock R32 second jump")
+    session = _restore(session, content, project)
+    for _ in range(8):
+        session.route_platform_step(move=1)
+    session.route_platform_step(move=1, jump=True)
+    for _ in range(4):
+        session.route_platform_step(move=1)
+    session.route_platform_step(move=1, jump=True)
+    for _ in range(6):
+        session.route_platform_step(move=1)
+    session.route_platform_travel("high_gate")
     session = _restore(session, content, project)
     if session.route_scene != "r40_citadel":
-        raise AssertionError("Authored room cursor was not persisted")
-    return 2
-
+        raise AssertionError("Authenticated high gate did not persist")
+    for _ in range(9):
+        session.route_platform_step(move=1)
+    phases = set()
+    for _ in range(220):
+        boss = session.route_platform_state()["boss"]
+        phases.add(boss["phase"])
+        if boss["defeated"]:
+            break
+        if boss["player_defeated"]:
+            raise AssertionError("Player lost the deterministic source encounter")
+        attack = boss["window"] == "recover" and boss["cooldown"] == 0
+        session.route_platform_step(attack=attack)
+    else:
+        raise AssertionError("R40 boss could not be completed in tick budget")
+    if phases != {1, 2}:
+        raise AssertionError("Boss never activated its second authored phase")
+    from sporebound.exploration import _key
+    if session.progress.story_flags.get(
+            _key("r40_citadel", "boss_defeated")) is not True:
+        raise AssertionError("Victory is missing from canonical Campaign")
+    session = _restore(session, content, project)
+    if not session.route_platform_state()["boss"]["defeated"]:
+        raise AssertionError("Boss did not restore from command replay")
+    return 5
 
 def _roguelite(content, project):
     session = GameSession.new(content, project, "main", seed=19)
