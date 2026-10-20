@@ -211,7 +211,7 @@ def explore_action_scene(scene, goals, *, seeds=(0, 1, 2),
               "partial")
     return {"schema": 1, "kind": "r77a-action-exploration", "status": status,
             "scene": source["id"], "scene_sha256": source_hash,
-            "config": {"seeds": list(seeds), "goals": [list(g) for g in sorted(ordered_goals)],
+            "config": {"seeds": list(seeds), "goals": deepcopy(goals),
                        "ticks_per_seed": ticks_per_seed, "state_budget": state_budget},
             "coverage": {"zones": [list(c) for c in sorted(all_zones)],
                          "goals": [list(c) for c in sorted(all_goals)],
