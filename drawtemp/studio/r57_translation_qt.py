@@ -73,6 +73,16 @@ class TranslationStudioDialog(QDialog):
         self.context.setReadOnly(True)
         self.context.setAccessibleName("Contexte et texte source")
         panel.addWidget(self.context, 1)
+        self.plural_label = QLabel("Forme plurielle à traduire")
+        panel.addWidget(self.plural_label)
+        self.plural_form = QComboBox()
+        self.plural_form.setAccessibleName("Choisir la forme plurielle à traduire")
+        self.plural_form.addItem("Un élément (one)", "one")
+        self.plural_form.addItem("Plusieurs éléments (other)", "other")
+        self.plural_form.currentIndexChanged.connect(self.show_selected_form)
+        panel.addWidget(self.plural_form)
+        self.plural_label.setVisible(False)
+        self.plural_form.setVisible(False)
         panel.addWidget(QLabel("Traduction"))
         self.text = QPlainTextEdit()
         self.text.setAccessibleName("Éditer la traduction sélectionnée")
@@ -142,19 +152,30 @@ class TranslationStudioDialog(QDialog):
                                       str(entry["source"]))
             lang = self.current_language()
             editable = lang in ("fr", "en")
+            source = entry["source"]
+            plural = isinstance(source, dict)
+            self.plural_label.setVisible(plural)
+            self.plural_form.setVisible(plural)
             value = self.drafts.get((key, lang), entry["translations"].get(lang, ""))
-            self.text.setPlainText(value if isinstance(value, str) else str(value))
+            if plural:
+                # Each form stays a structured one/other pair. Converting it
+                # to str(dict) would corrupt the translation upon saving.
+                value = value.get(self.plural_form.currentData(), "") if isinstance(value, dict) else ""
+            self.text.setPlainText(value)
             self.text.setReadOnly(not editable)
             self.save_button.setEnabled(editable)
             # Pseudo preview is non-editable and protects placeholders.
             try:
                 preview = self.catalog.render(
-                    key, lang if not editable else "qps-ploc")
+                    key, lang if not editable else "qps-ploc",
+                    count=(1 if self.plural_form.currentData() == "one" else 2) if plural else None)
             except LocalizationError:
                 preview = "Aperçu indisponible (paramètres requis)"
             self.preview.setText(preview)
         else:
             self.key_label.setText("Aucune clé")
+            self.plural_label.setVisible(False)
+            self.plural_form.setVisible(False)
             self.context.clear()
             self.text.clear()
             self.preview.clear()
@@ -169,10 +190,28 @@ class TranslationStudioDialog(QDialog):
               ". Réconcilier le texte source avant publication.")
              if self.drift else "Aucune dérive des sources du projet."))
 
+    def show_selected_form(self, *_):
+        # Existing edits are saved on textChanged, even when the user changes
+        # the singular/plural selector without leaving the keyboard.
+        self.show_key(self.keys.currentItem())
+
     def remember_draft(self):
         lang = self.current_language()
         if self._selected_key and lang in ("fr", "en"):
-            self.drafts[(self._selected_key, lang)] = self.text.toPlainText()
+            draft_key = (self._selected_key, lang)
+            source = self.catalog.data["entries"][self._selected_key]["source"]
+            if isinstance(source, dict):
+                # Unsupplied target forms explicitly fall back to the source.
+                existing = self.drafts.get(
+                    draft_key,
+                    self.catalog.data["entries"][self._selected_key]
+                    ["translations"].get(lang, {"one": "", "other": ""}))
+                existing = dict(existing) if isinstance(existing, dict) else {
+                    "one": "", "other": ""}
+                existing[self.plural_form.currentData()] = self.text.toPlainText()
+                self.drafts[draft_key] = existing
+            else:
+                self.drafts[draft_key] = self.text.toPlainText()
 
     def reconcile_sources(self):
         if not self.drift:
