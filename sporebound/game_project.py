@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R51.A: opt-in UI layouts share the canonical GameProject extension.
+        # Validation runs at load/authoring time; legacy manifests are untouched.
+        from .ui_layout_r51 import NAMESPACE as UI_NAMESPACE, validate_ui_catalog
+        if UI_NAMESPACE in self.extensions:
+            validate_ui_catalog(self.extensions[UI_NAMESPACE]["data"])
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
