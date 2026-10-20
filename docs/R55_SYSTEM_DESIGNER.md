@@ -1,10 +1,10 @@
 # R55 — System Designer: premier lot exécutable
 
-Cette livraison commence **R55.A** et le contrat transactionnel **R55.B** de la
+Cette livraison commence **R55.A** et fournit une première interface native **R55.B** de la
 [roadmap R51–R80](DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md).
-Elle **ne valide pas encore** le gate R55 ni la release 10.0 : l'atelier
-graphique Qt, l'intégration au temps réel et la certification de bout en bout
-nécessitent encore des PR de suivi.
+Elle **ne valide pas encore** le gate R55 ni la release 10.0 : l'éditeur
+Qt nécessite une qualification QTest/UX approfondie, l'intégration au tick
+canonique et la certification de bout en bout restent à livrer.
 
 ## Propriété et schéma
 
@@ -55,6 +55,7 @@ projet.
 
 ```sh
 python -m unittest tests_standalone.test_r55_system_design -v
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_r55_system_design_gui -v
 ```
 
 Couvre cycles/typing, ordre stable, projection sans mutation, capacité,
@@ -62,10 +63,22 @@ achats/ventes sans duplication, quête unique, sauvegarde/rechargement, rejet
 de stock forgé même avec checksum recalculé, Undo/Redo et compatibilité
 des sauvegardes sans R55.
 
+## Interface R55.B initiale
+
+Dans le Studio Qt, ouvrir **Outils → System Designer R55**. Un graphe
+représente les liens ressources → producteurs → ressources et
+ressources → marchands/contrats; les onglets permettent d'ajouter ou retirer
+des éléments via des formulaires typés. La projection affiche les deltas et
+les stocks insuffisants. **Appliquer au projet** crée une seule transaction
+`AuthoringSession`, compatible avec les commandes générales Undo/Redo.
+Les producteurs à plusieurs ressources restent visibles ; leur édition avancée
+nécessitera un éditeur multi-ports dédié.
+
 ## Reste pour le gate R55
 
-- **R55.B** : canvas nodal Qt, éditeurs typés, avertissements de flux,
-  interactions clavier, QTest et prévisualisation/Undo/Redo visuels.
+- **R55.B** : édition avancée multi-ports, déplacement/nœuds, raccourcis,
+  accessibilité Qt, QTest d'interactions complets et gestion explicite
+  des conflits entre deux fenêtres.
 - **R55.C** : démonstrateur complet réellement assemblé via le Studio,
   raccord marchand/quête au Player, transition entre régions, simulations
   longues multi-seeds, balance et rapport GO/NO-GO sur master final.
