@@ -5,12 +5,16 @@ on:
     paths:
       - "drawtemp/quality/r80_compatibility.py"
       - "tests_standalone/test_r80a_compatibility.py"
+      - "tests_standalone/test_r80a2_historical.py"
+      - "drawtemp/quality/r80_historical.py"
       - "docs/R80A_COMPATIBILITY_BASELINE.md"
       - ".github/workflows/r80a-compatibility.yml"
   pull_request:
     paths:
       - "drawtemp/quality/r80_compatibility.py"
       - "tests_standalone/test_r80a_compatibility.py"
+      - "tests_standalone/test_r80a2_historical.py"
+      - "drawtemp/quality/r80_historical.py"
       - "docs/R80A_COMPATIBILITY_BASELINE.md"
       - ".github/workflows/r80a-compatibility.yml"
 
@@ -31,12 +35,16 @@ jobs:
         with:
           python-version: '3.12'
       - name: Fail-closed R80.A regression suite
-        run: python -m unittest -v tests_standalone.test_r80a_compatibility
+        run: python -m unittest -v tests_standalone.test_r80a_compatibility tests_standalone.test_r80a2_historical
       - name: Produce NO-GO report (never authorize tag)
         run: python -m drawtemp.quality.r80_compatibility --revision "${{ github.sha }}" --evidence-dir . --output r80a-audit.json
+      - name: Execute SHA-pinned historical R16 compatibility gates
+        run: python -m drawtemp.quality.r80_historical --report r80a2-historical.json
       - name: Check that candidate is NOT certified
-        run: python -c "import json; r=json.load(open('r80a-audit.json', encoding='utf-8')); assert r['decision']=='NO-GO' and r['release_certified'] is False and r['tag_allowed'] is False"
+        run: python -c "import json; a=json.load(open('r80a-audit.json', encoding='utf-8')); b=json.load(open('r80a2-historical.json', encoding='utf-8')); assert a['decision']=='NO-GO' and not a['release_certified'] and not a['tag_allowed']; assert b['result']=='passed' and not b['release_certified'] and not b['tag_allowed']"
       - uses: actions/upload-artifact@v4
         with:
           name: r80a-no-go-${{ matrix.os }}
-          path: r80a-audit.json
+          path: |
+            r80a-audit.json
+            r80a2-historical.json
