@@ -117,7 +117,8 @@ class SystemDesignerDialog(QDialog):
         self._selection = None
         self.graph = InteractiveSystemGraph(
             on_select=self._selected_graph, on_connect=self._port_connect,
-            on_move=self._node_moved, on_status=self._status, parent=self)
+            on_move=self._node_moved, on_status=self._status,
+            on_remove=self._disconnect_by_keyboard, parent=self)
         self.scene = self.graph.canvas  # Compatible with original Qt smoke.
         self.graph.setMinimumHeight(270)
         root.addWidget(self.graph, 2)
@@ -467,6 +468,14 @@ class SystemDesignerDialog(QDialog):
         if self._selection and self._selection[0] == "node":
             category, _ = self._selection[1]
             self.edit_item(category)
+
+    def _disconnect_by_keyboard(self, source, target):
+        try:
+            self.disconnect_nodes(source, target)
+        except ValueError as exc:
+            self._status("Suppression refusée : " + str(exc))
+        else:
+            self._status("Liaison supprimée (brouillon).")
 
     def _remove_selected_link(self):
         if not self._selection or self._selection[0] != "link":
