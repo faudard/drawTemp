@@ -494,6 +494,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
+        self._action("r65_composer", "R65 • Combat Composer action…", self.open_r65_composer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
         self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
@@ -591,6 +592,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
+        tools_menu.addAction(self.commands["r65_composer"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r41_party"])
         tools_menu.addAction(self.commands["r53_composer"])
@@ -908,6 +910,16 @@ class StudioWindow(QMainWindow):
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_r65_composer(self):
+        """R65.B uses the canonical R1 Studio session; all edits are reversible."""
+        from drawtemp.studio.combat_composer_r65_qt import CombatComposerDialog
+        revision = self.session.revision
+        dialog = CombatComposerDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
             self.refresh()
 
     def open_ability_designer(self):

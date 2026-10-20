@@ -116,6 +116,10 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R65.B: legacy projects bypass the optional combat validation entirely.
+        if "org.drawtemp.actioncombat" in self.extensions:
+            from .action_combat_catalog_r65 import catalog_from_project
+            catalog_from_project(self)
         # R36: reject invalid controllers and dangling R28 animation IDs on load.
         from .animation_graph import controllers_from_project
         controllers_from_project(self)
