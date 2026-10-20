@@ -50,7 +50,8 @@ STARTERS = (
                   "combat temps réel, Qt onscreen et export non certifiés."),
     Starter("action_combat_prototype", "Le guet de la clairière", "action_prototype",
             None, "Combat R26 réel dans un Player headless et même GameSession ; "
-                  "loot Campaign, rendu Qt et export non certifiés."),
+                  "or Campaign attribué une seule fois après victoire ; "
+                  "rendu Qt et export non certifiés."),
 )
 _BY_KEY = {row.key: row for row in STARTERS}
 REQUIRED_GENRES = (
