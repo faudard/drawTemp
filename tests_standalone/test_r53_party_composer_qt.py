@@ -11,6 +11,8 @@ from tests_standalone.test_r53_party_composer import composer_fixture
 from drawtemp.studio.party_orchestration_authoring import inspect_orchestration
 
 if _HAS_QT:
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from drawtemp.studio.party_orchestration_qt import R53PartyComposerDialog
 
@@ -74,6 +76,20 @@ class R53PartyComposerQtTests(unittest.TestCase):
         dialog.refresh()
         self.assertEqual(dialog.combos.rowCount(), 1)
         self.assertEqual(dialog.skills.rowCount(), 2)
+
+    def test_keyboard_buttons_launch_preview_and_combo_creation(self):
+        editor = AuthoringSession.new(*composer_fixture())
+        dialog = R53PartyComposerDialog(editor)
+        self.addCleanup(dialog.close)
+        dialog.show()
+        dialog.add_button.setFocus()
+        QTest.keyClick(dialog.add_button, Qt.Key_Space)
+        self.assertEqual(dialog.combos.rowCount(), 1)
+        dialog.preview_button.setFocus()
+        QTest.keyClick(dialog.preview_button, Qt.Key_Space)
+        self.assertTrue(dialog.apply_button.isEnabled(),
+                        dialog.report.toPlainText())
+        self.assertEqual(editor.revision, 0)
 
     def test_duplicate_slot_and_unavailable_combo_are_rejected(self):
         editor = AuthoringSession.new(*composer_fixture())
