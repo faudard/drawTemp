@@ -131,9 +131,9 @@ class PackageManagerDialog(QDialog):
     def _select(self):
         report = self._selected_report()
         self.remove_button.setEnabled(bool(report and report["removable"]))
-        # R58.B2 upgrades one isolated pack only: legacy receipts cannot
-        # establish safe reverse dependencies for a multi-pack project.
-        self.upgrade_button.setEnabled(bool(report and len(self.reports) == 1))
+        # R58.B3 allows leaf upgrades only when all reverse pins are proven;
+        # the backend still validates every archive and reference.
+        self.upgrade_button.setEnabled(bool(report and report["upgradable"]))
         if report is None:
             self.details.clear()
             return
@@ -141,6 +141,9 @@ class PackageManagerDialog(QDialog):
             "id": report["id"], "version": report["version"],
             "asset_ids": report["asset_ids"], "files": report["files"],
             "used_by": report["used_by"],
+            "direct_dependencies": report["direct_dependencies"],
+            "reverse_dependencies_verified": report["reverse_dependencies_verified"],
+            "upgrade_allowed": report["upgradable"],
             "blocked": not report["removable"],
             "on_remove": "Les fichiers physiques sont conservés pour Undo.",
             "rights_verified": False,
@@ -198,7 +201,7 @@ class PackageManagerDialog(QDialog):
 
     def upgrade_selected(self):
         report = self._selected_report()
-        if report is None or self.project_root is None or len(self.reports) != 1:
+        if report is None or self.project_root is None or not report["upgradable"]:
             return
         archive, _ = QFileDialog.getOpenFileName(
             self, "Nouvelle version R24.C (ou archive de retour arrière)", "",
