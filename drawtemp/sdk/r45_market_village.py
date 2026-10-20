@@ -22,6 +22,11 @@ def village_project():
     project.title = "R45 — Sept jours au marché"
     project.subtitle = "Artisanat, livraisons et prix sur sept journées"
     project.story["entry_scenes"] = {}
+    # Exploration stages must also resolve to canonical R9 narrative scene IDs.
+    project.story["scenes"].append({
+        "id": "outskirts", "title": "Aux abords du village",
+        "speaker": "Jeanne", "text": "Le chemin traverse les collines.",
+        "choices": [{"id": "continue", "label": "Continuer"}]})
     project.exploration["arrival"] = {
         "title": "Place du marché", "theme": "village",
         "width": 4, "height": 4, "start": [0, 1],
