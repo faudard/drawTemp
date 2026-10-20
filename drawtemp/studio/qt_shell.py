@@ -688,9 +688,20 @@ class StudioWindow(QMainWindow):
             self.refresh()
 
     def open_preflight(self):
-        """R38.4 read-only preflight on the current canonical editor revision."""
+        """R38.4 non-modal preflight refreshes on R1 revision changes."""
         from drawtemp.studio.r38_preflight_qt import PreflightDialog
-        PreflightDialog(self).exec()
+        existing = getattr(self, "_r38_preflight_dialog", None)
+        if existing is not None and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return existing
+        dialog = PreflightDialog(self)
+        dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+        dialog.finished.connect(
+            lambda _code: setattr(self, "_r38_preflight_dialog", None))
+        self._r38_preflight_dialog = dialog
+        dialog.show()
+        return dialog
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
