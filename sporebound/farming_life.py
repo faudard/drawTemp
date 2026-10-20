@@ -48,7 +48,8 @@ def validate_farming(spec, scene_ids, item_ids):
     for row in plots:
         require(type(row) is dict and set(row) == {"id", "scene", "soil"}
                 and _id(row["id"]) and row["id"] not in used
-                and row["scene"] in scene_ids and row["soil"] in SOILS,
+                and type(row["scene"]) is str and row["scene"] in scene_ids
+                and type(row["soil"]) is str and row["soil"] in SOILS,
                 "R62 invalid plot or scene")
         used.add(row["id"])
     used.clear()
@@ -57,7 +58,8 @@ def validate_farming(spec, scene_ids, item_ids):
                 {"id", "seed_item", "yield_item", "yield_quantity",
                  "grow_days", "soils", "seasons"}
                 and _id(row["id"]) and row["id"] not in used
-                and row["seed_item"] in item_ids and row["yield_item"] in item_ids
+                and _id(row["seed_item"]) and row["seed_item"] in item_ids
+                and _id(row["yield_item"]) and row["yield_item"] in item_ids
                 and _int(row["yield_quantity"], 1, 99)
                 and _int(row["grow_days"], 1, 120)
                 and type(row["soils"]) is list and bool(row["soils"])
@@ -76,8 +78,9 @@ def validate_farming(spec, scene_ids, item_ids):
                 {"id", "scene", "feed_item", "yield_item",
                  "yield_quantity", "interval_days"}
                 and _id(row["id"]) and row["id"] not in used
-                and row["scene"] in scene_ids
-                and row["feed_item"] in item_ids and row["yield_item"] in item_ids
+                and type(row["scene"]) is str and row["scene"] in scene_ids
+                and _id(row["feed_item"]) and row["feed_item"] in item_ids
+                and _id(row["yield_item"]) and row["yield_item"] in item_ids
                 and _int(row["yield_quantity"], 1, 99)
                 and _int(row["interval_days"], 1, 120),
                 "R62 invalid animal or canonical item reference")
@@ -194,7 +197,10 @@ class FarmingLife:
             row["crop"] = crop
         previous = self.receipts.get(receipt_id)
         if previous is not None:
-            require(previous == row, "R62 receipt reused for another command")
+            # Retry remains idempotent even after the world's day advances.
+            require(previous["kind"] == kind and previous["target"] == target
+                    and previous.get("crop") == crop,
+                    "R62 receipt reused for another command")
             return None
         require(len(self.journal) < MAX_RECEIPTS, "R62 receipt budget exceeded")
         # Safe because all domain preconditions are checked before the write.
