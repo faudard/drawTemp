@@ -214,9 +214,75 @@ alone. **These tests are authored but have NOT been confirmed passing
 on GitHub Actions**, which currently fails before scheduling any jobs.
 
 Outstanding: gameplay tuning and accessibility, enemy varieties,
-production Player/QML integration, full human-playtested original game,
+production Player polish and verified installed-bundle integration, full human-playtested original game,
 native packaged clean-machine exports, 3-OS GPU performance and signatures.
 The boss is an original minimal encounter, **not** an 8.0-complete boss/game.
+
+## R40.B.5 — Main Qt Quick Player platform integration
+
+The **actual** `drawtemp.player.qt_app` now recognizes canonical R32 scenes
+and presents them as a `platform` screen instead of trying to use the
+top-down tactical/exploration grid. No alternate engine is added:
+
+- `Simulation.platform_state()` produces an immutable authored-geometry +
+  R32 actor/boss projection **without materializing the physics journal**
+  on a read-only view. `platform_step()` and `platform_travel()` remain
+  revision-checked, atomic real `GameSession` calls.
+- `PlayerController` exclusively routes physical scenes through R32 inputs.
+  Old `explore_move`, `explore_interact` and `explore_actor` entry points
+  reject physical scenes. Every authored R32 portal (not just R33 high gate)
+  requires real trigger contact; `Simulation.route_options()` also marks it
+  unavailable until contact.
+- The **main** `Main.qml` includes `PlatformViewport.qml`, a Qt Quick
+  side-view read-only Canvas showing R32 colliders, physical actor position,
+  current portal contacts and the deterministic R40 boss hit/telegraph zones.
+  The original tactical `TacticalBoard` remains unchanged and visible only
+  outside physical scenes. The viewport is not a second gameplay simulation.
+- The existing Qt `PlayerBridge` uses `ActionStepClock` and monotonic
+  nanoseconds to advance exactly the due **integer 60 Hz engine ticks**,
+  independent of the QML paint/event timer. Jump and attack buttons generate
+  buffered input **edges**, not held-frame double-jumps.
+- Existing Player slots save immediately when manually requested, after
+  authenticated transitions and boss terminal outcomes, and periodically
+  during physical traversal (every 60 committed revisions), avoiding
+  60 full disk writes per second. The Player can load a **manual pre-fight**
+  slot after death; there is not yet a dedicated checkpoint-respawn contract.
+
+Create an authored `r40-metroidvania` project using the existing Studio
+Project Wizard, then launch the **main Player**:
+
+    python -m drawtemp.player.qt_app --content /PATH/TO/game.json --project /PATH/TO/game.game.json --campaign main
+
+The project must be a canonical matching Content and GameProject pair.
+A smoke run instantiates the real root QML with a physical scene but
+does not validate human-visible graphics:
+
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --smoke-scene platform --content /PATH/TO/game.json
+
+Controls: **A/D or ←/→** move, **Space** jump/double-jump, **F** attack
+during recovery, **Enter** use a contacted portal. Accessible on-screen
+hold buttons offer an alternative; the existing save/load/pause menu remains.
+Pause, unload and scene changes reset the presentation clock. Rendering,
+including telegraph colors, is derived from the same fixed-tick replay.
+
+Headless and actual Main.qml offscreen smoke tests:
+
+    python -m unittest tests_standalone.test_r40_player_platform -v
+    python -m unittest tests_standalone.test_r40_player_routes tests_standalone.test_r40_platform_ability tests_standalone.test_r40_platform_boss -v
+
+The tests cover wizard→Player physical path→feather→double jump→guardian
+→boss win→slot replay; boss defeat→manual pre-fight restore; read-only view
+purity, old top-down command refusal, physical route validity and stale
+revision refusal, render-frequency independence, and optional actual QML
+widgets/bridge. **Tests are authored, not confirmed PASS:** the current
+GitHub Actions repository workflow starts then fails with *zero jobs*.
+
+**Not done:** human playtests, optimized million-tick/memory performance,
+controller/gamepad polish, character animation and sound, death-respawn UI,
+the complete top-down and roguelite original game slices, verified full
+native export, 3-OS GPU/device validation, localization/accessibility
+acceptance and release sign-off. R40.B.5 is a **development integration**,
+not an 8.0-certified Player. **R40.12 remains NO-GO.**
 
 ## Remaining R40.B and R40.C gates
 
