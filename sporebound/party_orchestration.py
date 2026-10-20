@@ -19,7 +19,8 @@ def _id(value):
 
 
 def validate_orchestration(data, *, campaigns, content=None):
-    require(type(data) is dict and set(data) == {"version", "pause_policy", "combos"}
+    require(type(data) is dict and {"version", "pause_policy", "combos"} <= set(data)
+            and set(data) <= {"version", "pause_policy", "combos", "defaults"}
             and type(data["version"]) is int and data["version"] == VERSION
             and data["pause_policy"] == PAUSE_POLICY,
             "Unsupported R53 orchestration version or pause policy")
@@ -69,19 +70,37 @@ def validate_orchestration(data, *, campaigns, content=None):
                             and all(effect.kind == "damage"
                                     for effect in skill.effects),
                             "R53.A2 permits only native enemy damage skills")
+    if "defaults" in data:
+        defaults = data["defaults"]
+        require(type(defaults) is dict and len(defaults) <= len(campaigns)
+                and set(defaults) <= set(campaigns),
+                "R53 defaults must reference configured party campaigns")
+        for cid, row in defaults.items():
+            active = campaigns[cid]["active"]
+            require(type(row) is dict and set(row) == {"leader", "formation"}
+                    and type(row["leader"]) is str and row["leader"] in active
+                    and type(row["formation"]) is list
+                    and len(row["formation"]) == len(active)
+                    and all(type(slot) is str and slot in SLOTS
+                            for slot in row["formation"])
+                    and len(set(row["formation"])) == len(active),
+                    "R53 default leader/formation require active heroes and unique slots")
     return deepcopy(data)
 
 
 class PartyOrchestration:
     """Session-owned leader/slots; R41 still owns active member selection."""
 
-    def __init__(self, specification, config):
-        validate_orchestration(specification, campaigns={"current": config})
+    def __init__(self, specification, config, *, campaign_id=None):
+        key = campaign_id if campaign_id is not None else "current"
+        validate_orchestration(specification, campaigns={key: config})
         self._spec = deepcopy(specification)
         self._config = deepcopy(config)
+        self._campaign_id = key
         self.active = list(config["active"])
-        self.leader = self.active[0]
-        self.formation = list(SLOTS[:len(self.active)])
+        defaults = specification.get("defaults", {}).get(key, {})
+        self.leader = defaults.get("leader", self.active[0])
+        self.formation = list(defaults.get("formation", SLOTS[:len(self.active)]))
         self.events = []
 
     @property
@@ -155,7 +174,8 @@ class PartyOrchestration:
                 "Invalid R53 orchestration checkpoint")
         activations = [row["members"] for row in party.events
                        if row["op"] == "activate"]
-        candidate = type(self)(self._spec, self._config)
+        candidate = type(self)(self._spec, self._config,
+                               campaign_id=self._campaign_id)
         consumed = 0
         for event in recording["events"]:
             require(type(event) is dict and type(event.get("op")) is str,

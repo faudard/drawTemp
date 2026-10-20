@@ -96,7 +96,8 @@ class GameSession:
         from .party_orchestration import PartyOrchestration
         orchestration = (party["data"].get("orchestration")
                          if config is not None else None)
-        self._party_orchestration = (PartyOrchestration(orchestration, config)
+        self._party_orchestration = (PartyOrchestration(orchestration, config,
+                                                             campaign_id=campaign_id)
                                      if orchestration is not None else None)
         # Only initial new-game construction seeds these items. Loaded saves
         # replace Campaign through verified replay, never replenish stock.
