@@ -49,6 +49,7 @@ class R74PlayerCertificationTests(unittest.TestCase):
             self.assertGreater(stage["commands"], 0)
             self.assertLess(stage["commands"], 1800)
             self.assertEqual(len(stage["recording_digest"]), 64)
+            self.assertTrue(stage["checkpoint_disk_roundtrip"])
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
 
     def test_materialized_encounter_and_25_gold_per_loot_unit(self):
