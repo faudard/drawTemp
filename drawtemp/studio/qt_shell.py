@@ -596,11 +596,11 @@ class StudioWindow(QMainWindow):
         if self.session.revision != prior:
             self.refresh()
 
-    def open_refactor(self):
+    def open_refactor(self, identity=None):
         """R38.3 explicit mission-scoped reference rename with Undo/Redo."""
         from drawtemp.studio.r38_refactor_qt import RefactorDialog
         prior = self.session.revision
-        RefactorDialog(self).exec()
+        RefactorDialog(self, initial=identity).exec()
         if self.session.revision != prior:
             self.refresh()
 
@@ -718,6 +718,13 @@ class StudioWindow(QMainWindow):
                        lambda: self.reference_filter.setCurrentIndex(1))
         menu.addAction("Références utilisées",
                        lambda: self.reference_filter.setCurrentIndex(2))
+        identity = index.data(Qt.UserRole)
+        if identity:
+            key = tuple(identity.split("|", 2))
+            if key[0] in ("objects", "actors") and key in self._resource_by_key:
+                menu.addSeparator()
+                menu.addAction("Renommer l'ID et ses références (R38.3)…",
+                               lambda identity=key: self.open_refactor(identity))
         menu.exec(self.resource_view.viewport().mapToGlobal(point))
 
     def refresh(self):
