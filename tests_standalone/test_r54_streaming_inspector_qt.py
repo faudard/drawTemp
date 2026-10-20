@@ -30,6 +30,7 @@ class WorldStreamingQtTests(unittest.TestCase):
             self.assertEqual(dialog.tree.topLevelItemCount(), 3)
             self.assertEqual(dialog.zoom.currentData(), 1.0)
             self.assertIn("Cache :", dialog.status.text())
+            dialog.budget.setValue(4)
             dialog.generate_from_routes()
             self.assertEqual(dialog.tree.topLevelItemCount(), 3)
             self.assertEqual(editor.revision, 0)
