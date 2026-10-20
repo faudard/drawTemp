@@ -246,6 +246,24 @@ def seeded_for_project(project, catalog=None):
         if campaign.get("description"):
             sources["campaign." + cid + ".description"] = (
                 campaign["description"], "Campaign summary", 500)
+    story = project.get("story", {})
+    for scene in story.get("scenes", []) if isinstance(story, dict) else []:
+        if not isinstance(scene, dict) or not isinstance(scene.get("id"), str):
+            continue
+        sid = scene["id"]
+        for field, context, limit in (
+                ("title", "Narrative scene title", 120),
+                ("speaker", "Narrative speaker", 120),
+                ("text", "Narrative dialogue and subtitles", 1500)):
+            value = scene.get(field)
+            if isinstance(value, str) and value:
+                sources["story." + sid + "." + field] = (value, context, limit)
+        for choice in scene.get("choices", []):
+            if (isinstance(choice, dict) and isinstance(choice.get("id"), str)
+                    and isinstance(choice.get("label"), str) and choice["label"]):
+                sources["story." + sid + ".choice." + choice["id"] + ".label"] = (
+                    choice["label"], "Narrative choice", 160)
+    # Sources added above are included in the same deterministic migration.
     drift = []
     for key, (source, context, limit) in sources.items():
         if not isinstance(source, str) or not source or not KEY.fullmatch(key):
@@ -259,3 +277,50 @@ def seeded_for_project(project, catalog=None):
                 "translations": {},
             }
     return Catalog(data), tuple(drift)
+
+
+
+def localize_view(view, catalog, language):
+    """R57 projection on an already calculated Player view; never mutates state."""
+    result = dict(view)
+    result["language"] = language
+    if catalog is None:
+        return result
+
+    def translate(key, source):
+        if not isinstance(source, str) or not source:
+            return source
+        try:
+            return catalog.render(key, language, source=source)
+        except LocalizationError:
+            # Missing runtime placeholders or stale authoring must stay legible.
+            return source
+
+    campaign = str(view.get("campaign", ""))
+    if campaign.endswith("_journey"):
+        result["title"] = translate("campaign." + campaign + ".name",
+                                    view.get("title"))
+        result["subtitle"] = translate("campaign." + campaign + ".description",
+                                       view.get("subtitle"))
+    else:
+        result["title"] = translate("project.title", view.get("title"))
+        result["subtitle"] = translate("project.subtitle", view.get("subtitle"))
+
+    scene = view.get("scene")
+    if isinstance(scene, dict) and isinstance(scene.get("id"), str):
+        sid = scene["id"]
+        result["scene"] = dict(scene)
+        for field in ("title", "speaker", "text"):
+            if field in scene:
+                result["scene"][field] = translate(
+                    "story." + sid + "." + field, scene[field])
+        choices = view.get("choices")
+        if isinstance(choices, list):
+            result["choices"] = [
+                dict(row, label=translate(
+                    "story." + sid + ".choice." + row["id"] + ".label",
+                    row.get("label", "")))
+                if isinstance(row, dict) and isinstance(row.get("id"), str)
+                else row for row in choices
+            ]
+    return result
