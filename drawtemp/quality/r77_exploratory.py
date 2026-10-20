@@ -30,26 +30,19 @@ def _cell(position):
     return position[0] // 1000, position[1] // 1000
 
 
-def _path(start, target, *, width, height, blocked):
-    """Pure shortest route on the authored grid; runtime owns actual collision."""
-    if target in blocked:
-        return None
-    queue, previous = deque([start]), {start: None}
+def _routes(start, *, width, height, blocked):
+    """One bounded BFS per tick, reused for every candidate destination."""
+    queue, previous, distance = deque([start]), {start: None}, {start: 0}
     while queue:
         cell = queue.popleft()
-        if cell == target:
-            route = [cell]
-            while previous[cell] is not None:
-                cell = previous[cell]
-                route.append(cell)
-            return list(reversed(route))
         for dx, dy in DIRECTIONS:
             nxt = cell[0] + dx, cell[1] + dy
             if (nxt not in previous and nxt not in blocked and
                     0 <= nxt[0] < width and 0 <= nxt[1] < height):
                 previous[nxt] = cell
+                distance[nxt] = distance[cell] + 1
                 queue.append(nxt)
-    return None
+    return previous, distance
 
 
 def _next_input(runner, goals, rng, attempted):
@@ -86,15 +79,15 @@ def _next_input(runner, goals, rng, attempted):
         else:
             candidates.append((pos, "object"))
     rng.shuffle(candidates)
-    choices = []
-    for target, kind in candidates:
-        path = _path(cell, target, width=runner.scene["width"],
-                     height=runner.scene["height"], blocked=blocked)
-        if path is not None and (kind == "object" or cell != target):
-            choices.append((len(path), path))
+    parents, distances = _routes(cell, width=runner.scene["width"],
+                                 height=runner.scene["height"], blocked=blocked)
+    choices = [(distances[target], target) for target, kind in candidates
+               if target in distances and (kind == "object" or cell != target)]
     if choices:
-        route = min(choices, key=lambda item: item[0])[1]
-        next_cell = route[1] if len(route) > 1 else route[0]
+        target = min(choices, key=lambda item: item[0])[1]
+        next_cell = target
+        while parents[next_cell] is not None and parents[next_cell] != cell:
+            next_cell = parents[next_cell]
     else:
         open_cells = [(x, y) for y in range(runner.scene["height"])
                       for x in range(runner.scene["width"])
