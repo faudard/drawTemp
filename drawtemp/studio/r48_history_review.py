@@ -2,7 +2,7 @@
 
 All edits remain owned by one AuthoringSession. Imports reuse the R30.C
 pinned, validated two-file reader; ancestry is declared by the operator, not
-verified Git history. The revision graph is in-memory only. No save, checkout,
+verified Git history. The revision graph may be explicitly persisted in an optional verified sidecar. No autosave, checkout,
 network access, audit append, or silent conflict choice is performed here.
 """
 from __future__ import annotations
@@ -83,7 +83,10 @@ class ProjectHistoryWorkspace:
 
     def save_history(self, path=None):
         """Explicitly save a complete validated DAG; never overwrite blindly."""
-        target = LocalHistoryStore(path if path is not None else self.history_path)
+        chosen = path if path is not None else self.history_path
+        if chosen is None:
+            raise HistoryStoreError("missing_destination", "Choose a history file first")
+        target = LocalHistoryStore(chosen)
         if self.history_path is not None and target.path != self.history_path:
             raise HistoryStoreError(
                 "wrong_destination", "Choose another workspace before switching history files")
