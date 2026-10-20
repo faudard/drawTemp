@@ -29,6 +29,9 @@ from drawtemp.studio.package_manager import (
     _walk_refs,
 )
 from sporebound.assets import AssetRegistry
+from drawtemp.studio.package_upgrade_recovery import (
+    require_no_pending_upgrade, begin_upgrade_journal, clear_upgrade_journal,
+)
 
 _MAX_DIFF = 512
 
@@ -200,6 +203,7 @@ def preview_package_upgrade(
 ):
     """Read-only diff; no filesystem writes, no editing or implicit grant."""
     root = _project_root(project_root)
+    require_no_pending_upgrade(root)
     if type(expected_sha256) is not str or len(expected_sha256) != 64 or any(
             c not in "0123456789abcdef" for c in expected_sha256):
         _reject("invalid_pin", "Supply an independently verified lowercase SHA-256")
@@ -321,6 +325,7 @@ def apply_package_upgrade(preview, editor, project_root):
     if not isinstance(preview, PackageUpgradePreview):
         _reject("invalid_preview", "Expected versioned upgrade preview")
     root = _project_root(project_root)
+    require_no_pending_upgrade(root)
     snapshot, old = _snapshot_and_pack(editor, root, preview.package_id)
     if (snapshot["revision"] != preview.source_revision or
             _snapshot_digest(snapshot) != preview.source_digest or
@@ -340,6 +345,12 @@ def apply_package_upgrade(preview, editor, project_root):
         _reject("stale_preview", "Version directory appeared/disappeared since preview")
     created_dir = None
     created_files = []
+    marker_sha = None
+    if not reuse:
+        # Durable intent BEFORE filesystem writes. On process termination the
+        # marker survives and blocks any subsequent package edit pending
+        # explicit inspection; no files are silently deleted on startup.
+        marker_sha = begin_upgrade_journal(root, preview, manifest)
     try:
         if not reuse:
             created_dir, created_files = _create_new_version(root, manifest, raw)
@@ -356,8 +367,17 @@ def apply_package_upgrade(preview, editor, project_root):
                 _snapshot_digest(editor.snapshot().to_dict()) != preview.source_digest):
             _reject("stale_preview", "Editor changed during installation")
         # No documents are saved; the preexisting on-disk project stays valid.
-        return editor.apply(preview._edit)
+        transition = editor.apply(preview._edit)
     except BaseException:
         if created_dir is not None:
             _cleanup(created_dir, created_files)
+        if marker_sha is not None:
+            # If the cleanup or filesystem acknowledgement fails, retain the
+            # journal and force explicit review rather than hiding uncertainty.
+            clear_upgrade_journal(root, expected_sha256=marker_sha)
         raise
+    if marker_sha is not None:
+        # If this final unlink fails, the edit has succeeded but the persistent
+        # marker remains, so further package operations fail closed.
+        clear_upgrade_journal(root, expected_sha256=marker_sha)
+    return transition
