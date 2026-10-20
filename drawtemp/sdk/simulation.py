@@ -207,6 +207,103 @@ class Simulation:
         operation = 'route_interact' if routed else 'explore_interact'
         return self._apply(operation, point_id, expected_revision=expected_revision)
 
+    def platform_state(self, *, expected_revision=None):
+        """Immutable R32 render projection without creating an engine journal.
+
+        Viewing an untouched scene must not materialize GameSession._platform:
+        only a genuine fixed-tick command may begin its replay stream.
+        """
+        self._check_revision(expected_revision, "platform_state")
+        session = self._session
+        if (session.mode != "campaign" or session.progress.story_pending
+                or session.tactical_story_pending or not session.scene_router.enabled
+                or session.route_scene not in session.project.exploration):
+            return None
+        from sporebound.physics_scenes import EXTENSION
+        authored = (session.project.extensions.get(EXTENSION, {})
+                    .get("data", {}).get("scenes", {}).get(session.route_scene))
+        if authored is None or session._rt_journal is not None:
+            return None
+        if session._platform is not None:
+            runtime = session._platform
+        else:
+            from sporebound.platform_physics import PlatformPhysics
+            opened = [row["opens"] for row in authored["colliders"]
+                      if "opens" in row
+                      and session.progress.story_flags.get(
+                          session._platform_flag(row["opens"])) is True]
+            runtime = PlatformPhysics(
+                authored, initial_disabled=sorted(set(opened)),
+                max_air_jumps=session._metroidvania_air_jumps())
+        return freeze({"world": deepcopy(authored), "state": runtime.snapshot()})
+
+    def platform_step(self, move=0, jump=False, attack=False, *,
+                      expected_revision=None):
+        """Exactly one real 60 Hz GameSession tick, revision-guarded and atomic."""
+        return self._apply("route_platform_step", move, jump, False, attack,
+                           expected_revision=expected_revision)
+
+    def platform_travel(self, link_id, *, expected_revision=None):
+        """Only a contacted R32 portal may authorize an R25 scene transition."""
+        return self._apply("route_platform_travel", link_id,
+                           expected_revision=expected_revision)
+
+    def route_options(self, *, expected_revision=None):
+        """Read-only R25 exit catalogue for Studio/Player; no new route ledger.
+
+        Eligibility is computed by the existing SceneRouter and Campaign.
+        An unavailable route stays visible but cannot be entered; inspecting
+        the menu never mutates replay, revisions, or RNG.
+        """
+        self._check_revision(expected_revision, 'route_options')
+        session = self._session
+        if (not session.scene_router.enabled or session.mode != 'campaign'
+                or session.route_scene not in session.project.exploration
+                or session.progress.story_pending or session.tactical_story_pending):
+            return freeze([])
+        result = []
+        for link in session.project.scene_routes['links']:
+            if link['source'] != session.route_scene:
+                continue
+            try:
+                session.scene_router.destination(
+                    session.route_scene, link['id'], session.progress)
+            except RuleError:
+                available = False
+            else:
+                available = True
+            metroidvania = session.project.extensions.get("drawtemp.metroidvania")
+            if metroidvania is not None:
+                for edge in metroidvania["data"]["links"]:
+                    if edge["id"] != link["id"] or not edge["requires"]:
+                        continue
+                    available = (available and
+                        edge["source"] == session.route_scene and
+                        edge["destination"] == link["destination"] and
+                        set(edge["requires"]) <= session._metroidvania_abilities())
+            # A physical portal remains unavailable until a real fixed-tick
+            # R32 command places the player inside its trigger rectangle.
+            authored = (session.project.extensions.get("drawtemp.physics", {})
+                        .get("data", {}).get("scenes", {})
+                        .get(session.route_scene, {}))
+            physical_routes = {row["route"] for row in
+                               authored.get("colliders", []) if "route" in row}
+            if link["id"] in physical_routes:
+                available = (available and session._platform is not None
+                             and link["id"] in session._platform.available_routes())
+            destination = link['destination']
+            title = (session.project.exploration[destination]['title']
+                     if destination in session.project.exploration
+                     else session.content.missions[destination].name)
+            result.append({'id': link['id'], 'destination': destination,
+                           'title': title, 'available': available})
+        return freeze(result)
+
+    def route_transition(self, link_id, *, expected_revision=None):
+        """Atomic R25 GameSession transition, guarded by R1 revision checks."""
+        return self._apply('route_transition', link_id,
+                           expected_revision=expected_revision)
+
     def explore_wait(self, *, expected_revision=None):
         return self._apply('explore_wait', expected_revision=expected_revision)
 

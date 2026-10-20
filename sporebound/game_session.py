@@ -381,6 +381,40 @@ class GameSession:
         payload = (self.route_scene + ":" + collider).encode("utf-8")
         return "r32_open_" + hashlib.sha256(payload).hexdigest()[:24]
 
+    def _metroidvania_abilities(self):
+        """R33 authored grants resolved exclusively from earned Campaign flags."""
+        spec = self.project.extensions.get("drawtemp.metroidvania")
+        if spec is None:
+            return frozenset()
+        graph = spec["data"]
+        abilities = set(graph["starting_capabilities"])
+        for pickup in graph["pickups"]:
+            if self.progress.story_flags.get("r33_pickup_" + pickup["id"]) is True:
+                abilities.update(pickup["grants"])
+        return frozenset(abilities)
+
+    def _metroidvania_air_jumps(self):
+        """One opt-in R33 ability in canonical Campaign flags, never CT."""
+        return int("double_jump" in self._metroidvania_abilities())
+
+    def _metroidvania_collect(self, events):
+        """Accept a pickup only when the real R32 trigger was entered."""
+        spec = self.project.extensions.get("drawtemp.metroidvania")
+        if spec is None:
+            return
+        room = self.route_scene
+        candidates = {p["id"] for p in spec["data"]["pickups"] if p["room"] == room}
+        entered = {event["collider"] for event in events
+                   if event["kind"] == "trigger_enter"}
+        for pickup in candidates & entered:
+            self.progress.story_flags["r33_pickup_" + pickup] = True
+        if "waystone" in entered:
+            from .exploration import _key
+            authored = self.project.exploration.get(room, {}).get(
+                "interactions", [])
+            if any(point["id"] == "waystone" for point in authored):
+                self.progress.story_flags[_key(room, "waystone")] = True
+
     def _active_platform(self):
         from .platform_physics import PlatformPhysics
         authored = self._platform_definition()
@@ -388,24 +422,36 @@ class GameSession:
             opened = [row["opens"] for row in authored["colliders"]
                       if "opens" in row and
                       self.progress.story_flags.get(self._platform_flag(row["opens"])) is True]
-            self._platform = PlatformPhysics(authored,
-                                             initial_disabled=sorted(set(opened)))
+            self._platform = PlatformPhysics(
+                authored, initial_disabled=sorted(set(opened)),
+                max_air_jumps=self._metroidvania_air_jumps())
         return self._platform
 
     def route_platform_state(self):
         """Detached state projection for Player/Studio; no frame-clock input."""
         return self._active_platform().snapshot()
 
-    def route_platform_step(self, move=0, jump=False, interact=False):
+    def route_platform_step(self, move=0, jump=False, interact=False, attack=False):
         """Exactly one fixed step; rewards and door flags belong to Campaign."""
         runtime = self._active_platform()
         if self._living_world is not None:
             self._living_world.preflight(1)
-        events = runtime.step({"tick": runtime.tick + 1, "move": move,
-                               "jump": jump, "interact": interact})
+        command = {"tick": runtime.tick + 1, "move": move,
+                   "jump": jump, "interact": interact}
+        if "boss" in runtime.scene:
+            command["attack"] = attack
+        else:
+            require(type(attack) is bool and not attack,
+                    "Attack requires an authored R40 platform boss")
+        events = runtime.step(command)
         for event in events:
             if event["kind"] == "door_open":
                 self.progress.story_flags[self._platform_flag(event["collider"])] = True
+        self._metroidvania_collect(events)
+        for event in events:
+            if event["kind"] == "boss_defeated":
+                from .exploration import _key
+                self.progress.story_flags[_key(self.route_scene, "boss_defeated")] = True
         if self._living_world is not None:
             self._living_world.advance(1)
         return {"state": runtime.snapshot(), "events": events}
@@ -427,6 +473,31 @@ class GameSession:
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
+        # R33 ability-gated route requirements are explicit project data.
+        # For authored physical gates, enforce actual R32 overlap too;
+        # narrative-only links retain their earlier R25 behavior.
+        metroidvania = self.project.extensions.get("drawtemp.metroidvania")
+        if metroidvania is not None:
+            gated = [row for row in metroidvania["data"]["links"]
+                     if row["id"] == link_id and row["requires"]]
+            for row in gated:
+                require(row["source"] == self.route_scene and
+                        row["destination"] == route["destination"],
+                        "R33 gate does not match the authored scene route")
+                require(set(row["requires"]) <= self._metroidvania_abilities(),
+                        "R33 scene gate requires an earned capability")
+        # Every authored physical portal requires actual R32 overlap,
+        # including non-ability routes. Prevent old narrative APIs from
+        # bypassing the Player's physical movement and collision system.
+        physical = (self.project.extensions.get("drawtemp.physics", {})
+                    .get("data", {}).get("scenes", {})
+                    .get(self.route_scene, {}))
+        portals = {c["route"] for c in physical.get("colliders", [])
+                   if "route" in c}
+        if link_id in portals:
+            require(self._platform is not None and
+                    link_id in self._platform.available_routes(),
+                    "Physical scene route requires actual R32 portal contact")
         before = deepcopy((self.progress, self.battle, self.fronts, self.finalized,
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
@@ -1286,6 +1357,18 @@ class GameSession:
             session._rt_origin = origin
             session._rt_position = list(position)
             session._rt_journal = journal
+        # A completed boss in the active room must carry an authentic
+        # replay. A hash-recomputed Campaign flag without scene_platform is
+        # not sufficient evidence of a physical boss victory.
+        physics_catalog = (project.extensions.get("drawtemp.physics", {})
+                           .get("data", {}).get("scenes", {}))
+        authored_physics = physics_catalog.get(session.route_scene, {})
+        if "boss" in authored_physics:
+            from .exploration import _key
+            claimed = session.progress.story_flags.get(
+                _key(session.route_scene, "boss_defeated")) is True
+            require(not claimed or "scene_platform" in data,
+                    "R40 boss victory requires an authenticated R32 replay")
         if "scene_platform" in data:
             from .platform_physics import PlatformPhysics
             saved = data["scene_platform"]
@@ -1296,6 +1379,14 @@ class GameSession:
             authored = session._platform_definition()
             platform = PlatformPhysics.from_recording(saved["physics"],
                                                       expected_scene=authored)
+            require(platform.max_air_jumps <= session._metroidvania_air_jumps(),
+                    "R32 air jumps are not authorized by earned R33 abilities")
+            if "boss" in authored:
+                from .exploration import _key
+                won = session.progress.story_flags.get(
+                    _key(session.route_scene, "boss_defeated")) is True
+                require(won == platform.boss.snapshot()["defeated"],
+                        "R40 boss replay disagrees with canonical campaign victory")
             authored_openable = {row["opens"] for row in authored["colliders"]
                                  if "opens" in row}
             saved_opened = {ident for ident in authored_openable

@@ -10,10 +10,11 @@ from tempfile import TemporaryDirectory
 from drawtemp.core import Content, GameProject
 from drawtemp.export.r15 import ExportError, preflight
 from drawtemp.sdk.reference import reference_project
+from drawtemp.sdk.r40_starters import STARTER_KINDS, create_starter_pair
 from sporebound.studio_transaction import validate_pair
 from drawtemp.quality.r14 import safe_asset_path
 
-TEMPLATES = ("blank", "tactical", "narrative", "jeanne", "asterion")
+TEMPLATES = ("blank", "tactical", "narrative", "jeanne", "asterion") + STARTER_KINDS
 _TITLES = {"blank": "Nouveau RPG", "tactical": "Prototype tactique",
            "narrative": "Histoire interactive",
            "jeanne": "Jeanne d'Arc — Les Cendres du Royaume",
@@ -56,6 +57,17 @@ def create_template(kind, destination, *, title=None, subtitle=None,
             content = Content.from_dict(json.loads(source.read_text(encoding="utf-8")))
             project = GameProject.from_dict(
                 json.loads(source_project.read_text(encoding="utf-8")), content)
+            valid_content, valid_project = validate_pair(
+                content.to_dict(), project.to_dict())
+            (stage / "game.json").write_text(
+                json.dumps(valid_content, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+            (stage / "game.game.json").write_text(
+                json.dumps(valid_project, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8")
+        elif kind in STARTER_KINDS:
+            # One canonical project pair; R40.A starter != R40 certification.
+            content, project = create_starter_pair(kind)
             valid_content, valid_project = validate_pair(
                 content.to_dict(), project.to_dict())
             (stage / "game.json").write_text(
