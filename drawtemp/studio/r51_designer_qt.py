@@ -19,11 +19,12 @@ from PySide6.QtWidgets import (
 
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.studio.r51_layout_authoring import LayoutAuthoring
+from drawtemp.quality.r51_ui import ui_export_audit
 from drawtemp.studio.r51_layout_draft import (
     check_layout, edit_breakpoints, edit_layout, edit_gauge_bindings,
     editor_sample, move_focus, new_layout,
 )
-from sporebound.ui_layout_r51 import FIELDS, INTENTS, KINDS, UiLayoutError
+from sporebound.ui_layout_r51 import FIELDS, INTENTS, KINDS, NAMESPACE, VERSION, UiLayoutError
 
 
 class R51DesignerDialog(QDialog):
@@ -459,13 +460,20 @@ class R51DesignerDialog(QDialog):
             root.setProperty("permittedActions", [])
             root.setProperty("highContrast", self.contrast_preview.isChecked())
             root.setProperty("textScale", self.scale_preview.value() / 100.0)
-            kind = self._draft["kind"]
-            note = (" · Écran non branché dans le Player"
-                    if kind in ("DIALOGUE", "INVENTORY", "HUD_ACTION")
-                    else " · Parité Player à valider")
+            catalog = self.editor.inspect()["catalog"]
+            catalog["layouts"][self._layout_id] = self._draft
+            audit = ui_export_audit({
+                "extensions": {
+                    NAMESPACE: {"schema_version": VERSION, "data": catalog}
+                }
+            })
+            if audit["errors"]:
+                issues = " · Export bloqué : " + "; ".join(audit["errors"][:2])
+            else:
+                issues = " · Aucun blocage de capacités détecté (tests non certifiés)"
             self.report.setText(
                 "Aperçu fictif · %d colonnes · aucune commande de jeu déclenchée%s"
-                % (sample["columns"], note))
+                % (sample["columns"], issues))
         except (UiLayoutError, ValueError) as exc:
             self._notice(exc)
 
