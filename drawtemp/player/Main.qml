@@ -221,6 +221,8 @@ ApplicationWindow {
                  menuPayload.available === true && !root.showClassicMenu
         projection: menuPayload.projection || ({})
         allowActions: !root.inputLocked
+        highContrast: root.highContrast
+        textScale: root.textScale
         permittedActions: menuPayload.permitted_actions || []
         onIntent: function(action) {
             if (root.inputLocked ||
@@ -263,6 +265,8 @@ ApplicationWindow {
         visible: authoredPayload.available === true
         projection: authoredPayload.projection || ({})
         allowActions: !root.inputLocked
+        highContrast: root.highContrast
+        textScale: root.textScale
         permittedActions: authoredPayload.permitted_actions || []
         onIntent: function(action) {
             if (!root.inputLocked) player.authoredUiIntent(action)
