@@ -477,6 +477,7 @@ class StudioWindow(QMainWindow):
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
+        self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
@@ -550,6 +551,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
+        tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
@@ -686,6 +688,16 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
         initial_revision = self.session.revision
         dialog = LogicGraphDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != initial_revision:
+            self.refresh()
+
+    def open_ability_designer(self):
+        """R43.B shares the original R1 owner and has no independent save."""
+        from drawtemp.studio.ability_designer_r43_qt import AbilityDesignerDialog
+        initial_revision = self.session.revision
+        dialog = AbilityDesignerDialog(self.session, parent=self)
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != initial_revision:

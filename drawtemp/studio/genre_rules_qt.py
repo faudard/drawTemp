@@ -415,6 +415,11 @@ class GenreRulesWorkspace(QWidget):
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
+        # Keep the R28 native-skill editor; R43 is an explicit optional,
+        # versioned composition workflow over that same canonical Content.
+        self.r43_button = QPushButton("Ouvrir Combat & Ability Designer 2.0 (R43)…")
+        self.r43_button.clicked.connect(self.open_r43_designer)
+        layout.addWidget(self.r43_button)
         self.abilities = AbilityDesignerPanel(session)
         self.enemies = EnemyDesignerPanel(session)
         self.tabs.addTab(self.abilities, "Ability Designer")
@@ -426,6 +431,13 @@ class GenreRulesWorkspace(QWidget):
         self.colliders.updated.connect(self.updated.emit)
         self.abilities.updated.connect(self.updated.emit)
         self.enemies.updated.connect(self.updated.emit)
+
+    def open_r43_designer(self):
+        from drawtemp.studio.ability_designer_r43_qt import AbilityDesignerDialog
+        dialog = AbilityDesignerDialog(self.session, parent=self)
+        dialog.updated.connect(self.updated.emit)
+        dialog.exec()
+        self.refresh()
 
     def refresh(self):
         self.abilities.refresh()
