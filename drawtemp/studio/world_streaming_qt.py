@@ -246,6 +246,8 @@ class WorldStreamingDialog(QDialog):
             self.status.setText("Cache désactivé")
             return
         focus = self._focus()
+        if focus not in {cell["id"] for cell in self.document["cells"]}:
+            focus = self.document["start"]
         try:
             report = inspect_streaming(
                 self.document, self._project,
