@@ -75,7 +75,7 @@ class RefactorDialog(QDialog):
         self.old_id.currentIndexChanged.connect(self._invalidate)
         self.new_id.textChanged.connect(self._invalidate)
         self._refresh_missions()
-        if initial is not None and len(initial) == 3:
+        if isinstance(initial, (tuple, list)) and len(initial) == 3:
             family, mid, identifier = initial
             family_at = self.family.findData(family)
             mission_at = self.mission.findData(mid)
