@@ -104,6 +104,8 @@ class SystemDesignerQtTests(unittest.TestCase):
         self.assertEqual(dlg.tabs.currentIndex(), 0)
         self.assertTrue(dlg.edit_selected.isEnabled())
         self.assertFalse(dlg.unlink_selected.isEnabled())
+        self.assertTrue(dlg.connect_button.isEnabled())
+        self.assertEqual(dlg.inspector.objectName(), "r55GraphInspector")
 
         self.assertTrue(dlg.connect_nodes(
             ("resources", "ore"), ("producers", "jeweler"), 3))
@@ -132,6 +134,8 @@ class SystemDesignerQtTests(unittest.TestCase):
         target = dlg.graph.nodes[("merchants", "trader")].input
 
         def click(port):
+            dlg.graph.centerOn(port.sceneBoundingRect().center())
+            self.app.processEvents()
             pos = dlg.graph.mapFromScene(port.sceneBoundingRect().center())
             QTest.mouseClick(dlg.graph.viewport(), Qt.LeftButton, pos=pos)
             self.app.processEvents()
