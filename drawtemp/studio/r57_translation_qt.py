@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QVBoxLayout, QWidget,
@@ -37,7 +38,8 @@ class TranslationStudioDialog(QDialog):
         layout = QVBoxLayout(self)
         self.help = QLabel(
             "Traductions séparées du projet et du replay. "
-            "Aucun texte n'est exporté ni enregistré avant Enregistrer.")
+            "Aucun texte n'est exporté ni enregistré avant Enregistrer. "
+            "Ctrl+F : rechercher · Ctrl+L : clés · Ctrl+E : traduction · Ctrl+S : sauvegarder.")
         self.help.setWordWrap(True)
         layout.addWidget(self.help)
         top = QHBoxLayout()
@@ -84,6 +86,13 @@ class TranslationStudioDialog(QDialog):
         splitter.addWidget(editor)
         splitter.setStretchFactor(1, 2)
         layout.addWidget(splitter, 1)
+        # Explicit mnemonic navigation, independent of native mouse devices.
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(self.search.setFocus)
+        self.list_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
+        self.list_shortcut.activated.connect(self.keys.setFocus)
+        self.edit_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
+        self.edit_shortcut.activated.connect(self.text.setFocus)
         self.status = QLabel()
         self.status.setWordWrap(True)
         self.status.setAccessibleName("Diagnostic de traduction")
