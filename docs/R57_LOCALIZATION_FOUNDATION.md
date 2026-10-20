@@ -90,6 +90,33 @@ Qt 6.8 packaged dependency does not guarantee a cross-platform Gamepad API;
 do not report controller support without a tested input backend. The global
 R57 gate remains NO-GO.
 
+## R57.D — Translation Studio plurals and audited coverage correctness
+
+On top of the integration PR, this incremental follow-up fixes two correctness
+gaps without changing localization format v1 or any R1 save contract:
+
+- Translation Studio exposes the separate `one` and `other` fields for
+  plural message entries. They stay structured `{one: ..., other: ...}` in the
+  sidecar instead of being converted to a Python dictionary string. Switching
+  forms or language does not discard a pending draft; pseudo-localization
+  preview uses the corresponding numeric count.
+- Studio previews and Player narrative/cinematic text are now explicitly
+  **plain text**, avoiding rich-text interpretation of authored or translated
+  strings. The source context shows clearly labelled plural forms.
+- The QA coverage denominator counts keys actually extracted from the saved
+  GameProject. An additional/historical catalogue entry is reported in
+  `additional_catalog_keys` but cannot inflate the project translation
+  coverage percentage. Independent UI keys may be required by other surfaces,
+  so they are **not** silently called invalid or certified by this project's
+  gate.
+- Dedicated headless tests cover historical catalogue keys and plural
+  pseudo-RTL placeholders; an offscreen Qt test checks one/other editing,
+  save/reload and literal preview.
+
+This lot is developed on a branch based on the R51–R80 consolidation, after
+PR #424 was merged **into the consolidation branch**, not into `master`.
+The consolidated native experience still requires running CI and hardware QA.
+
 ## Auditable automated language readiness (still not certification)
 
 The headless `drawtemp.localization.qa` reader consumes the actual saved
