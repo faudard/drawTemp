@@ -209,16 +209,25 @@ def capture_suite(args):
             "--target", target, "--dpi", str(dpi), "--zoom", str(zoom),
             "--png", str(png), "--meta", str(meta),
         ]
-        run = subprocess.run(command, cwd=ROOT, env=env,
-                             capture_output=True, text=True, timeout=90)
-        if run.returncode:
+        try:
+            run = subprocess.run(command, cwd=ROOT, env=env,
+                                 capture_output=True, text=True, timeout=90)
+            if run.returncode:
+                report["cases"][key] = {
+                    "target": target, "dpi": dpi, "zoom": zoom,
+                    "capture_status": "failed",
+                    "error": (run.stderr + run.stdout)[-1500:],
+                }
+            else:
+                report["cases"][key] = json.loads(
+                    meta.read_text(encoding="utf-8"))
+        except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+            # Always emit a complete diagnostic matrix, never silently
+            # certify a screenshot that failed or exceeded its time budget.
             report["cases"][key] = {
                 "target": target, "dpi": dpi, "zoom": zoom,
-                "capture_status": "failed",
-                "error": (run.stderr + run.stdout)[-1500:],
+                "capture_status": "failed", "error": str(exc)[-1500:],
             }
-        else:
-            report["cases"][key] = json.loads(meta.read_text(encoding="utf-8"))
     report["capture_complete"] = (
         len(report["cases"]) == len(EXPECTED) and
         all(row.get("capture_status") == "captured"
