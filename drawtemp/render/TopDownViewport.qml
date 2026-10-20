@@ -34,6 +34,23 @@ Item {
         }
     }
 
+    // R52.B1: ambient tint overlays the scene graph, never the picking model.
+    // This Rectangle has no pointer handlers or direct Gameplay bindings.
+    Rectangle {
+        anchors.fill: parent
+        z: 90000
+        readonly property var tint: renderer.lightingOverlay
+        color: tint.color
+        opacity: tint.opacity
+        visible: opacity > 0
+    }
+    Timer {
+        interval: 50
+        repeat: true
+        running: renderer.lightingAnimating
+        onTriggered: renderer.advanceLighting(interval)
+    }
+
     Repeater {
         model: renderer.items
         delegate: Item {
