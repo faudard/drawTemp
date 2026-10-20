@@ -189,6 +189,13 @@ class Simulation:
             return None
         return freeze(self._session.survival_state())
 
+    def survival_condition(self, *, expected_revision=None):
+        """Read-only R63 critical-need projection (no revision mutation)."""
+        self._check_revision(expected_revision, "survival_condition")
+        if self._session._survival is None:
+            return None
+        return freeze(self._session.survival_condition())
+
     def survival_advance(self, ticks=1, *, expected_revision=None):
         return self._apply("survival_advance", ticks,
                            expected_revision=expected_revision)
