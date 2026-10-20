@@ -99,7 +99,7 @@ def apply_theme(app, name, scale=100):
     # Use spacing and moderate emphasis rather than tiny, crowded native menus.
     # The palette still controls foreground/background in both themes.
     app.setStyleSheet(
-        "QMenuBar { font-weight: 600; spacing: 4px; }"
+        "QMenuBar { font-weight: 500; spacing: 4px; }"
         "QMenuBar::item { padding: 6px 10px; }"
         "QMenu { font-weight: 500; }"
         "QMenu::item { padding: 7px 28px 7px 14px; }"
