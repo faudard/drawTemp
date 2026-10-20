@@ -201,6 +201,32 @@ ApplicationWindow {
         onActivated: pausePopup.open()
     }
 
+    // R51.B opt-in authored HUD. Only genuine CT Player commands are enabled;
+    // unspecified v1 intents remain disabled. Legacy UI is never hidden here.
+    R51Layout {
+        id: authoredHud
+        objectName: "r51-player-hud"
+        z: 20
+        width: Math.min(440, root.width * 0.34)
+        height: Math.min(250, root.height * 0.31)
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        property var authoredPayload: {
+            var revision = root.playerData.revision
+            if (root.playerData.screen !== "battle")
+                return { "available": false }
+            return player.authoredHud(Math.max(1, Math.round(width)))
+        }
+        visible: authoredPayload.available === true
+        projection: authoredPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: authoredPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (!root.inputLocked) player.authoredUiIntent(action)
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
