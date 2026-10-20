@@ -57,7 +57,7 @@ def make_revision(content, project, *, author: str, parents=()) -> ProjectRevisi
     # records declared *content* parents; the DAG validates unique node IDs.
     if (not isinstance(parents, (tuple, list)) or len(parents) > 2 or
             any(not isinstance(p, str) or not _HEX.fullmatch(p) for p in parents)):
-        raise CollaborationError("invalid_parents", "Expected up to two unique SHA-256 parents")
+        raise CollaborationError("invalid_parents", "Expected up to two valid SHA-256 content parents")
     data, manifest = validate_pair(content, project)
     payload = json.dumps({"content": data, "project": manifest},
                          sort_keys=True, ensure_ascii=False, allow_nan=False,
