@@ -29,7 +29,7 @@ def read_regular_snapshot(path, *, limit: int) -> bytes:
     if source.is_symlink():
         raise UnsafeSnapshotError("Symlink input refused")
     try:
-        before = source.stat(follow_symlinks=False)
+        before = os.lstat(source)
         if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
             raise UnsafeSnapshotError("Input is not a bounded regular file")
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -46,7 +46,7 @@ def read_regular_snapshot(path, *, limit: int) -> bytes:
         if (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (
                 after.st_size, after.st_mtime_ns, after.st_ctime_ns):
             raise UnsafeSnapshotError("Input modified during read")
-        latest = source.stat(follow_symlinks=False)
+        latest = os.lstat(source)
         if (latest.st_dev, latest.st_ino, latest.st_size, latest.st_mtime_ns,
                 latest.st_ctime_ns) != (
                 opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns,
