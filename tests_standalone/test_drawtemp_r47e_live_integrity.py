@@ -56,8 +56,12 @@ class LiveIntegrityTests(unittest.TestCase):
         self.assertEqual(apply.exception.code, "resource_changed")
         self.assertEqual(self.editor.snapshot().to_dict(), baseline)
         self.assertEqual(self.editor.revision, baseline["revision"])
-        report = self.registry.audit_project(self.editor.snapshot(),
-                                             expected_pins=self.pins)
+        # Audit a detached candidate with the namespace present so a missing
+        # contribution cannot mask the pack integrity diagnostic.
+        candidate = deepcopy(baseline)
+        candidate["project"].setdefault("extensions", {})[target["namespace"]] = {
+            "schema_version": 1, **deepcopy(target["extension"])}
+        report = self.registry.audit_project(candidate, expected_pins=self.pins)
         self.assertFalse(report["compatible"])
         self.assertIn("resource_changed", " ".join(report["errors"]))
         archive.write_bytes(original)
