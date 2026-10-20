@@ -285,7 +285,10 @@ def _receipt(manifest, archive_sha):
             "files": [{"path": prefix + f["path"], "sha256": f["sha256"],
                        "license": deepcopy(f["license"])} for f in manifest["files"]],
             "asset_ids": [manifest["id"] + "." + entry["id"]
-                          for entry in manifest["entries"]]}
+                          for entry in manifest["entries"]],
+            # R58.B3: archive-authored exact pins; legacy receipts remain
+            # readable without this key, but cannot prove reverse deps.
+            "dependencies": deepcopy(manifest["dependencies"])}
 
 
 def _make_transform(manifest, archive_sha):
@@ -424,6 +427,64 @@ def install_pack(preview, editor, project_root, *, expected_revision=None):
         raise
 
 
+def verify_receipt_dependency_graph(packs):
+    """Validate the complete *declared* subset of installed dependency pins.
+
+    Receipts without 'dependencies' are legacy/unknown, never an empty
+    dependency list. Clients must refuse dependency-sensitive multi-pack
+    edits while any such unknown receipts remain.
+    """
+    if type(packs) is not list:
+        fail("invalid_receipts", "Installed packs must be a list")
+    index = {}
+    for row in packs:
+        if type(row) is not dict or type(row.get("id")) is not str:
+            fail("invalid_receipts", "Malformed receipt identity")
+        if row["id"] in index:
+            fail("invalid_receipts", "Duplicate installed package")
+        index[row["id"]] = row
+    graph = {}
+    for row in packs:
+        if "dependencies" not in row:
+            continue  # Historical R24.C receipt: dependency graph UNKNOWN.
+        deps = row["dependencies"]
+        if type(deps) is not list or len(deps) > 32:
+            fail("invalid_receipts", "Invalid installed dependency list")
+        visited = set()
+        edges = []
+        for dep in deps:
+            _exact(dep, {"id", "version", "sha256"}, "installed dependency")
+            _id(dep["id"])
+            _version(dep["version"])
+            _hash(dep["sha256"])
+            if dep["id"] in visited or dep["id"] == row["id"]:
+                fail("invalid_receipts", "Duplicate/self dependency in receipt")
+            visited.add(dep["id"])
+            actual = index.get(dep["id"])
+            if actual is None or (actual.get("version"), actual.get("sha256")) != (
+                    dep["version"], dep["sha256"]):
+                fail("dependency_conflict",
+                     "Missing or incompatible dependency for " + row["id"] +
+                     ": " + dep["id"])
+            edges.append(dep["id"])
+        graph[row["id"]] = tuple(sorted(edges))
+    state = {}
+
+    def visit(pack_id):
+        if state.get(pack_id) == 1:
+            fail("dependency_cycle", "Installed package dependency cycle")
+        if state.get(pack_id) == 2:
+            return
+        state[pack_id] = 1
+        for dep in graph.get(pack_id, ()):
+            visit(dep)
+        state[pack_id] = 2
+
+    for pack_id in sorted(graph):
+        visit(pack_id)
+    return all("dependencies" in row for row in packs)
+
+
 def verify_installed_packs(project_root, project):
     """Return all detected receipt/asset digest errors for export preflight.
 
@@ -448,7 +509,10 @@ def verify_installed_packs(project_root, project):
         ids = {row["id"]: row for row in assets.to_dict()["entries"]}
         seen_ids, seen_paths = set(), set()
         for pack in packs:
-            _exact(pack, {"id", "version", "sha256", "files", "asset_ids"}, "receipt")
+            if type(pack) is not dict or set(pack) not in (
+                    {"id", "version", "sha256", "files", "asset_ids"},
+                    {"id", "version", "sha256", "files", "asset_ids", "dependencies"}):
+                fail("invalid_receipts", "Unknown installed receipt fields")
             _id(pack["id"])
             _version(pack["version"])
             _hash(pack["sha256"])
@@ -497,6 +561,7 @@ def verify_installed_packs(project_root, project):
                 asset = ids[aid]
                 if asset["kind"] != "animation" and asset["path"].casefold() not in own_paths:
                     fail("invalid_receipts", "Untracked asset in installed pack")
+        verify_receipt_dependency_graph(packs)
     except (ResourcePackError, OSError, ValueError, KeyError, TypeError) as exc:
         issues.append("Resource pack integrity: " + str(exc))
     return issues
