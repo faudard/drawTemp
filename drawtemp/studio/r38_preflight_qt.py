@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget,
     QPushButton, QVBoxLayout,
@@ -19,6 +20,7 @@ class PreflightDialog(QDialog):
         self.owner = owner
         self.session = owner.session
         self.report = None
+        self._observed_revision = None
         self.asset_root = (str(Path(owner.content_path).parent)
                            if getattr(owner, "content_path", None) else None)
         self.setObjectName("r38-project-preflight")
@@ -69,6 +71,21 @@ class PreflightDialog(QDialog):
         layout.addLayout(footer)
 
         self.refresh()
+        # Only re-evaluate if R1's canonical revision changes; this is not
+        # filesystem polling or an implicit export. A manual refresh is still
+        # available for asset files changed outside the editor.
+        self._revision_watch = QTimer(self)
+        self._revision_watch.setInterval(800)
+        self._revision_watch.timeout.connect(self._refresh_if_changed)
+        self._revision_watch.start()
+        self.finished.connect(lambda _code: self._revision_watch.stop())
+
+    def _refresh_if_changed(self):
+        if self.owner.session is not self.session:
+            self.session = self.owner.session
+            self._observed_revision = None
+        if self._observed_revision != self.session.revision:
+            self.refresh()
 
     def _root_text(self):
         return ("Assets : " + self.asset_root if self.asset_root
@@ -90,10 +107,12 @@ class PreflightDialog(QDialog):
                 require_licenses=self.rights.isChecked())
         except (ValueError, TypeError, KeyError, OSError) as exc:
             self.report = None
+            self._observed_revision = self.session.revision
             self.summary.setText("Preflight impossible : " + str(exc))
             self.issues.clear()
             return
         self.report = report
+        self._observed_revision = report["revision"]
         self.issues.clear()
         for issue in report["issues"]:
             label = ("ERREUR" if issue["severity"] == "error" else "AVERTISSEMENT")
@@ -116,3 +135,7 @@ class PreflightDialog(QDialog):
         if not report["complete"]:
             status += "\nAudit incomplet : le résultat ne peut pas être déclaré conforme."
         self.summary.setText(status + "\nAucune certification Player/release délivrée.")
+
+    def closeEvent(self, event):
+        self._revision_watch.stop()
+        super().closeEvent(event)
