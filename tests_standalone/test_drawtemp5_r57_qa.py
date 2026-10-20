@@ -86,6 +86,15 @@ class R57CoverageGateTests(unittest.TestCase):
                             ["automated_pass"])
             self.assertEqual(src, project_file.read_bytes())
             self.assertEqual(catalog_src, catalog_file.read_bytes())
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                self.assertEqual(
+                    main([str(project_file), str(catalog_file),
+                          "--json-out", str(project_file)]), 2)
+                self.assertEqual(
+                    main([str(project_file), str(catalog_file),
+                          "--json-out", str(catalog_file)]), 2)
+            self.assertEqual(src, project_file.read_bytes())
+            self.assertEqual(catalog_src, catalog_file.read_bytes())
             changed = dict(PROJECT, title="Changement")
             project_file.write_text(json.dumps(changed), encoding="utf-8")
             with redirect_stdout(StringIO()):
