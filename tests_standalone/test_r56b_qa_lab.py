@@ -9,7 +9,8 @@ import unittest
 
 from drawtemp.quality.r56_lab import (
     KIND, build_suite, capture_case, diff_batches, inspect_case,
-    read_report, read_suite, run_batch, save_json, validate_suite, main,
+    read_report, read_suite, replay_to_step, run_batch, save_json,
+    validate_suite, main,
 )
 from drawtemp.sdk.r40_starters import create_starter_pair
 from sporebound.game_session import GameSession
@@ -73,6 +74,30 @@ class QALabHeadlessTests(unittest.TestCase):
             inspect_case(result["cases"][0]["report"], suite["cases"][1], 1)
         with self.assertRaises(ValueError):
             inspect_case(result["cases"][1]["report"], suite["cases"][1], True)
+
+    def test_selected_point_replays_actual_invariant_value(self):
+        content, project, suite = fixture()
+        batch = run_batch(suite, content, project, revision=SHA)
+        passing = replay_to_step(
+            suite["cases"][0], content, project, revision=SHA, step=1,
+            report=batch["cases"][0]["report"])
+        self.assertEqual(passing["status"], "reproduced")
+        self.assertTrue(passing["observations"][0]["matches"])
+        self.assertEqual(passing["observations"][0]["actual"], "arrival")
+        failure = replay_to_step(
+            suite["cases"][1], content, project, revision=SHA, step=2,
+            report=batch["cases"][1]["report"])
+        self.assertEqual(failure["status"], "invariant-failed")
+        self.assertEqual(failure["observations"][0]["expected"], "battle")
+        self.assertEqual(failure["observations"][0]["actual"], "campaign")
+        self.assertFalse(failure["observations"][0]["matches"])
+        self.assertFalse(failure["release_certified"])
+        with self.assertRaises(ValueError):
+            replay_to_step(suite["cases"][0], content, project,
+                           revision="b" * 40, step=1)
+        with self.assertRaises(ValueError):
+            replay_to_step(suite["cases"][0], content, project,
+                           revision=SHA, step=257)
 
     def test_stale_revision_blocks_all_scenarios(self):
         content, project, suite = fixture()
