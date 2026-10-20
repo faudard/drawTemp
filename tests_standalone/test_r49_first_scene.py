@@ -173,9 +173,19 @@ class FirstSceneQtTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             window = self.create_window(temp)
             try:
-                window.navigate("events")
-                panel = window._models["events"].first_scene
-                self.assertEqual(panel.objectName(), "r49c2-first-scene")
+                with patch.object(window, "playtest", return_value=False) as play, \
+                        patch.object(window, "export_player", return_value=False) as export:
+                    window.navigate("events")
+                    panel = window._models["events"].first_scene
+                    self.assertEqual(panel.objectName(), "r49c2-first-scene")
+                    # Both UI buttons use Studio's existing commands.
+                    # Signals are connected during workspace construction.
+                    # The fake callbacks must never spawn a Player or export.
+                    panel.playtestRequested.emit()
+                    panel.exportRequested.emit()
+                    play.assert_called_once_with()
+                    export.assert_called_once_with()
+                
                 self.assertFalse(panel.apply_button.isEnabled())
                 previous = window.session.snapshot().to_dict()
                 panel.event_id.setText("r49_ui_event")
@@ -190,10 +200,6 @@ class FirstSceneQtTests(unittest.TestCase):
                 snapshot = window.session.snapshot().to_dict()
                 self.assertIn("r49_ui_scene",
                               [s["id"] for s in snapshot["project"]["story"]["scenes"]])
-                with patch.object(window, "playtest", return_value=False):
-                    # Signal itself remains connected to original shell method;
-                    # check the bound action wiring rather than mocking the slot.
-                    self.assertGreater(len(panel.playtestRequested), 0) if False else None
                 window.session.undo()
                 window.refresh()
                 self.assertEqual(window.session.snapshot().to_dict(), previous)
