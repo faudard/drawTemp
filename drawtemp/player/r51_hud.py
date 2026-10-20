@@ -42,7 +42,13 @@ def hud_for_player(controller, width):
         "projection": projection,
         # Only the already implemented PlayerController.command("end") can
         # be enabled. Remaining v1 authoring intents stay visibly inert.
-        "permitted_actions": ["combat.end_turn"] if authorized else [],
+        "permitted_actions": (
+            ["combat.end_turn"] + (
+                ["combat.open_inventory"] if any(
+                    row["kind"] == "INVENTORY"
+                    for row in catalog["layouts"].values()) else []
+            )
+        ) if authorized else [],
     }
 
 
