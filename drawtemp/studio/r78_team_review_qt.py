@@ -274,7 +274,9 @@ class TeamReviewDialog(QDialog):
             note_head = notes.inspect()["head"]
             task_head = tasks.inspect()["head"]
             board = TeamReviewBoard(self.workspace.graph, self.policy, notes, tasks)
-            board.tasks_for(self.actor)  # Verify all existing anchors before binding.
+            # Both sidecars must belong to the same validated R48 project
+            # history. A structurally valid foreign notes file is not safe.
+            board.verify_journals(self.actor)
         except (ValueError, OSError, TypeError) as exc:
             self.status.setText("Journaux refusés : " + str(exc))
             return False

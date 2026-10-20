@@ -256,14 +256,42 @@ class TeamReviewBoard:
             return path
         return anchor_from_path(path)
 
+    def _verified_node(self, row):
+        # Metadata journals are independent local files. Their valid SHA
+        # chains do not establish that a record belongs to THIS workspace.
+        # Reject foreign revision identities before presenting or appending.
+        try:
+            node = self._node(row["node"])
+        except (ValueError, TypeError) as exc:
+            raise TeamBoardError(
+                "foreign_revision", "Review metadata references an unknown history node"
+            ) from exc
+        if node.revision.digest != row["document"]:
+            raise TeamBoardError(
+                "unknown_document", "Review metadata refers to another document"
+            )
+        validate_anchor(node, row["anchor"])
+        return node
+
     def _verified_events(self):
         rows = self.tasks.events()
         for row in rows:
-            node = self._node(row["node"])
-            if node.revision.digest != row["document"]:
-                raise TeamBoardError("unknown_document", "Task refers to a different document")
-            validate_anchor(node, row["anchor"])
+            self._verified_node(row)
         return rows
+
+    def _verified_notes(self):
+        rows = self.notes.events()
+        for row in rows:
+            self._verified_node(row)
+        return rows
+
+    def verify_journals(self, actor):
+        """Read-only cross-project guard before attaching existing sidecars."""
+        self._role(actor)
+        return {
+            "notes": len(self._verified_notes()),
+            "tasks": len(self._verified_events()),
+        }
 
     def differences(self, actor, local_id, incoming_id):
         self._role(actor)
@@ -277,6 +305,7 @@ class TeamReviewBoard:
         node = self._node(node_id)
         if anchor is not None:
             validate_anchor(node, anchor)
+        self._verified_notes()
         return self.notes.threads(node_id=node.node_id, anchor=anchor)
 
     def note(self, actor, *, node_id, path, expected_head,
@@ -284,6 +313,7 @@ class TeamReviewBoard:
         self._role(actor, contribute=True)
         node = self._node(node_id)
         anchor = self._anchor(path)
+        self._verified_notes()
         return self.notes.append(node, expected_head=expected_head, anchor=anchor,
                                  author=actor, text=text, kind=kind, thread=thread)
 

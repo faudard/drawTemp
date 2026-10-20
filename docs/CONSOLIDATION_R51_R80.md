@@ -63,6 +63,12 @@ GitHub a fusionné les branches compatibles directement dans l'agrégat. Les PR 
 
 Les fusions conflictuelles combinent les changements textuels ; elles **ne prouvent pas** leur correction à l'exécution. Un audit métier de tous les écrans, commandes, sauvegardes et contrats R1 est requis.
 
+## Renforcement R78 après consolidation
+
+- Le journal R78.B vérifie désormais les nœuds, digests de documents et ancres des **deux sidecars** contre le graphe R48 courant, à la lecture et avant l'ajout de commentaires ; le sélecteur Qt refuse l'ouverture d'un journal de notes d'un autre projet.
+- Tests de régression ajoutés : journal de commentaires valide mais étranger, refus d'append, aucune modification de Content/GameProject et aucun fichier de tâches créé par l'UI refusée.
+- **CI non validée** : sur la branche d'intégration, des workflows GitHub Actions échouent sans jobs consultables (`total_count=0` sur plusieurs runs), ce qui ne permet pas de conclure à un succès ou un échec de test. Exemple : [Run R10](https://github.com/faudard/drawTemp/actions/runs/39413840198). Exécuter les suites sur une machine de build / rétablir l'exécution des jobs avant tout GO.
+
 ## Gates avant fusion vers master
 
 - [ ] CI complète sur le SHA final de #446 et matrice Linux/Windows/macOS.

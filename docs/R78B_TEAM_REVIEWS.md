@@ -17,6 +17,13 @@ history, or R78.A permissions and leases.
   strict, bounded, integrity checked, and append only. All writes require a
   caller-pinned HEAD, writer lock, re-read of bytes and explicit fsync.
   Torn/corrupt logs must be inspected, never auto-repaired.
+- **Integration hardening:** `TeamReviewBoard.verify_journals()` checks *both*
+  sidecars against the active validated R48 graph: every note/task event must
+  identify a known node, the exact document digest and a valid typed resource
+  anchor. Validly hashed records from another project's history are rejected
+  before reading discussions or appending any further note. Qt checks both
+  journals before binding them to the current Studio. This does not provide
+  cryptographic authentication or distributed project isolation.
 - Tasks attach to validated R48 resource nodes. Each has a stable numeric ID,
   title, assignee, release slug and status (`todo`/`in_progress`/`done`).
   `release_board` groups them by release and state; this is not a release
@@ -36,7 +43,8 @@ Open **Outils → Collaboration / VCS → R78 • Revues et tâches d’équipe 
    snapshot (separate history owned by the existing R48 workflow).
 2. Choose a local folder for the separate `r78_review_notes.jsonl` and
    `r78_team_board.jsonl` files. Selecting a folder only inspects metadata:
-   files are not created until a user explicitly posts an event.
+   files are not created until a user explicitly posts an event. Existing
+   foreign or corrupt journals are refused without rewriting or repairing them.
 3. Choose before/after revisions, inspect the semantic diff and select a
    resource or enter a semantic diff path such as
    `/project/story/scenes/arrival/title`.
