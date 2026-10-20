@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel,
+    QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel,
     QLineEdit, QMessageBox, QPushButton, QSpinBox, QSplitter, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -133,6 +133,20 @@ class R51DesignerDialog(QDialog):
         self.width_choice.setSuffix(" px logiques")
         right_layout.addWidget(QLabel("Largeur de simulation responsive"))
         right_layout.addWidget(self.width_choice)
+        theme_row = QHBoxLayout()
+        self.contrast_preview = QCheckBox("Contraste renforcé")
+        self.contrast_preview.setObjectName("r51-preview-contrast")
+        self.contrast_preview.setAccessibleName("Mode contraste renforcé dans l'aperçu")
+        theme_row.addWidget(self.contrast_preview)
+        self.scale_preview = QSpinBox()
+        self.scale_preview.setObjectName("r51-preview-text-scale")
+        self.scale_preview.setRange(85, 135)
+        self.scale_preview.setValue(100)
+        self.scale_preview.setSingleStep(5)
+        self.scale_preview.setSuffix(" % texte")
+        self.scale_preview.setAccessibleName("Échelle du texte dans l'aperçu")
+        theme_row.addWidget(self.scale_preview)
+        right_layout.addLayout(theme_row)
         bp_row = QHBoxLayout()
         add_bp = QPushButton("Ajouter breakpoint")
         add_bp.clicked.connect(self.add_breakpoint)
@@ -177,6 +191,8 @@ class R51DesignerDialog(QDialog):
         self.layouts.currentIndexChanged.connect(self._on_screen)
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.width_choice.valueChanged.connect(self._render)
+        self.contrast_preview.toggled.connect(self._render)
+        self.scale_preview.valueChanged.connect(self._render)
         self.refresh()
 
     def _notice(self, exc):
@@ -441,9 +457,15 @@ class R51DesignerDialog(QDialog):
             root.setProperty("projection", sample)
             root.setProperty("allowActions", False)
             root.setProperty("permittedActions", [])
+            root.setProperty("highContrast", self.contrast_preview.isChecked())
+            root.setProperty("textScale", self.scale_preview.value() / 100.0)
+            kind = self._draft["kind"]
+            note = (" · Écran non branché dans le Player"
+                    if kind in ("DIALOGUE", "INVENTORY", "HUD_ACTION")
+                    else " · Parité Player à valider")
             self.report.setText(
-                "Aperçu fictif · %d colonnes · aucune commande de jeu déclenchée"
-                % sample["columns"])
+                "Aperçu fictif · %d colonnes · aucune commande de jeu déclenchée%s"
+                % (sample["columns"], note))
         except (UiLayoutError, ValueError) as exc:
             self._notice(exc)
 
