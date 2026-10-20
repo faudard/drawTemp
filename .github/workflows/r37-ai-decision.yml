@@ -5,6 +5,9 @@ on:
     paths:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
+      - 'sporebound/ai_squad.py'
+      - 'drawtemp/studio/ai_squad_authoring.py'
+      - 'drawtemp/studio/ai_squad_qt.py'
       - 'drawtemp/studio/ai_sensor_authoring.py'
       - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
@@ -21,12 +24,17 @@ on:
       - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - 'tests_standalone/test_r37_perception.py'
       - 'tests_standalone/test_r37_perception_qt.py'
+      - 'tests_standalone/test_r37_squad.py'
+      - 'tests_standalone/test_r37_squad_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   push:
     branches: [master]
     paths:
       - 'sporebound/advanced_ai.py'
       - 'sporebound/ai_perception.py'
+      - 'sporebound/ai_squad.py'
+      - 'drawtemp/studio/ai_squad_authoring.py'
+      - 'drawtemp/studio/ai_squad_qt.py'
       - 'drawtemp/studio/ai_sensor_authoring.py'
       - 'drawtemp/studio/ai_sensor_qt.py'
       - 'sporebound/game_session.py'
@@ -43,6 +51,8 @@ on:
       - 'tests_standalone/test_r37_behavior_tree_qt.py'
       - 'tests_standalone/test_r37_perception.py'
       - 'tests_standalone/test_r37_perception_qt.py'
+      - 'tests_standalone/test_r37_squad.py'
+      - 'tests_standalone/test_r37_squad_qt.py'
       - '.github/workflows/r37-ai-decision.yml'
   workflow_dispatch:
 
@@ -78,6 +88,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r37_behavior_tree -v
       - name: R37.D R35/R25 world perception and replay
         run: python -m unittest tests_standalone.test_r37_perception -v
+      - name: R37.D3 direct radio squads and save/replay
+        run: python -m unittest tests_standalone.test_r37_squad -v
       - name: R31 compatible declarative graph contracts
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_graph -v
 
@@ -94,4 +106,4 @@ jobs:
       - name: R37.C visual tree, diagnostics and Undo/Redo
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt tests_standalone.test_r37_perception_qt -v
+        run: python -m unittest tests_standalone.test_r37_behavior_tree_qt tests_standalone.test_r37_perception_qt tests_standalone.test_r37_squad_qt -v
