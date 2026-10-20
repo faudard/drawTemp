@@ -198,10 +198,13 @@ def main(argv=None):
                         brush=QBrush(QColor(color)))
                     if boss["window"] in ("telegraph", "strike"):
                         danger = boss["attack_rect"]
-                        tint = "#f59d47" if boss["window"] == "telegraph" else "#e54545"
+                        tint = QColor(
+                            "#f59d47" if boss["window"] == "telegraph"
+                            else "#e54545")
+                        tint.setAlpha(105)
                         self.display.addRect(
                             *(value * factor for value in danger),
-                            brush=QBrush(QColor(tint + "66")))
+                            brush=QBrush(tint))
             body = state["actor"]
             w, h = authored["hero"]["size"]
             self.display.addRect(body["x"] * factor, body["y"] * factor,
