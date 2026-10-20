@@ -44,9 +44,9 @@ def hud_for_player(controller, width):
         # be enabled. Remaining v1 authoring intents stay visibly inert.
         "permitted_actions": (
             ["combat.end_turn"] + (
-                ["combat.open_inventory"] if any(
+                ["combat.open_inventory"] if sum(
                     row["kind"] == "INVENTORY"
-                    for row in catalog["layouts"].values()) else []
+                    for row in catalog["layouts"].values()) == 1 else []
             )
         ) if authorized else [],
     }
