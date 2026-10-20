@@ -168,6 +168,14 @@ class R60HybridShowcaseTests(unittest.TestCase):
             GameSession.from_recording(altered, self.content, self.project)
         self.assertEqual(game.recording(), authentic)
 
+    def test_complete_headless_showcase_runs_native_ct(self):
+        from examples.r60_production_showcase import run_showcase
+        proof = run_showcase(seed=17)
+        self.assertEqual(proof["slice"], "VS-60.B1")
+        self.assertTrue(proof["ct_completed"])
+        self.assertEqual(proof["gold_delta"], 60)
+        self.assertTrue(proof["replay_roundtrip"])
+
     def test_r53_without_r60_additions_keeps_original_identity(self):
         old_content, old_project = build_relais_hybride_r53()
         self.assertNotIn(SYSTEMS_EXTENSION, old_project.extensions)
