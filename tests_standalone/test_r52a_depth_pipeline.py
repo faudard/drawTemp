@@ -1,5 +1,10 @@
 """R52.A regression fixtures: view transforms, depth layers and fail-closed effects."""
+import importlib.util
 import math
+import os
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from drawtemp.render.iso_scene import (Camera, IsoProjection, TopDownProjection,
@@ -119,6 +124,78 @@ class DepthPipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             backend_plan("invalid", hardware_available=True,
                          software_available=True)
+
+
+
+class DepthQmlContractTests(unittest.TestCase):
+    def test_both_views_keep_parallax_below_interactive_items(self):
+        root = Path(__file__).resolve().parents[1] / "drawtemp" / "render"
+        for name in ("IsoViewport.qml", "TopDownViewport.qml"):
+            qml = (root / name).read_text(encoding="utf-8")
+            self.assertIn("renderer.depthLayers", qml)
+            self.assertIn("z: -200000 + layer.depthIndex", qml)
+            self.assertIn("parallax", qml)
+            self.assertIn("renderer", qml)
+        iso = (root / "IsoViewport.qml").read_text(encoding="utf-8")
+        self.assertIn("renderer.cellAt", iso)
+        self.assertIn("renderer.pickAt", iso)
+
+    @unittest.skipUnless(importlib.util.find_spec("PySide6") is not None,
+                         "PySide6 is optional in headless suites")
+    def test_qt_profiles_are_transactional_and_both_qml_views_load(self):
+        # Run each QML viewport in an isolated process: no Qt global state
+        # leaks into unrelated offscreen or GUI test cases.
+        source = """
+import sys
+from pathlib import Path
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQuick import QQuickView
+from drawtemp.render.qt_viewport import make_controller
+from drawtemp.sdk.reference import MISSION, reference_project
+from drawtemp.render.iso_scene import scene_from_mission
+app = QGuiApplication.instance() or QGuiApplication([])
+content, _ = reference_project()
+scene = scene_from_mission(content.missions[MISSION])
+renderer = make_controller(scene, projection_mode=sys.argv[1])
+before = renderer.items
+profile = {"layers": [{"id": "far", "x": 1, "y": 2,
+                        "width": 250, "height": 120,
+                        "parallax": 0.4, "color": "#123456",
+                        "opacity": 0.8}]}
+renderer.setDepthProfile(profile)
+assert len(renderer.depthLayers) == 1
+assert renderer.items == before
+try:
+    renderer.setDepthProfile({"layers": [{"id": "../bad"}]})
+except ValueError:
+    pass
+else:
+    raise AssertionError("invalid profile accepted")
+assert len(renderer.depthLayers) == 1
+view = QQuickView()
+renderer.attach_engine(view.engine())
+view.rootContext().setContextProperty("renderer", renderer)
+view.setResizeMode(QQuickView.SizeRootObjectToView)
+qml = Path("drawtemp/render") / sys.argv[2]
+view.setSource(QUrl.fromLocalFile(str(qml.resolve())))
+assert view.rootObject() is not None, str(view.errors())
+view.resize(800, 600)
+view.show()
+app.processEvents()
+assert view.rootObject() is not None, str(view.errors())
+view.close()
+"""
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+                   QT_QUICK_BACKEND="software")
+        root = Path(__file__).resolve().parents[1]
+        for mode, qml in (("isometric", "IsoViewport.qml"),
+                          ("top_down", "TopDownViewport.qml")):
+            with self.subTest(mode=mode):
+                result = subprocess.run([sys.executable, "-c", source, mode, qml],
+                                        cwd=root, env=env, capture_output=True,
+                                        text=True, timeout=45)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
