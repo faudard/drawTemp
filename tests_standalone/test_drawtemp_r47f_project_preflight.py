@@ -82,6 +82,27 @@ class ModdedProjectPreflightTests(unittest.TestCase):
         self.assertIn("unpinned_mod", " ".join(report["errors"]))
         self.assertIn("orphan_namespace", " ".join(report["errors"]))
 
+    def test_read_only_mod_cannot_claim_a_project_namespace(self):
+        from tests_standalone.test_drawtemp_r47a_modding import manifest
+        directory = create_template("tactical", self.root / "tactical")
+        project_file = directory / "game.game.json"
+        data = json.loads(project_file.read_text(encoding="utf-8"))
+        data.setdefault("extensions", {})["org.example.readonly"] = {
+            "schema_version": 1, "data": {"forged": True},
+            "references": []}
+        project_file.write_text(json.dumps(data), encoding="utf-8")
+        doc = manifest("read-only-mod", "org.example.readonly")
+        doc["extension"] = None
+        doc["permissions"] = ["project.read"]
+        registry = ModRegistry()
+        registry.install(doc)
+        pins = {doc["id"]: registry.status(doc["id"])["manifest_sha256"]}
+        report = inspect_modded_project(
+            directory / "game.json", registry, expected_pins=pins,
+            managed_namespaces=(doc["namespace"],))
+        self.assertFalse(report["ready_for_player_preview"])
+        self.assertIn("unexpected_namespace", " ".join(report["errors"]))
+
     def test_modified_r30_pack_blocks_player_preview(self):
         directory, registry, docs, archives, pins, scope = (
             self.installed_project("tactical"))
