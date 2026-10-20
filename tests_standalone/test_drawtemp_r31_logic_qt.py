@@ -229,6 +229,37 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_reference_quest_qt_button_installs_once_and_undoes_all(self):
+        from PySide6.QtWidgets import QMessageBox
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        from drawtemp.studio.logic_vertical_slice import GRAPH
+        session = new_session()
+        initial = session.snapshot().to_dict()
+        view = LogicGraphDialog(session)
+        try:
+            self.assertEqual(view.slice_demo.objectName(),
+                             "r31h-create-reference-quest")
+            with patch.object(QMessageBox, "question",
+                              return_value=QMessageBox.Yes):
+                self.assertTrue(view.create_reference_quest())
+            self.assertEqual(session.revision, 1)
+            self.assertEqual(view.draft.graph["id"], GRAPH)
+            self.assertIn("r31h_chest", view.graphs.itemText(
+                view.graphs.currentIndex()))
+            self.assertEqual(len(graphs_from_project(
+                session.snapshot().to_dict()["project"])), 1)
+            with patch.object(QMessageBox, "question",
+                              return_value=QMessageBox.Yes):
+                self.assertFalse(view.create_reference_quest())
+            self.assertEqual(session.revision, 1)
+            view.undo()
+            self.assertEqual(session.snapshot().to_dict()["content"],
+                             initial["content"])
+            self.assertEqual(session.snapshot().to_dict()["project"],
+                             initial["project"])
+        finally:
+            view.close()
+
     def test_export_campaign_qt_requires_committed_variable_and_supports_undo(self):
         from PySide6.QtWidgets import QInputDialog
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
