@@ -228,7 +228,8 @@ class Content:
                          data.get("tactic_unlocks", []), data.get("archetypes", {}))
             if rules is None:
                 from .logic_variables import has_logic_variables
-                if has_logic_variables(data):
+                from .logic_vertical_objective import has_slice_objective
+                if has_logic_variables(data) or has_slice_objective(data):
                     from .tactical_rpg3 import authored_rules_for_document
                     rules = authored_rules_for_document(data)
             result.validate(rules=rules)
@@ -257,8 +258,9 @@ class Content:
         from .rules import default_rules
         if rules is None:
             from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
             raw = self.to_dict()
-            if has_logic_variables(raw):
+            if has_logic_variables(raw) or has_slice_objective(raw):
                 from .tactical_rpg3 import authored_rules_for_document
                 rules = authored_rules_for_document(raw)
         rules = rules if rules is not None else default_rules()
