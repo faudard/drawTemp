@@ -54,12 +54,9 @@ class R63PlayerTests(unittest.TestCase):
                                 for row in before["recipes"]))
             player.survival_craft("make_camp")
             player.survival_craft("make_ration")
-            self.assertEqual(player.state()["survival"]["inventory"], [
-                {"id": "axe", "quantity": 1},
-                {"id": "camp", "quantity": 1},
-                {"id": "ration", "quantity": 1},
-                {"id": "wood", "quantity": 0}
-            ] if False else player.state()["survival"]["inventory"])
+            quantities = {row["id"]: row["quantity"]
+                          for row in player.state()["survival"]["inventory"]}
+            self.assertEqual(quantities, {"camp": 1, "ration": 1})
             self.assertTrue(player.state()["survival"]["shelters"][0]["available"])
             hunger = player.state()["survival"]["needs"]["hunger"]
             player.survival_eat("ration")
