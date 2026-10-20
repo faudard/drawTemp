@@ -639,6 +639,17 @@ ApplicationWindow {
                             }
                             Label {
                                 Layout.fillWidth: true
+                                text: "Régions visitées : " +
+                                      root.playerData.world_atlas.visited_regions.length + " / " +
+                                      root.playerData.world_atlas.region_total +
+                                      " · accessibles : " +
+                                      root.playerData.world_atlas.reachability.regions.length
+                                color: root.ivory
+                                wrapMode: Text.WordWrap
+                                Accessible.name: text
+                            }
+                            Label {
+                                Layout.fillWidth: true
                                 text: "Biome : " + (root.playerData.world_atlas.biome || "") +
                                       " · Vue : " + (root.playerData.world_atlas.projection || "")
                                 color: root.muted

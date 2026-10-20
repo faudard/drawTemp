@@ -114,6 +114,28 @@ class WorldAtlasPlayerTests(unittest.TestCase):
             sim.world_transition("to_grove")
             self.assertEqual(thaw(sim.world_atlas_state())["scene"], "grove")
 
+    def test_world_reachability_is_conditional_and_never_mutates_saves(self):
+        sim = Simulation.new(self.content, self.project, "main", seed=44)
+        original = sim.recording()
+        initial = thaw(sim.world_atlas_state())
+        self.assertEqual(initial["reachability"]["regions"], ["valley"])
+        self.assertEqual(initial["reachability"]["blocked_routes"], ["to_grove"])
+        self.assertEqual(initial["visited_regions"], ["valley"])
+        self.assertEqual(initial["region_total"], 5)
+        self.assertEqual(sim.recording(), original)
+        sim.world_interact("relic")
+        open_route = thaw(sim.world_atlas_state())
+        self.assertEqual(open_route["reachability"]["regions"], ["grove", "valley"])
+        self.assertEqual(open_route["reachability"]["blocked_routes"], ["to_marsh"])
+        self.assertEqual(open_route["visited_regions"], ["valley"])
+        sim.explore_move(1, 0)
+        sim.explore_move(1, 0)
+        sim.explore_move(0, 1)
+        sim.world_transition("to_grove")
+        visited = thaw(sim.world_atlas_state())
+        self.assertEqual(visited["visited_regions"], ["grove", "valley"])
+        self.assertEqual(visited["reachability"]["blocked_routes"], ["to_marsh"])
+
     def test_old_project_has_no_world_atlas(self):
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()

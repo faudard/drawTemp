@@ -124,8 +124,10 @@ def validate_world_graph(raw, content, project):
         require(type(obj) is dict
                 and set(obj) == {"id", "scene", "kind", "flag"},
                 "R44: invalid persistent object fields")
-        require(_id(obj["id"]) and (obj["scene"], obj["id"]) not in object_ids
-                and obj["scene"] in scenes and obj["kind"] in OBJECT_KINDS
+        require(_id(obj["id"]) and type(obj["scene"]) is str
+                and obj["scene"] in scenes
+                and (obj["scene"], obj["id"]) not in object_ids
+                and type(obj["kind"]) is str and obj["kind"] in OBJECT_KINDS
                 and type(obj["flag"]) is str and _FLAG.fullmatch(obj["flag"])
                 and obj["flag"] not in flags,
                 "R44: duplicate object, invalid scene, kind or world flag")
@@ -215,6 +217,39 @@ class WorldGraph:
         route = self._router.destination(scene, route_id, progress)
         return {"route": route, "travel_cost": self._portals[route_id]["travel_cost"],
                 "source": list(self._portals[route_id]["source"])}
+
+    def reachable_scenes(self, start, progress):
+        """Reachability under *current R25 route conditions*, no state changes.
+
+        This projects R25 condition predicates, not mission unlock/deployment
+        eligibility. A locked edge is reported only when its source is reachable.
+        """
+        from .model import RuleError
+
+        require(type(start) is str and start in self._scenes,
+                "R44: unknown reachability start")
+        outgoing = {}
+        for route_id in sorted(self._portals):
+            route = self._router.links[route_id]
+            outgoing.setdefault(route["source"], []).append(route_id)
+        reached, pending, blocked = {start}, [start], set()
+        while pending:
+            scene = pending.pop(0)
+            for route_id in outgoing.get(scene, ()):
+                try:
+                    route = self._router.destination(scene, route_id, progress)
+                except RuleError:
+                    blocked.add(route_id)
+                    continue
+                destination = route["destination"]
+                if destination not in reached:
+                    reached.add(destination)
+                    pending.append(destination)
+        return {
+            "scenes": sorted(reached),
+            "regions": sorted({self._scenes[sid]["region"] for sid in reached}),
+            "blocked_routes": sorted(blocked),
+        }
 
     def shortest_path(self, start, destination, progress):
         """Stable minimum-cost directed path through currently unlocked portals."""

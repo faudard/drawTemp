@@ -198,13 +198,25 @@ class Simulation:
                 session.active_scene() is not None):
             return freeze({"enabled": False, "scene": "", "region": "",
                            "region_title": "", "portals": [], "objects": [],
-                           "object_ids": []})
+                           "object_ids": [], "reachability": {
+                               "scenes": [], "regions": [], "blocked_routes": []},
+                           "region_total": 0, "visited_regions": []})
         scene = session.route_scene
         region = next(region for region in graph.raw["regions"]
                       if any(entry["id"] == scene for entry in region["scenes"]))
         objects = graph.object_states(session.progress, scene)
         stage = session.route_state()
         position = stage["position"]
+        # Current conditional reachability and past actual visits are separate:
+        # neither is a mutable progress ledger, only projections of R25 + flags.
+        reachability = graph.reachable_scenes(scene, session.progress)
+        visited = {session.scene_router.start}
+        for route_id in session.route_history:
+            visited.add(session.scene_router.links[route_id]["destination"])
+        visited_regions = sorted({
+            region["id"] for region in graph.raw["regions"]
+            if any(entry["id"] in visited for entry in region["scenes"])
+        })
         portals = []
         for portal in graph.raw["portals"]:
             link = session.scene_router.links[portal["route"]]
@@ -232,6 +244,9 @@ class Simulation:
             "projection": region["projection"], "portals": portals,
             "objects": [{"id": ident, **obj} for ident, obj in sorted(objects.items())],
             "object_ids": sorted(objects),
+            "reachability": reachability,
+            "region_total": len(graph.raw["regions"]),
+            "visited_regions": visited_regions,
         })
 
     def world_interact(self, object_id, *, expected_revision=None):

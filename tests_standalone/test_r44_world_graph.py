@@ -121,6 +121,9 @@ class WorldGraph44Tests(unittest.TestCase):
             lambda g: g["portals"].clear(),
             lambda g: g["objects"][1].update(flag="world44_chest_open"),
             lambda g: g["objects"][0].update(kind="code"),
+            lambda g: g["objects"][0].update(kind=[]),
+            lambda g: g["objects"][0].update(scene=[]),
+            lambda g: g["objects"][0].update(flag=[]),
             lambda g: g["objects"][0].update(flag="ex_external"),
             lambda g: g.update(untrusted="payload"),
         ]

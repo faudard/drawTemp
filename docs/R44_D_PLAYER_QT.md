@@ -42,3 +42,10 @@ sauvegarde via F5, passe par le menu pause / écran titre / Continuer puis
 vérifie le retour vers la crête avec un objet déjà activé. Une défaillance
 renvoie un code de sortie non nul et affiche l'exception. Cette commande n'est
 pas une preuve de qualification GPU tri-OS, mais constitue le gate GUI reproductible.
+
+## R44.F — Contrôle de progression conditionnelle
+
+- `WorldGraph.reachable_scenes(start, progress)` fournit les scènes/régions atteignables et les identifiants de passages encore verrouillés, **sans mutation**. Le parcours utilise exclusivement les conditions R25. Ce résultat n'affirme pas qu'une mission tactique est déployable (autres restrictions de `GameSession.start_mission`).
+- La vue Player indique le nombre de régions effectivement **visitées** (historique canonique `SceneRouter`) séparément du nombre de régions actuellement **accessibles** (conditions). Aucun compteur n'est stocké dans le checkpoint.
+- La validation ferme désormais les objets malformés (type `scene`, `kind`, `flag`) par `RuleError` au lieu de laisser fuiter des `TypeError` dans le parseur.
+- Tests dédiés au verrouillage/déverrouillage, à la non-mutation du checkpoint et aux valeurs JSON mal typées.
