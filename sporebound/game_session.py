@@ -231,7 +231,8 @@ class GameSession:
                     "R41 encounter must start in its authored route scene")
         candidate = ClassicEncounter(
             encounter_id, config, self._classic_party.active,
-            self.content, self.progress.inventory)
+            self.content, self.progress.inventory,
+            hero_progress=self.progress.heroes)
         self._rpg_encounter = candidate
         return self.rpg_state()
 
@@ -1273,7 +1274,8 @@ class GameSession:
             session._rpg_encounter = ClassicEncounter.replay(
                 data["rpg_encounter"], encounter_id=encounter_id,
                 config=spec, party=session._classic_party.active,
-                content=session.content)
+                content=session.content,
+                hero_progress=session.progress.heroes)
             require(session._rpg_encounter.inventory == session.progress.inventory,
                     "R41 replay inventory disagrees with canonical Campaign")
         else:
