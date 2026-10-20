@@ -1,0 +1,48 @@
+name: R68.B2 Android source preflight (NOT APK certification)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r68_android_preflight.py'
+      - 'tests_standalone/test_r68_android_preflight.py'
+      - 'docs/R68B2_ANDROID_PACKAGING.md'
+      - '.github/workflows/r68b2-android-preflight.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/quality/r68_android_preflight.py'
+      - 'tests_standalone/test_r68_android_preflight.py'
+      - 'docs/R68B2_ANDROID_PACKAGING.md'
+      - '.github/workflows/r68b2-android-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-evidence-only:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Test isolated Android preflight and staging
+        run: python -m unittest tests_standalone.test_r68_android_preflight -v
+      - name: Confirm baseline is blocked (no wheels/SDK/devices)
+        shell: bash
+        run: |
+          set +e
+          python -m drawtemp.quality.r68_android_preflight --root . > r68-android-baseline.json
+          status=$?
+          set -e
+          test "$status" -eq 2
+          python -c 'import json; d=json.load(open("r68-android-baseline.json")); assert d["decision"] == "NO-GO" and d["blockers"] and not d["release_certified"]'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r68-android-no-go-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: r68-android-baseline.json
+          if-no-files-found: error
