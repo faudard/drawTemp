@@ -189,6 +189,85 @@ class R55SystemDesignerTests(unittest.TestCase):
         self.assertEqual(forecast["delta"]["ore"], -4)
         self.assertEqual(forecast["delta"]["ingot"], 2)
 
+    def test_compact_tick_receipts_survive_long_player_session(self):
+        economy = SystemEconomy(system_spec(), {"arrival"})
+        for _ in range(600):
+            economy.advance(1)
+        state = economy.snapshot()
+        self.assertEqual(state["tick"], 600)
+        self.assertEqual(state["journal"], [{"kind": "advance", "ticks": 600}])
+        restored = SystemEconomy(system_spec(), {"arrival"})
+        restored.restore(state)
+        self.assertEqual(restored.snapshot(), state)
+        restored.advance(1)
+        self.assertEqual(restored.snapshot()["journal"][0]["ticks"], 601)
+
+    def test_fixed_player_movement_advances_once_and_failure_is_atomic(self):
+        content, project = fixture()
+        session = GameSession.new(content, project, "main", seed=55)
+        before = session.recording()
+        with self.assertRaises(RuleError):
+            session.route_realtime_step(5, 0)
+        self.assertEqual(session.recording(), before)
+        session.route_realtime_step(1, 0)
+        self.assertEqual(session.system_state()["tick"], 1)
+        self.assertEqual(session.system_state()["journal"],
+                         [{"kind": "advance", "ticks": 1}])
+        checkpoint = session.recording()
+        resumed = GameSession.from_recording(checkpoint, content, project)
+        self.assertEqual(resumed.recording(), checkpoint)
+        resumed.route_realtime_step(0, 0)
+        self.assertEqual(resumed.system_state()["tick"], 2)
+
+        # Crossing the systems budget is refused *before* touching the
+        # canonical movement journal and Campaign position.
+        from sporebound.system_design import MAX_TICKS
+        resumed._systems.tick = MAX_TICKS
+        previous = resumed.route_realtime_state()
+        with self.assertRaises(RuleError):
+            resumed.route_realtime_step(0, 0)
+        self.assertEqual(resumed.route_realtime_state(), previous)
+
+    def test_multizone_market_quest_roundtrip_without_stock_duplication(self):
+        content, project = fixture()
+        project.exploration["outpost"] = deepcopy(project.exploration["arrival"])
+        project.exploration["outpost"]["title"] = "Avant-poste"
+        project.game_modes["scenes"]["outpost"] = {"preset": "action"}
+        project.scene_routes["links"].extend([
+            {"id": "to_outpost", "source": "arrival",
+             "destination": "outpost", "spawn": [0, 1]},
+            {"id": "to_market", "source": "outpost",
+             "destination": "arrival", "spawn": [0, 1]},
+        ])
+        project.validate(content)
+        session = GameSession.new(content, project, "main", seed=55)
+        session.progress.gold = 100
+        session.route_realtime_step(0, 0)
+        session.route_realtime_step(0, 0)
+        self.assertEqual(session.system_state()["stocks"]["ingot"], 1)
+        session.route_transition("to_outpost")
+        self.assertEqual(session.route_scene, "outpost")
+        session.route_realtime_step(0, 0)
+        session.route_realtime_step(0, 0)
+        self.assertEqual(session.system_state()["stocks"]["ingot"], 2)
+        with self.assertRaises(RuleError):
+            session.system_trade("trader", "buy", 2, "offscene")
+        checkpoint = session.recording()
+        restored = GameSession.from_recording(checkpoint, content, project)
+        self.assertEqual(restored.system_state(), session.system_state())
+        restored.route_transition("to_market")
+        self.assertTrue(restored.system_trade("trader", "buy", 2, "visit1"))
+        self.assertTrue(restored.system_fulfill("delivery"))
+        self.assertEqual(restored.progress.gold, 90)
+        self.assertEqual(restored.progress.inventory["ingot"], 0)
+        saved = restored.recording()
+        again = GameSession.from_recording(saved, content, project)
+        self.assertEqual(again.recording(), saved)
+        self.assertFalse(again.system_trade("trader", "buy", 2, "visit1"))
+        self.assertFalse(again.system_fulfill("delivery"))
+        self.assertEqual(again.system_state()["stocks"]["ingot"], 0)
+        self.assertEqual(again.progress.gold, 90)
+
     def test_legacy_save_is_unchanged_when_systems_are_disabled(self):
         content, project = scene_fixture()
         session = GameSession.new(content, project, "main")
