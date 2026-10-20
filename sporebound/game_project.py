@@ -175,7 +175,7 @@ class GameProject:
         if SYSTEMS_EXTENSION in self.extensions:
             validate_systems(
                 self.extensions[SYSTEMS_EXTENSION]["data"],
-                set(self.exploration) | set(content.missions))
+                set(self.exploration))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
