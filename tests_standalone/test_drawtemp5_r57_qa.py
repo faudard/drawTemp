@@ -57,7 +57,6 @@ class R57CoverageGateTests(unittest.TestCase):
             "context": "Historical UI label no longer in this GameProject",
             "max_length": 100, "translations": {},
         }
-        from drawtemp.localization import Catalog
         catalog = Catalog(raw)
         report = audit_project(PROJECT, catalog)
         required_count = len(self.full_catalog().data["entries"])
@@ -82,8 +81,13 @@ class R57CoverageGateTests(unittest.TestCase):
             }},
             "context": "Plural test", "max_length": 200,
         }
-        from drawtemp.localization import Catalog
         catalog = Catalog(raw)
+        # Manually authored extra catalog entries are not in the canonical
+        # project's coverage denominator but remain valid runtime messages.
+        self.assertIn("\u2067", catalog.render(
+            "catalog.count", "qps-plocm", count=1, single="One"))
+        self.assertIn("\u2069", catalog.render(
+            "catalog.count", "qps-plocm", count=2, many="Many"))
         report = audit_project(PROJECT, catalog)
         self.assertEqual(report["rtl_pseudo_failures"], [])
         self.assertEqual(report["additional_catalog_keys"], ["catalog.count"])
