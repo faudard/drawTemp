@@ -80,25 +80,38 @@ def variables_from_journal(battle):
     return current
 
 
-def set_variable(battle, action):
+def _writable_state(battle, name):
+    """Check the *next* write before emit, keeping the journal replayable.
+
+    Do not append the 4,097th event and only discover corruption while
+    rendering a debugger or loading a checkpoint. The validated authored
+    rules and the runtime command boundary share this preflight.
+    """
     state = variables_from_journal(battle)
-    name, value = action["name"], action["value"]
+    require(sum(row.get("kind") == "logic_variable" for row in battle.events)
+            < MAX_JOURNAL_WRITES, "Logic variable journal budget exceeded")
     require(name in state or len(state) < MAX_VARIABLES,
             "Logic variable count exceeded")
-    battle.emit("logic_variable", name=name, value=value)
+    return state
+
+
+def set_variable(battle, action):
+    validate_set(None, action)
+    state = _writable_state(battle, action["name"])
+    previous = state.get(action["name"])
+    require(previous is None or type(previous) is type(action["value"]),
+            "Logic variable type cannot change during a Battle")
+    battle.emit("logic_variable", name=action["name"], value=action["value"])
 
 
 def add_variable(battle, action):
-    state = variables_from_journal(battle)
-    name = action["name"]
-    previous = state.get(name, 0)
-    require(type(previous) is int,
-            "Cannot increment a Boolean variable")
+    validate_add(None, action)
+    state = _writable_state(battle, action["name"])
+    previous = state.get(action["name"], 0)
+    require(type(previous) is int, "Cannot increment a Boolean variable")
     value = previous + action["amount"]
     _scalar(value)
-    require(name in state or len(state) < MAX_VARIABLES,
-            "Logic variable count exceeded")
-    battle.emit("logic_variable", name=name, value=value)
+    battle.emit("logic_variable", name=action["name"], value=value)
 
 
 def compare_variable(battle, condition):
