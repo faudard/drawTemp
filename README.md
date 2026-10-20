@@ -6,6 +6,7 @@
 
 DrawTemp vise à terme un **éditeur de jeux 2D/2.5D multi-genres** : SRPG tactique, RPG classique, action-aventure avec exploration libre (inspiration Zelda), aventures narratives et jeux hybrides. La campagne Jeanne est le contenu de référence actuellement disponible, **pas une limitation du moteur futur**.
 
+- [Prototype R64.A RTS headless](docs/RTS_R64A.md) : escouades, pathfinding, replays déterministes et limites explicites ; **pas encore de RTS dans le Studio/Player**.
 - [Roadmap multi-genres (R25–R30, cible 6.0–7.0)](docs/DRAWTEMP_MULTI_GENRE_CREATOR_ROADMAP.md) : modes de jeu, architecture, ateliers, vertical slices, livraisons et critères de certification.
 - [Roadmap Creator Engine détaillée (R31–R40, cible 7.1–8.0)](docs/DRAWTEMP_7_1_TO_8_0_DETAILED_ROADMAP.md) : scripting visuel, physique, metroidvania, roguelite, monde vivant, VFX, IA et publication (jalons proposés).
 - [Roadmap prospective Studio professionnel (R51–R80, horizons 10.0–12.0)](docs/DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md) : 30 jalons, 90 sous-lots/PR proposés, gates, vertical slices et publication. **R41–R50 restent à formaliser et les lots R51+ ne sont pas implémentés par cette documentation.**
