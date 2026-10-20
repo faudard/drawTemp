@@ -77,6 +77,29 @@ class R63JourneyGateTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             GameSession.from_recording(checkpoint, content, project)
 
+    def test_balance_report_is_deterministic_readonly_and_detects_risks(self):
+        from sporebound.survival_balance import balance_survival
+        document = survival_spec()
+        original = deepcopy(document)
+        report = balance_survival(document, {"arrival"}, horizon=128)
+        self.assertEqual(document, original)
+        self.assertIsNotNone(report["exhausted_tick"])
+        self.assertGreater(report["exhausted_tick"], 0)
+        self.assertEqual(report["issues"], [])
+        self.assertEqual(len(report["cold_hazards"]), 1)
+        self.assertEqual(report,
+                         balance_survival(document, {"arrival"}, horizon=128))
+        cut = deepcopy(document)
+        cut["shelters"] = []
+        cut["foods"] = []
+        cut["nodes"][0]["cold"] = 0
+        report = balance_survival(cut, {"arrival"}, horizon=128)
+        self.assertEqual(set(report["issues"]), {
+            "no_environmental_hazard", "no_shelter", "no_food"})
+        for horizon in (0, True, 257):
+            with self.assertRaises(RuleError):
+                balance_survival(document, {"arrival"}, horizon=horizon)
+
     def test_long_fast_forward_matches_single_fixed_ticks(self):
         document = survival_spec()
         short = SurvivalRuntime(document, {"arrival"})
