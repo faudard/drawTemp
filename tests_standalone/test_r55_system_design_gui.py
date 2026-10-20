@@ -177,6 +177,25 @@ class SystemDesignerQtTests(unittest.TestCase):
         self.assertEqual(session.snapshot().to_dict(), before)
         dlg.close()
 
+    def test_delete_selected_recipe_link_by_keyboard_is_undoable(self):
+        dlg, session = self._authored_graph()
+        previous = session.snapshot().to_dict()
+        dlg.connect_nodes(
+            ("resources", "ore"), ("producers", "jeweler"), 3)
+        edge = next(e for e in dlg.graph.connections
+                    if e.source == ("resources", "ore")
+                    and e.target == ("producers", "jeweler"))
+        dlg.scene.clearSelection()
+        edge.setSelected(True)
+        dlg.graph.setFocus()
+        QTest.keyClick(dlg.graph, Qt.Key_Delete)
+        self.app.processEvents()
+        self.assertNotIn("ore", dlg.document["producers"][1]["inputs"])
+        self.assertEqual(session.snapshot().to_dict(), previous)
+        self.assertTrue(dlg.undo_draft())
+        self.assertEqual(dlg.document["producers"][1]["inputs"]["ore"], 3)
+        dlg.close()
+
     def test_stale_editor_cannot_override_new_revision(self):
         content, project = scene_fixture()
         session = AuthoringSession(content, project)
