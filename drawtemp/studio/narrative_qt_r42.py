@@ -90,6 +90,7 @@ class NarrativeStudioDialog(QDialog):
         toolbar = QHBoxLayout()
         self.buttons = {}
         for key, title, action in (
+            ('template', 'Modèle VS-42', self.preview_template),
             ('migrate', 'Migrer v1 → v2', self.preview_migration),
             ('new', 'Créer scène', self.preview_new_scene),
             ('link', 'Relier un choix', self.preview_link),
@@ -294,6 +295,28 @@ class NarrativeStudioDialog(QDialog):
             self._offer(plan, 'Lignes validées, prêtes à être appliquées')
         except (AuthoringError, ValueError, TypeError, AttributeError) as exc:
             QMessageBox.warning(self, 'Validation narrative', str(exc))
+
+    def preview_template(self):
+        """Never overwrite a Studio document without a separate explicit Apply."""
+        if self._dirty or self._plan is not None:
+            QMessageBox.warning(
+                self, 'Modèle VS-42',
+                'Appliquez ou abandonnez les modifications en cours.')
+            return
+        confirm = QMessageBox.question(
+            self, 'Modèle VS-42',
+            'Prévisualiser le remplacement du Contenu et du Projet en mémoire '
+            'par la quête « La loyauté du capitaine » ? '
+            'Le remplacement ne sera effectif qu’en cliquant sur Appliquer ; '
+            'Undo pourra le restaurer.',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if confirm != QMessageBox.Yes:
+            return
+        try:
+            self._offer(self.workbench.preview_captain_slice(),
+                        'Modèle VS-42 validé (Content + GameProject)')
+        except (AuthoringError, ValueError) as exc:
+            QMessageBox.warning(self, 'Modèle VS-42', str(exc))
 
     def preview_migration(self):
         try:
