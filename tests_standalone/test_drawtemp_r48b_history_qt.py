@@ -223,6 +223,39 @@ class HistoryDialogQtTests(unittest.TestCase):
         self.assertIsNone(self.dialog.check_audit())
         self.assertIn("Audit non vérifiable", self.dialog.audit_status.text())
 
+    def test_explicit_history_save_and_reopen_preserves_node_ids(self):
+        node = self.dialog.capture_live()
+        destination = self.rootdir / "history.r48.json"
+        digest = self.dialog.save_history(destination)
+        self.assertIsNotNone(digest)
+        self.assertTrue(destination.is_file())
+        previous_game = self.session.snapshot().to_dict()
+        reopened = ProjectHistoryDialog(self.session)
+        self.addCleanup(reopened.close)
+        self.assertIsNotNone(reopened.load_history(destination))
+        self.assertEqual(reopened.history_path.text(), str(destination))
+        self.assertEqual(
+            [row.node_id for row in reopened.workspace.revisions()],
+            [row.node_id for row in self.dialog.workspace.revisions()])
+        self.assertEqual(reopened.workspace.graph.node(node.node_id).label,
+                         "Version de travail")
+        self.assertEqual(self.session.snapshot().to_dict(), previous_game)
+
+    def test_external_history_change_requires_reload_before_save(self):
+        destination = self.rootdir / "history.r48.json"
+        first = self.dialog.save_history(destination)
+        self.assertIsNotNone(first)
+        another = ProjectHistoryDialog(self.session)
+        self.addCleanup(another.close)
+        another.load_history(destination)
+        another.capture_live()
+        self.assertIsNotNone(another.save_history())
+        self.dialog.capture_live()
+        previous = destination.read_bytes()
+        self.assertIsNone(self.dialog.save_history())
+        self.assertEqual(destination.read_bytes(), previous)
+        self.assertIn("Historique non enregistré", self.dialog.status.text())
+
     def test_studio_menu_exposes_r48_action(self):
         from drawtemp.studio.qt_shell import StudioWindow
         settings = QSettings(str(self.rootdir / "settings.ini"), QSettings.IniFormat)
