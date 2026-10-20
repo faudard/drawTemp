@@ -15,6 +15,12 @@ on:
       - 'drawtemp/render/cell_lighting.py'
       - 'drawtemp/assets/r36_runtime.py'
       - 'drawtemp/render/r36_frame_budget.py'
+      - 'drawtemp/quality/r36_release.py'
+      - 'drawtemp/export/r15.py'
+      - 'scripts/r36_visual_candidates.py'
+      - 'tests_standalone/test_r36_release_rights.py'
+      - 'tests_standalone/test_r36_visual_candidates.py'
+      - 'tests_standalone/goldens/r36/**'
       - 'tests_standalone/test_r36_sprite_rendering.py'
       - 'tests_standalone/test_r36_frame_budget.py'
       - 'tests_standalone/test_r36_cell_lighting.py'
@@ -52,6 +58,12 @@ on:
       - 'drawtemp/render/cell_lighting.py'
       - 'drawtemp/assets/r36_runtime.py'
       - 'drawtemp/render/r36_frame_budget.py'
+      - 'drawtemp/quality/r36_release.py'
+      - 'drawtemp/export/r15.py'
+      - 'scripts/r36_visual_candidates.py'
+      - 'tests_standalone/test_r36_release_rights.py'
+      - 'tests_standalone/test_r36_visual_candidates.py'
+      - 'tests_standalone/goldens/r36/**'
       - 'tests_standalone/test_r36_sprite_rendering.py'
       - 'tests_standalone/test_r36_frame_budget.py'
       - 'tests_standalone/test_r36_cell_lighting.py'
@@ -95,7 +107,7 @@ jobs:
       - name: Install
         run: python -m pip install -e .
       - name: Compile touched modules
-        run: python -m compileall -q sporebound/animation_graph.py drawtemp/studio/animation_graph_authoring.py drawtemp/studio/animation_graph_qt.py drawtemp/studio/r28d_workflow_qt.py drawtemp/render/committed_fx.py drawtemp/player/action_controller.py sporebound/animation_timeline.py drawtemp/studio/animation_timeline_authoring.py drawtemp/studio/animation_timeline_qt.py drawtemp/render/vfx2d.py drawtemp/player/animation_presentation.py drawtemp/render/r32_contact_trace.py drawtemp/render/cell_lighting.py drawtemp/player/action_app.py drawtemp/assets/r36_runtime.py drawtemp/render/r36_frame_budget.py drawtemp/render/iso_scene.py
+        run: python -m compileall -q sporebound/animation_graph.py drawtemp/studio/animation_graph_authoring.py drawtemp/studio/animation_graph_qt.py drawtemp/studio/r28d_workflow_qt.py drawtemp/render/committed_fx.py drawtemp/player/action_controller.py sporebound/animation_timeline.py drawtemp/studio/animation_timeline_authoring.py drawtemp/studio/animation_timeline_qt.py drawtemp/render/vfx2d.py drawtemp/player/animation_presentation.py drawtemp/render/r32_contact_trace.py drawtemp/render/cell_lighting.py drawtemp/player/action_app.py drawtemp/assets/r36_runtime.py drawtemp/render/r36_frame_budget.py drawtemp/quality/r36_release.py scripts/r36_visual_candidates.py drawtemp/export/r15.py drawtemp/render/iso_scene.py
       - name: Animation graph deterministic and canonical persistence
         run: python -m unittest tests_standalone.test_r36_animation_graph -v
       - name: R36.B1 committed impact timing, recovery, budgets and replay
@@ -110,6 +122,12 @@ jobs:
         run: python -m unittest tests_standalone.test_r36_sprite_rendering tests_standalone.test_r36_frame_budget -v
       - name: R4 atlas resolution regressions
         run: python -m unittest tests_standalone.test_drawtemp5_r4_assets -v
+      - name: R36.C2 R15 rights provenance, SHA and approval guards
+        run: python -m unittest tests_standalone.test_r36_release_rights tests_standalone.test_r36_visual_candidates -v
+      - name: Legacy Creator R15 export contracts
+        run: python -m unittest tests_standalone.test_drawtemp5_r15 -v
+      - name: R36.C2 complete screenshot matrix (no Qt required)
+        run: python scripts/r36_visual_candidates.py matrix
       - name: R32 platform collision regression
         run: python -m unittest tests_standalone.test_platform_physics_r32 -v
       - name: Legacy R28 and R12 animation regressions
@@ -146,3 +164,16 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m unittest tests_standalone.test_r36_action_actor_qt -v
+      - name: R36.C2 capture candidate Qt Studio and Action Player goldens
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python scripts/r36_visual_candidates.py capture --output r36-visual-candidates
+      - name: Upload R36 candidate screenshots for independent review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r36-qt-candidate-goldens
+          path: r36-visual-candidates/
+          if-no-files-found: ignore
+          retention-days: 14
