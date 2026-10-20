@@ -28,6 +28,10 @@ Exécuter le lot lance 1 à 12 scénarios via un worker Qt et l'exécuteur R56.A
 canonique, sans modifier la session de l'éditeur. Sélectionner un scénario et
 une étape pour voir commande, digest, checkpoint, mode, erreur et source.
 Les numéros sont des indices de commande et non des ticks moteur universels.
+Le bouton Rejouer cette étape reconstruit GameSession depuis la seed, rejoue
+le préfixe et montre les valeurs réellement observées des invariants, y
+compris les écarts. Les digests sont comparés aux checkpoints du rapport.
+Cette reproduction s'exécute dans un worker Qt, sans écrire dans le Studio.
 
 Importer/exporter une suite, exporter un rapport, puis comparer avec un rapport
 précédent du même lot par statut et hash de chaque étape. Les suites
