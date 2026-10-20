@@ -324,6 +324,8 @@ Les familles de références (FFT, Zelda, JRPG classiques, etc.) ne sont que des
 
 **Suivi R49.C1 — evidence gate, non certifiant :** [vertical slice headless canonique, mesures R30.F et registre NO_GO](drawtemp5/R49C1_CREATOR_GATE.md). La validation est réelle pour les contrats R28/R1/R2/R15, mais ne vaut ni usage tiers onscreen, ni session de gameplay, ni export exécutable certifié. R49.C2 et le gate VS-49 restent ouverts.
 
+**Suivi R49.C2 — première scène Qt, non certifiant :** [création atomique depuis R28.D d'une scène narrative, d'un trigger CT, de son message et de la liaison](drawtemp5/R49C2_FIRST_SCENE_UI.md). Boutons Playtest/export délégués au Studio existant ; tests GUI onscreen, vérification événement joué, vrai export natif et auteur tiers requis pour VS-49. Le gate reste NO-GO.
+
 **Gate R49 :** Un auteur tiers crée mini-jeu depuis template, modifie cartes/règles/dialogues, lance playtest et exporte sans JSON; erreurs P0 d'UX et commandes inactives supprimées.
 
 **Vertical slice :** VS-49 — Premier jeu en Studio : nouveau projet → scène → action → export.
