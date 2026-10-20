@@ -256,6 +256,22 @@ class GameProject:
                                    self.extensions[SYSTEMS_EXTENSION]["data"]["resources"])
             validate_farming(self.extensions[FARM_EXTENSION]["data"],
                              set(self.exploration), known_items)
+        # R62.B.2 social data references R35 NPC identities and native items.
+        from .relationship_life import (EXTENSION as SOCIAL_EXTENSION,
+                                        validate_relationships)
+        if SOCIAL_EXTENSION in self.extensions:
+            require(EXTENSION in self.extensions,
+                    "R62 relationships require the R35 living-world clock")
+            world = self.extensions[EXTENSION]["data"]
+            npcs = {row["id"] for row in world["npcs"]}
+            activities = {row["id"]: {stop["activity"] for stop in row["schedule"]}
+                          for row in world["npcs"]}
+            social_items = set(content.equipment)
+            if SYSTEMS_EXTENSION in self.extensions:
+                social_items.update(row["id"] for row in
+                                    self.extensions[SYSTEMS_EXTENSION]["data"]["resources"])
+            validate_relationships(self.extensions[SOCIAL_EXTENSION]["data"],
+                                   npcs, social_items, npc_activities=activities)
         # R63: Survival is an optional typed GameProject extension.
         from .survival import EXTENSION as SURVIVAL_EXTENSION, validate_survival
         if SURVIVAL_EXTENSION in self.extensions:
