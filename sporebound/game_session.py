@@ -514,6 +514,42 @@ class GameSession:
              self._rt_position, self._rt_journal, self._platform) = before
             raise
 
+    def route_abandon_ct(self, link_id):
+        """Explicitly abandon an R25-routed CT battle and return atomically.
+
+        Abandoned battles pay no tactical reward. Both the battle removal
+        and route navigation are rolled back on a rejected or failed exit.
+        The Player facade persists the resulting GameSession once.
+        """
+        require(self.scene_router.enabled and self.mode == "battle"
+                and self.route_scene in self.content.missions
+                and not self.tactical_story_pending,
+                "Only a routed, active CT encounter can be abandoned")
+        # Validate destination before the mutation, including narrative gates.
+        route = self.scene_router.destination(
+            self.route_scene, link_id, self.progress)
+        require(route["destination"] in self.project.exploration,
+                "CT abandonment must return to authored exploration")
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.abandon_encounter()
+            return self.route_transition(link_id)
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
+            raise
+
     def _tactical_story_progress(self):
         require(bool(self.tactical_story_pending), "No tactical dialogue pending")
         require(not self.progress.story_pending,
