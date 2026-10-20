@@ -585,6 +585,52 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        # Navigation uses task names first, not internal roadmap identifiers.
+        # Preserve the technical title in the action tooltip/status bar.
+        tool_labels = {
+            "global_search": "Recherche globale et utilisations…",
+            "r35_world": "Horaires et routines des PNJ…",
+            "r44_atlas": "Atlas du monde…",
+            "r54_stream": "Streaming des régions…",
+            "r77_lab": "Laboratoire d’exploration…",
+            "r30_assist": "Terrains et puzzles assistés…",
+            "r74_dungeons": "Assistant de création de donjons…",
+            "procgen": "Aperçu des donjons procéduraux…",
+            "r43_ability": "Compétences et ciblage…",
+            "r65_composer": "Combat d’action…",
+            "r41_party": "Groupes RPG…",
+            "r53_composer": "Combos et synergies d’équipe…",
+            "r41_encounter": "Rencontres RPG…",
+            "r37_ai": "Comportements IA…",
+            "r37_sensor": "Perception et navigation IA…",
+            "r37_squad": "Escouades IA…",
+            "r37_boss": "Boss et phases d’IA…",
+            "r31_logic": "Logique visuelle et événements…",
+            "r42_narrative": "Éditeur narratif…",
+            "r75_narrative": "Assistant quêtes et dialogues…",
+            "r62_relationships": "Relations et affinités des PNJ…",
+            "r55_systems": "Systèmes et ateliers…",
+            "r62_farm": "Cultures et élevage…",
+            "r63_survival": "Survie, recettes et refuges…",
+            "r45_economy": "Économie et commerces…",
+            "r51_hud": "Interface de jeu / HUD…",
+            "r49_references": "Vérifier les références…",
+            "r38_prefabs": "Prefabs et variantes…",
+            "r38_refactor": "Renommer des références…",
+            "r38_preflight": "Préflight du projet…",
+            "r76_optimizer": "Optimisation des assets…",
+            "r49_metrics": "Mesures UX locales…",
+            "r30_scale": "Performances et budgets…",
+            "r57_translation": "Localisation et traductions…",
+            "r48_history": "Historique du projet…",
+            "r78_team_reviews": "Revues et tâches d’équipe…",
+            "r30_creator": "Packs et conflits…",
+        }
+        for key, label in tool_labels.items():
+            action = self.commands[key]
+            action.setStatusTip(action.text())
+            action.setToolTip(action.text())
+            action.setText(label)
         # Make the two discovery commands available without opening a submenu.
         tools_menu.addAction(self.commands["palette"])
         tools_menu.addAction(self.commands["global_search"])
