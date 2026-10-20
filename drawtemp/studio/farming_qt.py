@@ -7,6 +7,8 @@ existing editor, rather than duplicating schedule ownership.
 """
 from __future__ import annotations
 
+from copy import deepcopy
+
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QMessageBox, QPushButton, QSpinBox, QTabWidget,
@@ -14,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from drawtemp.studio.farming_authoring import FarmDraft
-from sporebound.farming_life import FarmingLife, SEASONS, SOILS
+from sporebound.farming_life import FarmingLife, SEASONS, SOILS, validate_farming
 
 
 def _combo(items, selected=""):
@@ -49,6 +51,7 @@ class FarmRecordEditor(QDialog):
         self.draft = draft
         self.record = None
         row = record or {}
+        self.original_id = row.get("id") if record is not None else None
         self.setWindowTitle({
             "plots": "Parcelle", "crops": "Culture", "animals": "Animal",
         }[family] + " — R62")
@@ -137,6 +140,28 @@ class FarmRecordEditor(QDialog):
         # validator still runs before any draft or project mutation.
         if not ident:
             QMessageBox.warning(self, "R62", "Identifiant requis.")
+            return
+        # Fail before the dialog closes: authors can correct bad IDs, empty
+        # seasons and invalid item references without losing the typed form.
+        try:
+            staged = self.draft.document
+            entries = staged[self.family]
+            if self.original_id is None:
+                if any(item["id"] == ident for item in entries):
+                    raise ValueError("Cet identifiant existe déjà.")
+                entries.append(deepcopy(value))
+            else:
+                if ident != self.original_id:
+                    raise ValueError("Renommer un ID demande une migration dédiée.")
+                index = next((i for i, item in enumerate(entries)
+                              if item["id"] == self.original_id), -1)
+                if index < 0:
+                    raise ValueError("L'enregistrement n'existe plus.")
+                entries[index] = deepcopy(value)
+            validate_farming(staged, set(self.draft.scenes),
+                             set(self.draft.items))
+        except (ValueError, TypeError, KeyError) as exc:
+            QMessageBox.warning(self, "R62", str(exc))
             return
         self.record = value
         self.accept()
