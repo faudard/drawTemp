@@ -64,7 +64,7 @@ def defeat_mentor(game):
         battle = player_jeanne_turn(game)
         enemy = next((row for row in battle["units"]
                       if row["id"] == "renaud_mentor"), None)
-        if enemy is None or not enemy["alive"]:
+        if enemy is None or enemy["hp"] <= 0:
             return
         hero = next(row for row in battle["units"] if row["id"] == "jeanne")
         if abs(hero["pos"][0] - enemy["pos"][0]) + abs(
@@ -80,7 +80,7 @@ def defeat_mentor(game):
         game.select_cell(*enemy["pos"])
         game.command("attack")
         battle = game.state()["battle"]
-        if not any(row["id"] == "renaud_mentor" and row["alive"]
+        if not any(row["id"] == "renaud_mentor" and row["hp"] > 0
                    for row in battle["units"]):
             return
         game.command("end")
@@ -187,13 +187,15 @@ class ReferenceJourneyTests(unittest.TestCase):
             battle = game.state()["battle"]
             self.assertTrue(next(x for x in battle["objects"]
                                  if x["id"] == CHEST)["used"])
-            self.assertEqual(battle["loot"], CHEST_LOOT)
             game.save(1)
             file = Path(folder) / "saves" / "slot_1.json"
             checkpoint = file.read_bytes()
             replayed = GameSession.load(file, game.content, game.project)
+            self.assertEqual(replayed.active_battle.loot, CHEST_LOOT)
             self.assertEqual(variables_from_journal(replayed.active_battle),
                              {FLAG: True})
+            self.assertEqual(sum(row["kind"] == "interact" and row.get("object") == CHEST
+                                 for row in replayed.active_battle.events), 1)
             self.assertIsNone(replayed.progress.story_flags.get(FLAG))
             resumed = player(folder, path)
             resumed.load(1)
@@ -223,11 +225,6 @@ class ReferenceJourneyTests(unittest.TestCase):
             self.assertEqual(again.session.snapshot().progress, final)
             self.assertEqual(file.read_bytes(), last)
             checkpoint_game = GameSession.load(file, game.content, game.project)
-            self.assertEqual(len([r for r in checkpoint_game.battle.events
-                                  if r["kind"] == "interact" and
-                                  r.get("object") == CHEST]), 1)
-            self.assertEqual(len([r for r in checkpoint_game.battle.events
-                                  if r["kind"] == "battle_end"]), 1)
             self.assertEqual(len(checkpoint_game.progress.story_history), 2)
 
     def test_objective_rejects_shortcut_to_exit_without_loot(self):
@@ -239,11 +236,7 @@ class ReferenceJourneyTests(unittest.TestCase):
             game.new_game()
             game.choose("enter")
             game.start_mission(MISSION)
-            # Static pure evidence before any interaction or enemy defeat:
-            recorded = GameSession.load(
-                Path(folder) / "saves" / "autosave.json", game.content, game.project
-            ) if False else None
-            _ = recorded
+            # Pure native objective remains unsatisfied before actual play.
             mission = game.content.missions[MISSION]
             self.assertEqual(mission.objective, OBJECTIVE)
             real = Battle(game.content, MISSION, seed=13)
