@@ -488,6 +488,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r62_farm", "Farm Studio R62 : cultures et élevage…", self.open_farm_studio)
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
@@ -569,6 +570,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r62_farm"])
         tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -734,6 +736,15 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.system_design_qt import SystemDesignerDialog
         revision = self.session.revision
         dialog = SystemDesignerDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_farm_studio(self):
+        """R62.B.1 typed authoring, canonical R1 apply and undo/redo."""
+        from drawtemp.studio.farming_qt import FarmStudioDialog
+        revision = self.session.revision
+        dialog = FarmStudioDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
