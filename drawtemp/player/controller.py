@@ -153,6 +153,15 @@ class PlayerController:
         self.forecast = ""
         return self.state()
 
+    def next_dialogue_line(self):
+        """Advance only one v2 line, then autosave the revision."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.scene:
+            raise ValueError('No dialogue is pending')
+        self.session.advance_narrative_line(expected_revision=state.revision)
+        return self._changed()
+
     def choose(self, choice_id):
         state = self._current()
         if not state.scene:
@@ -180,12 +189,105 @@ class PlayerController:
         self.inspected_skill = "attack"
         return self._changed()
 
+    def toggle_party_member(self, hero_id):
+        """R41 active/reserve toggle through canonical Simulation."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Finish the battle/dialogue before changing party")
+        party = self.session.party_state(expected_revision=state.revision)
+        if party is None:
+            raise ValueError("This project has no RPG_TURN party")
+        selected = list(party["active"])
+        if hero_id not in party["members"]:
+            raise ValueError("Recruit the hero before deploying them")
+        if hero_id in selected:
+            if len(selected) <= 1:
+                raise ValueError("A party needs at least one active hero")
+            selected.remove(hero_id)
+        else:
+            authored = self.project.extensions["drawtemp.partyrpg"]["data"][
+                "campaigns"][self.campaign_id]
+            if len(selected) >= authored["max_active"]:
+                raise ValueError("Active group is full; reserve a hero first")
+            selected.append(hero_id)
+        self.session.party_set_active(selected, expected_revision=state.revision)
+        return self._changed()
+
+    def switch_party_leader(self, hero_id):
+        """R53 campaign-only leader switch with R1 revision and autosave."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Leader changes require idle exploration")
+        self.session.party_switch_leader(hero_id,
+                                         expected_revision=state.revision)
+        return self._changed()
+
+    def recruit_party_member(self, hero_id):
+        """Add a recruitable hero through GameSession, never a UI-only roster."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Recruitment requires idle exploration")
+        self.session.party_recruit(hero_id, expected_revision=state.revision)
+        return self._changed()
+
+    def claim_rpg_quest(self):
+        state = self._current()
+        self.session.rpg_claim_quest(expected_revision=state.revision)
+        return self._changed()
+
+    def start_rpg_encounter(self, encounter_id):
+        """Enter an explicitly authored RPG encounter from the campaign menu."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Complete pending narrative first")
+        self.session.rpg_start(encounter_id, expected_revision=state.revision)
+        return self._changed()
+
+    def rpg_action(self, kind, target="", skill=""):
+        state = self._current()
+        if state.mode != "rpg":
+            raise ValueError("No current RPG encounter")
+        view = thaw(self.session.rpg_state(expected_revision=state.revision))
+        if view["result"]:
+            raise ValueError("Encounter already finished")
+        action = {"kind": kind, "actor": view["active"]}
+        if kind in ("attack", "item", "skill", "combo"):
+            action["target"] = target
+        if kind == "skill":
+            action["skill"] = skill
+        if kind == "combo":
+            action["combo"] = skill
+        if kind == "item":
+            action["item"] = "potion"
+        self.session.rpg_action(action, expected_revision=state.revision)
+        return self._changed()
+
+    def finish_rpg_encounter(self):
+        state = self._current()
+        if state.mode != "rpg":
+            raise ValueError("No current RPG encounter")
+        self.session.rpg_finish(expected_revision=state.revision)
+        return self._changed()
+
+    def travel_route(self, link_id):
+        """Travel only through authored and currently unlocked R25 links."""
+        self._require_cinematic_completed()
+        state = self._current()
+        authorized = thaw(self.session.route_destinations(
+            expected_revision=state.revision))
+        if link_id not in {link["id"] for link in authorized}:
+            raise ValueError("Destination is unavailable")
+        self.session.route_transition(link_id, expected_revision=state.revision)
+        return self._changed()
+
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
         if self.session.platform_state(expected_revision=state.revision) is not None:
             raise ValueError("Physical scenes require R32 platform controls")
-        if not state.exploration or state.exploration["completed"]:
+        world = thaw(self.session.world_atlas_state())
+        if not state.exploration or (state.exploration["completed"] and
+                                     not world["enabled"]):
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
         return self._changed()
@@ -313,6 +415,36 @@ class PlayerController:
             raise ValueError("System economy is not configured")
         self.session.system_fulfill(quest_id, expected_revision=state.revision)
         return self._changed()
+
+    def world_interact(self, object_id):
+        """R44 persistent object activation through the R1 GameSession owner."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration:
+            raise ValueError("R44: no active exploration scene")
+        world = thaw(self.session.world_atlas_state())
+        if not world["enabled"] or object_id not in world["object_ids"]:
+            raise ValueError("R44: unknown World Atlas object")
+        point = next((p for p in state.exploration["interactions"]
+                      if p["id"] == object_id), None)
+        self.session.world_interact(object_id, expected_revision=state.revision)
+        self.message = ((point["title"] + " — " + point["text"])
+                        if point is not None else "Objet du monde activé")
+        return self._changed(keep_message=True)
+
+    def world_transition(self, route_id):
+        """R44 hotspot-aware travel, authorized by SceneRouter in GameSession."""
+        self._require_cinematic_completed()
+        state = self._current()
+        world = thaw(self.session.world_atlas_state())
+        route = next((entry for entry in world["portals"]
+                      if entry["id"] == route_id), None)
+        if not world["enabled"] or route is None:
+            raise ValueError("R44: unknown World Atlas passage")
+        self.session.world_transition(route_id, expected_revision=state.revision)
+        self.selected = [0, 0]
+        self.message = "Arrivée : " + route["title"]
+        return self._changed(keep_message=True)
 
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
@@ -719,14 +851,23 @@ class PlayerController:
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
-                "choices": [], "missions": [], "scene": {}, "exploration": {},
+                "choices": [], "missions": [], "scene": {}, "dialogue_line": {}, "exploration": {},
+                "world_atlas": {"enabled": False, "scene": "", "region": "",
+                                "region_title": "", "portals": [], "objects": [],
+                                "object_ids": [], "reachability": {
+                                    "scenes": [], "regions": [], "blocked_routes": []},
+                                "region_total": 0, "visited_regions": []},
                 "routes": [],
                 "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "systems": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
-                "gear": {"equipped": {}, "inventory": []}}
+                "gear": {"equipped": {}, "inventory": []},
+                "party": {"enabled": False, "heroes": [], "active": [],
+                          "capacity": 0},
+                "rpg_available": [], "rpg": {}, "rpg_quest": {},
+                "route_links": []}
         if self.campaign_id.endswith("_journey"):
             campaign = self.project.campaign(self.campaign_id)
             if campaign is not None:
@@ -737,6 +878,22 @@ class PlayerController:
         snapshot = self._current()
         base["revision"] = snapshot.revision
         base["missions"] = list(snapshot.missions)
+        base["rpg_available"] = list(self.session.rpg_available(
+            expected_revision=snapshot.revision))
+        hybrid = self.session.party_hybrid_state(
+            expected_revision=snapshot.revision)
+        base["r53_hybrid"] = thaw(hybrid) if hybrid is not None else {}
+        base["route_links"] = list(thaw(self.session.route_destinations(
+            expected_revision=snapshot.revision)))
+        quest = self.session.rpg_quest_state(expected_revision=snapshot.revision)
+        base["rpg_quest"] = thaw(quest) if quest is not None else {}
+        if snapshot.mode == "rpg":
+            base["rpg"] = thaw(self.session.rpg_state(
+                expected_revision=snapshot.revision))
+            base["rpg"]["skill_catalog"] = {
+                sid: {"name": skill.name, "cost": skill.cost,
+                      "target": skill.target}
+                for sid, skill in self.content.skills.items()}
         progress = thaw(snapshot.progress)
         # R27.D campaign journey: read-only view from the canonical Campaign
         # snapshot. Never store a second progress ledger or route outside R1.
@@ -766,6 +923,36 @@ class PlayerController:
                 campaign = self.project.campaign(self.campaign_id)
                 base["title"] = campaign["name"]
                 base["subtitle"] = campaign["description"]
+        party_state = self.session.party_state(expected_revision=snapshot.revision)
+        if party_state is not None:
+            party = thaw(party_state)
+            config = self.project.extensions["drawtemp.partyrpg"]["data"][
+                "campaigns"][self.campaign_id]
+            base["party"] = {
+                "enabled": True, "active": list(party["active"]),
+                "capacity": config["max_active"],
+                "equipment": {
+                    uid: dict(progress["heroes"][uid]["equipment"])
+                    for uid in party["members"]
+                },
+                "recruitable": [
+                    {"id": uid, "name": next(
+                        (unit.name for mission in self.content.missions.values()
+                         for unit in mission.units
+                         if unit.id == uid and unit.team == "player"), uid)}
+                    for uid in config["recruitable"] if uid not in party["members"]
+                ],
+                "heroes": [{
+                    "id": uid,
+                    "name": next(
+                        (unit.name for mission in self.content.missions.values()
+                         for unit in mission.units
+                         if unit.id == uid and unit.team == "player"), uid),
+                    "job": progress["heroes"][uid]["job"],
+                    "xp": progress["heroes"][uid]["xp"],
+                    "active": uid in party["active"],
+                } for uid in party["members"]],
+            }
         equipped = progress.get("heroes", {}).get("jeanne", {}).get("equipment", {})
         stock = progress.get("inventory", {})
         base["gear"] = {
@@ -778,7 +965,16 @@ class PlayerController:
             ],
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
+        presentation = thaw(self.session.narrative_line(
+            expected_revision=snapshot.revision))
+        if presentation:
+            # Same authored scene, current saved line. The QML surface never
+            # mutates the story definition or pretends to evaluate effects.
+            base["dialogue_line"] = presentation
+            base["scene"]["speaker"] = presentation["speaker"]
+            base["scene"]["text"] = presentation["text"]
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        base["world_atlas"] = thaw(self.session.world_atlas_state())
         system_snapshot = self.session.system_state(
             expected_revision=snapshot.revision)
         if system_snapshot is not None:
@@ -874,13 +1070,19 @@ class PlayerController:
                           battle.get("active") == pending["active"] and
                           not battle.get("result")),
             }
-        if snapshot.scene and (snapshot.battle or not snapshot.exploration or
-                               snapshot.exploration["completed"]):
+        if snapshot.mode == "rpg":
+            base["screen"] = "rpg_battle"
+        elif snapshot.scene and (snapshot.battle or not snapshot.exploration or
+                               (snapshot.exploration["completed"] and
+                                not base["world_atlas"]["enabled"])):
             base["screen"] = "dialogue"
-            base["choices"] = thaw(self.session.choices())
+            base["choices"] = (
+                thaw(self.session.choices())
+                if not presentation or presentation["complete"] else [])
         elif base["platform"]["enabled"]:
             base["screen"] = "platform"
-        elif snapshot.exploration and not snapshot.exploration["completed"]:
+        elif snapshot.exploration and (not snapshot.exploration["completed"] or
+                                       base["world_atlas"]["enabled"]):
             base["screen"] = "exploration"
         elif snapshot.battle:
             base["screen"] = "result" if snapshot.battle["result"] else "battle"

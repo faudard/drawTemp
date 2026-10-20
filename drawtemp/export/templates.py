@@ -14,8 +14,10 @@ from drawtemp.sdk.r40_starters import STARTER_KINDS, create_starter_pair
 from sporebound.studio_transaction import validate_pair
 from drawtemp.quality.r14 import safe_asset_path
 
-TEMPLATES = ("blank", "tactical", "narrative", "jeanne", "asterion") + STARTER_KINDS
+TEMPLATES = ("blank", "tactical", "narrative", "classic_rpg", "hybrid_r53", "jeanne", "asterion") + STARTER_KINDS
 _TITLES = {"blank": "Nouveau RPG", "tactical": "Prototype tactique",
+           "classic_rpg": "Le relais du village — RPG classique",
+           "hybrid_r53": "Le relais hybride — groupe R53, RPG & tactique CT",
            "narrative": "Histoire interactive",
            "jeanne": "Jeanne d'Arc — Les Cendres du Royaume",
            "asterion": "Asterion — Les Veilleurs du Signal"}
@@ -89,7 +91,13 @@ def create_template(kind, destination, *, title=None, subtitle=None,
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(safe_asset_path(source.parent, relative), target)
         else:
-            if kind == "narrative":
+            if kind == "classic_rpg":
+                from drawtemp.creator_examples.classic_rpg import build_relais_du_village
+                content, project = build_relais_du_village()
+            elif kind == "hybrid_r53":
+                from drawtemp.creator_examples.r53_hybrid import build_relais_hybride_r53
+                content, project = build_relais_hybride_r53()
+            elif kind == "narrative":
                 content, project = reference_project()
                 project.title = _TITLES[kind]
             else:

@@ -1,0 +1,88 @@
+name: DrawTemp R50.B Creator Catalog (non-certifying)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_catalog_qt.py'
+      - 'drawtemp/studio/r50b_player_journey.py'
+      - 'drawtemp/studio/r50b_exploration.py'
+      - 'drawtemp/studio/r50b_action.py'
+      - 'sporebound/player_controller.py'
+      - 'drawtemp/player/r50b_action_controller.py'
+      - 'drawtemp/player/r50b_action_app.py'
+      - 'drawtemp/player/R50BActionPlayer.qml'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'tests_standalone/test_r50b_action_player.py'
+      - 'pyproject.toml'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/action_scene_adapter.py'
+      - 'sporebound/action_settlement.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r50b_catalog.py'
+      - 'tests_standalone/test_r50b_player_journey.py'
+      - 'tests_standalone/test_r50b_exploration.py'
+      - 'tests_standalone/test_r50b_action.py'
+      - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
+      - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/studio/r50b_catalog.py'
+      - 'drawtemp/studio/r50b_catalog_qt.py'
+      - 'drawtemp/studio/r50b_player_journey.py'
+      - 'drawtemp/studio/r50b_exploration.py'
+      - 'drawtemp/studio/r50b_action.py'
+      - 'sporebound/player_controller.py'
+      - 'drawtemp/player/r50b_action_controller.py'
+      - 'drawtemp/player/r50b_action_app.py'
+      - 'drawtemp/player/R50BActionPlayer.qml'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'tests_standalone/test_r50b_action_player.py'
+      - 'pyproject.toml'
+      - 'sporebound/game_session.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/action_scene_adapter.py'
+      - 'sporebound/action_settlement.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r50b_catalog.py'
+      - 'tests_standalone/test_r50b_player_journey.py'
+      - 'tests_standalone/test_r50b_exploration.py'
+      - 'tests_standalone/test_r50b_action.py'
+      - 'docs/drawtemp9/R50_B_CREATOR_CATALOG.md'
+      - '.github/workflows/drawtemp-r50b-creator-catalog.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headless-and-offscreen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install project and optionally PySide6
+        shell: bash
+        run: |
+          if [ "${{ matrix.python }}" = "3.12" ]; then
+            python -m pip install '.[qt6]'
+          else
+            python -m pip install .
+          fi
+      - name: Compile R50.B modules
+        run: |
+          python -m compileall -q drawtemp/studio/r50b_catalog.py drawtemp/studio/r50b_catalog_qt.py drawtemp/studio/r50b_player_journey.py drawtemp/studio/r50b_exploration.py drawtemp/studio/r50b_action.py sporebound/player_controller.py sporebound/game_session.py sporebound/game_project.py sporebound/action_scene_adapter.py sporebound/action_settlement.py drawtemp/player/r50b_action_controller.py drawtemp/player/r50b_action_app.py drawtemp/player/action_app.py drawtemp/player/qt_app.py drawtemp/studio/qt_shell.py tests_standalone/test_r50b_catalog.py tests_standalone/test_r50b_player_journey.py tests_standalone/test_r50b_exploration.py tests_standalone/test_r50b_action.py tests_standalone/test_r50b_action_player.py
+      - name: Authoring/action/replay and Qt offscreen regression
+        run: |
+          python -m unittest -v tests_standalone.test_r50b_catalog tests_standalone.test_r50b_player_journey tests_standalone.test_r50b_exploration tests_standalone.test_r50b_action tests_standalone.test_r50b_action_player tests_standalone.test_r28e_minigames_certification tests_standalone.test_action_runtime_r26
