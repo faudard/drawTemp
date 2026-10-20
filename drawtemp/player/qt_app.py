@@ -595,7 +595,7 @@ def main(argv=None):
     parser.add_argument("--smoke", action="store_true", help="Load the QML root and quit")
     parser.add_argument("--reference", action="store_true",
                         help="Run the deterministic R0 reference campaign")
-    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration", "cinematic"),
+    parser.add_argument("--smoke-scene", choices=("title", "battle", "exploration", "platform", "cinematic"),
                         default="title", help="Exercise a real game scene during Qt smoke")
     parser.add_argument("--save-dir", type=Path, help="Separate persistent save directory")
     parser.add_argument("--content", type=Path, help="Custom canonical Content JSON")
@@ -669,6 +669,12 @@ def main(argv=None):
         controller.new_game()
         if controller.state()["screen"] != "exploration":
             parser.error("No exploration stage in the current campaign")
+    elif args.smoke and args.smoke_scene == "platform":
+        if args.reference:
+            parser.error("--smoke-scene platform requires an authored R32 game")
+        controller.new_game()
+        if controller.state()["screen"] != "platform":
+            parser.error("No physical R32 scene in the current authored campaign")
     elif args.smoke and args.smoke_scene == "cinematic":
         if args.reference:
             parser.error("--smoke-scene cinematic requires authored scene clips")
