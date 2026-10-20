@@ -229,6 +229,156 @@ class VisualLogicQtTests(unittest.TestCase):
         finally:
             view.close()
 
+    def test_reference_quest_qt_button_installs_once_and_undoes_all(self):
+        from PySide6.QtWidgets import QMessageBox
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        from drawtemp.studio.logic_vertical_slice import GRAPH
+        session = new_session()
+        initial = session.snapshot().to_dict()
+        view = LogicGraphDialog(session)
+        try:
+            self.assertEqual(view.slice_demo.objectName(),
+                             "r31h-create-reference-quest")
+            with patch.object(QMessageBox, "question",
+                              return_value=QMessageBox.Yes):
+                self.assertTrue(view.create_reference_quest())
+            self.assertEqual(session.revision, 1)
+            self.assertEqual(view.draft.graph["id"], GRAPH)
+            self.assertIn("r31h_chest", view.graphs.itemText(
+                view.graphs.currentIndex()))
+            self.assertEqual(len(graphs_from_project(
+                session.snapshot().to_dict()["project"])), 1)
+            with patch.object(QMessageBox, "question",
+                              return_value=QMessageBox.Yes):
+                self.assertFalse(view.create_reference_quest())
+            self.assertEqual(session.revision, 1)
+            view.undo()
+            self.assertEqual(session.snapshot().to_dict()["content"],
+                             initial["content"])
+            self.assertEqual(session.snapshot().to_dict()["project"],
+                             initial["project"])
+        finally:
+            view.close()
+
+    def test_export_campaign_qt_requires_committed_variable_and_supports_undo(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        from sporebound.logic_campaign_bridge import EXTENSION
+        session = new_session()
+        draft = LogicGraphDraft.new(MISSION, "qt_export", source_revision=0)
+        draft.add_variable_after("message", "r31_test_quest", value=True)
+        draft.apply(session)
+        view = LogicGraphDialog(session)
+        try:
+            index = view.graphs.findData("qt_export")
+            self.assertGreaterEqual(index, 0)
+            view.graphs.setCurrentIndex(index)
+            with patch.object(QInputDialog, "getItem",
+                              side_effect=[("r31_test_quest", True),
+                                           ("victory", True)]), \
+                 patch.object(QInputDialog, "getText",
+                              return_value=("r31_reward", True)):
+                self.assertTrue(view.export_campaign_flag())
+            self.assertEqual(session.revision, 2)
+            bridge = session.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+            self.assertEqual(bridge["data"]["bindings"][0]["target"],
+                             "r31_reward")
+            view.undo()
+            self.assertNotIn(EXTENSION, session.snapshot().to_dict()["project"]["extensions"])
+        finally:
+            view.close()
+
+    def test_typed_variable_qt_editor_and_native_preview(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_variable", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(view, "_prompt_variable_name",
+                              return_value="r31_door"), \
+                 patch.object(QInputDialog, "getItem",
+                              return_value=("Affecter booléen", True)), \
+                 patch.object(view, "_prompt_variable_value", return_value=True):
+                view.add_variable()
+            self.assertEqual(view.draft.graph["schema_version"], 4)
+            self.assertEqual(view.draft.node("variable1")["params"]["kind"],
+                             "logic_set")
+            view.choose_node("variable1")
+            with patch.object(view, "_prompt_variable_name",
+                              return_value="r31_door"), \
+                 patch.object(QInputDialog, "getItem",
+                              side_effect=[("eq", True), ("Booléen", True)]), \
+                 patch.object(view, "_prompt_variable_value", return_value=True):
+                view.add_variable_check()
+            self.assertIn("check1", view.canvas._cards)
+            self.assertTrue(view.preview())
+            self.assertIn("r31_qt_variable_s1", view.diagnostics.toPlainText())
+            self.assertTrue(view.apply_changes())
+            self.assertTrue(view.start_debug())
+            self.assertTrue(view.debug_step())
+            self.assertEqual(
+                view.debug_session.report()["report"]["battle_variables"],
+                {"r31_door": True})
+        finally:
+            view.close()
+
+    def test_wait_gate_qt_edit_preview_and_debug_schedule(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_wait", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(QInputDialog, "getInt", return_value=(4, True)):
+                view.add_wait()
+            self.assertEqual(view.draft.graph["schema_version"], 3)
+            self.assertIn("wait1", view.canvas._cards)
+            view.choose_node("wait1")
+            with patch.object(QInputDialog, "getInt", return_value=(6, True)):
+                view.edit_node()
+            self.assertEqual(view.draft.node("wait1")["params"]["ticks"], 6)
+            self.assertTrue(view.preview())
+            self.assertIn("delay_ticks", str(view.draft.prepare(session)[1]))
+            self.assertTrue(view.apply_changes())
+            self.assertTrue(view.start_debug())
+            self.assertTrue(view.debug_step())
+            view.choose_node("wait1")
+            self.assertTrue(view.debug_inspect())
+            self.assertIn("scheduled", view.diagnostics.toPlainText())
+            self.assertEqual(session.snapshot().to_dict()["project"]
+                             ["extensions"]["org.drawtemp.logic"]["data"]["graphs"][0]
+                             ["schema_version"], 3)
+        finally:
+            view.close()
+
+    def test_flag_gate_qt_edit_preview_and_unresolved_reference(self):
+        from PySide6.QtWidgets import QInputDialog
+        from drawtemp.studio.logic_graph_qt import LogicGraphDialog
+        session = new_session()
+        view = LogicGraphDialog(session)
+        try:
+            with patch.object(QInputDialog, "getText",
+                              return_value=("qt_flag", True)):
+                view.new_graph()
+            view.choose_node("message")
+            with patch.object(QInputDialog, "getText",
+                              return_value=("event_missing", True)):
+                view.add_flag()
+            self.assertEqual(view.draft.graph["schema_version"], 3)
+            self.assertIn("flag1", view.canvas._cards)
+            self.assertFalse(view.preview())
+            self.assertFalse(view.apply_changes())
+            self.assertEqual(session.revision, 0)
+        finally:
+            view.close()
+
     def test_debugger_ui_breakpoint_step_inspect_and_stale_revision(self):
         from drawtemp.studio.logic_graph_qt import LogicGraphDialog
         session = new_session()

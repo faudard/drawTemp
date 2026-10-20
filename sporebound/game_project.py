@@ -116,6 +116,18 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        from .logic_campaign_bridge import validate_bridge
+        validate_bridge(self, content)
+        # R38.2: optional authored prefab instance provenance, validated on load.
+        # Legacy projects without this extension retain byte-compatible manifests.
+        from .prefab_variants import NAMESPACE as PREFAB_NS, validate_prefab_extensions
+        if PREFAB_NS in self.extensions:
+            validate_prefab_extensions(self.extensions[PREFAB_NS], content)
+        # R51.A: opt-in UI layouts share the canonical GameProject extension.
+        # Validation runs at load/authoring time; legacy manifests are untouched.
+        from .ui_layout_r51 import NAMESPACE as UI_NAMESPACE, validate_ui_catalog
+        if UI_NAMESPACE in self.extensions:
+            validate_ui_catalog(self.extensions[UI_NAMESPACE]["data"])
         # R32: reject malformed geometry on load, even outside the Studio.
         from .physics_scenes import EXTENSION as PHYSICS_EXTENSION, physics_scene_ids, validate_physics_catalog
         if PHYSICS_EXTENSION in self.extensions:
@@ -144,6 +156,21 @@ class GameProject:
             validate_roguelite_spec(
                 self.extensions[ROGUELITE_EXTENSION]["data"],
                 content=content, project=self)
+        # R43: opt-in Ability schema is validated on every canonical load.
+        # Legacy project JSON and native tactical skills remain untouched.
+        if "org.drawtemp.abilities" in self.extensions:
+            from dataclasses import asdict
+            from drawtemp.sdk.ability_contracts import (
+                validate_catalog, compile_ct_skill,
+            )
+            abilities = validate_catalog(
+                self.extensions["org.drawtemp.abilities"]["data"])["abilities"]
+            for ability in abilities:
+                if "TACTICAL_CT" in ability["profiles"]:
+                    native = content.skills.get(ability["id"])
+                    require(native is not None and
+                            asdict(native) == compile_ct_skill(ability),
+                            "R43 CT ability must match its compiled native Content skill")
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
@@ -151,6 +178,12 @@ class GameProject:
         from .cinematics import validate_cinematics
         validate_cinematics(self.cinematics, content, self.campaigns,
                             self.story.get("scenes", []))
+        # R46.A: optional, versioned bindings onto R11 event identities.
+        # Keep the v1 cinematic array canonical and all legacy manifests inert.
+        from .cinematic_pro import EXTENSION as CINEMATIC_PRO_EXTENSION, validate_cinematic_pro
+        if CINEMATIC_PRO_EXTENSION in self.extensions:
+            validate_cinematic_pro(
+                self.extensions[CINEMATIC_PRO_EXTENSION]["data"], self.cinematics)
         from .narrative import validate_story
         validate_story(self.story, content, self.campaigns)
         # Only a verified node in the authored siege may trigger a narrative scene.
@@ -169,13 +202,23 @@ class GameProject:
             validate_living_world(
                 self.extensions[EXTENSION]["data"],
                 set(self.exploration) | set(content.missions),
-                exploration=self.exploration)
+                exploration=self.exploration,
+                item_ids=set(content.equipment))
+        # R55: typed production graphs are opt-in and fail closed at load.
+        from .system_design import EXTENSION as SYSTEMS_EXTENSION, validate_systems
+        if SYSTEMS_EXTENSION in self.extensions:
+            validate_systems(
+                self.extensions[SYSTEMS_EXTENSION]["data"],
+                set(self.exploration))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
         validate_game_modes(self.game_modes, content, self)
         from .scene_router import validate_scene_routes
         validate_scene_routes(self.scene_routes, content, self)
+        from .world_streaming import EXTENSION as STREAM_EXTENSION, validate_world_streaming
+        if STREAM_EXTENSION in self.extensions:
+            validate_world_streaming(self.extensions[STREAM_EXTENSION]["data"], self)
         require(isinstance(self.battle_support, list) and len(self.battle_support) <= 40,
                 'Invalid battle support rules')
         for spec in self.battle_support:

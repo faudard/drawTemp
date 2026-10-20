@@ -5,7 +5,6 @@ documents are emitted. Existing R15/AuthoringSession remain the sole owners.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -16,6 +15,7 @@ from PySide6.QtWidgets import (
 from drawtemp.studio.genre_workflow import (
     GENRES, create_genre_project, preview_genre_project,
 )
+from drawtemp.studio.r49_creator_ux import creator_preflight_text
 
 
 class GenreProjectWizard(QDialog):
@@ -46,7 +46,7 @@ class GenreProjectWizard(QDialog):
         dest_row.addWidget(browse)
         form.addRow("Destination", dest_row)
         layout.addLayout(form)
-        layout.addWidget(QLabel("Apercu des capacites et des prerequis (non sauvegardes)"))
+        layout.addWidget(QLabel("Capacités et conditions de création (aucun fichier modifié)"))
         self.report = QPlainTextEdit()
         self.report.setObjectName("r28-genre-project-diagnostics")
         self.report.setAccessibleName("Diagnostic de creation")
@@ -77,7 +77,9 @@ class GenreProjectWizard(QDialog):
     def refresh(self, *_):
         result = preview_genre_project(
             self.genre.currentData(), self.destination.text())
-        self.report.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
+        self.report.setPlainText(creator_preflight_text(result))
+        self.report.setAccessibleDescription(
+            "Préflight accessible : état, genre, dossier, fonctionnalités et blocages")
         self.create_button.setEnabled(result["passed"])
         return result
 

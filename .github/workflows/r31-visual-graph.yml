@@ -1,9 +1,20 @@
-name: DrawTemp R31.ABCD Visual Logic Studio
+name: DrawTemp R31.ABCDEFGHI Visual Logic Studio
 on:
   pull_request:
     paths:
       - 'drawtemp/sdk/logic_graph.py'
       - 'drawtemp/sdk/logic_branches.py'
+      - 'drawtemp/sdk/logic_sequence.py'
+      - 'sporebound/logic_variables.py'
+      - 'sporebound/logic_campaign_bridge.py'
+      - 'sporebound/logic_vertical_objective.py'
+      - 'drawtemp/studio/logic_vertical_slice.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/sdk/logic_campaign.py'
+      - 'sporebound/tactical_rpg3.py'
+      - 'sporebound/engine.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/model.py'
       - 'drawtemp/studio/logic_graph_draft.py'
       - 'drawtemp/studio/logic_debugger.py'
       - 'sporebound/event_debugger.py'
@@ -12,11 +23,22 @@ on:
       - 'tests_standalone/test_drawtemp_r31_logic_graph.py'
       - 'tests_standalone/test_drawtemp_r31_logic_branches.py'
       - 'tests_standalone/test_drawtemp_r31_logic_debugger.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_sequence.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_variables.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_campaign.py'
+      - 'tests_standalone/test_drawtemp_r31_logic_vertical_slice.py'
+      - 'tests_standalone/test_drawtemp_r31_certification.py'
+      - 'scripts/r31i_certify.py'
       - 'tests_standalone/test_drawtemp_r31_logic_qt.py'
       - 'docs/drawtemp5/R31A_VISUAL_GRAPH_ADR.md'
       - 'docs/drawtemp5/R31B_LOGIC_STUDIO.md'
       - 'docs/drawtemp5/R31C_TYPED_BRANCHES.md'
       - 'docs/drawtemp5/R31D_VISUAL_DEBUGGER.md'
+      - 'docs/drawtemp5/R31E_NATIVE_WAITS_FLAGS.md'
+      - 'docs/drawtemp5/R31F_TYPED_BATTLE_VARIABLES.md'
+      - 'docs/drawtemp5/R31G_CAMPAIGN_BRIDGE.md'
+      - 'docs/drawtemp5/R31H_PLAYER_VERTICAL_SLICE.md'
+      - 'docs/drawtemp5/R31I_CERTIFICATION.md'
       - '.github/workflows/r31-visual-graph.yml'
   push:
     branches: [master]
@@ -53,9 +75,26 @@ jobs:
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_branches -v
       - name: R31.D isolated native debugger and node tracing
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_debugger -v
+      - name: R31.E native waits, journal flags and authenticated Battle replay
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_sequence -v
+      - name: R31.F typed combat variables, canonical journal replay and old-manifest preservation
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_variables -v
+      - name: R31.G campaign bridge, authentic victory/defeat and verified checkpoint
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_campaign -v
+      - name: R31.H Studio-to-Player journey and authenticated save/replay
+        run: python -m unittest tests_standalone.test_drawtemp_r31_logic_vertical_slice -v
+      - name: R31.I certification headless (no skipped or missing tests)
+        run: python scripts/r31i_certify.py --suite headless --min-tests 25 --output r31i-headless-${{ matrix.os }}.json
+      - name: Publish R31.I headless attestation, even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r31i-headless-${{ matrix.os }}
+          path: r31i-headless-${{ matrix.os }}.json
+          if-no-files-found: warn
 
   studio-qt:
-    name: R31.BCD Qt offscreen / ${{ matrix.os }}
+    name: R31.BCDEFGHI Qt offscreen / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -73,3 +112,12 @@ jobs:
       - run: python -m pip install '.[qt6]'
       - name: Qt node canvas, visual debugger, native breakpoint and undo
         run: python -m unittest tests_standalone.test_drawtemp_r31_logic_qt.VisualLogicQtTests -v
+      - name: R31.I certification Qt (no skipped or missing tests)
+        run: python scripts/r31i_certify.py --suite qt --min-tests 5 --output r31i-qt-${{ matrix.os }}.json
+      - name: Publish R31.I Qt attestation, even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r31i-qt-${{ matrix.os }}
+          path: r31i-qt-${{ matrix.os }}.json
+          if-no-files-found: warn

@@ -232,6 +232,19 @@ class CinematicDocument:
             event.update(changes)
         self._edit(operation, expected_revision=expected_revision)
 
+    def trim_event(self, clip_id, event_id, duration_ms, *,
+                   expected_revision=None):
+        """R46.B: right-edge trim, one validated revision/Undo step.
+
+        Canonical R11 keyframes are proportionally retimed by resize_event;
+        fade constraints and out-of-bounds cuts fail atomically. The Studio
+        never mutates a GameProject during a pointer-move preview.
+        """
+        def operation(data):
+            clip, event = self._event_in(data, clip_id, event_id)
+            event.update(resize_event(event, duration_ms, clip["duration_ms"]))
+        self._edit(operation, expected_revision=expected_revision)
+
     def delete_event(self, clip_id, event_id):
         def operation(data):
             clip, _ = self._event_in(data, clip_id, event_id)

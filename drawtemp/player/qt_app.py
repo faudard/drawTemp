@@ -15,7 +15,8 @@ from drawtemp.render.qt_viewport import make_controller
 
 
 def build_controller(*, save_dir=None, reference=False, content_path=None,
-                     project_path=None, campaign_id=None):
+                     project_path=None, campaign_id=None, mod_registry=None,
+                     expected_mod_pins=None, managed_mod_namespaces=()):
     """Load the packaged demo, R0 reference, or a validated authored pair.
 
     A custom project owns a distinct default save directory so two unrelated
@@ -25,15 +26,36 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         raise ValueError("--reference cannot be combined with authored content")
     if project_path is not None and content_path is None:
         raise ValueError("--project requires --content")
+    if (mod_registry is None) != (expected_mod_pins is None):
+        raise ValueError("Mod registry and separately trusted pins must be provided together")
+    if mod_registry is not None and content_path is None:
+        raise ValueError("Mod verification requires explicit authored Content")
     project_manifest = None
     if reference:
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()
     elif content_path is not None:
+        if mod_registry is not None and Path(content_path).expanduser().is_symlink():
+            raise ValueError("R47 mod preflight refuses symlinked Content")
         source = Path(content_path).expanduser().resolve()
         manifest = (Path(project_path).expanduser().resolve()
                     if project_path is not None
                     else source.with_suffix(".game.json"))
+        # This is opt-in. Builtin and pre-existing games continue to load
+        # their inert extensions without executing any third-party mod code.
+        if mod_registry is not None:
+            if project_path is not None and manifest != source.with_name(
+                    source.stem + ".game.json"):
+                raise ValueError(
+                    "R47 mod preflight requires canonical Content/GameProject filenames")
+            from drawtemp.sdk.mod_preflight import inspect_modded_project
+            audit = inspect_modded_project(
+                source, mod_registry, expected_pins=expected_mod_pins,
+                managed_namespaces=managed_mod_namespaces)
+            if not audit["ready_for_player_preview"]:
+                raise ValueError(
+                    "R47 mod preflight refused Player preview: " +
+                    "; ".join(audit["errors"]))
         # Reuse the validated Content/Project pair and its authored rules.
         import json
         from sporebound.tactical_rpg3 import authored_rules_for_document
@@ -87,6 +109,8 @@ def scene_for_player(controller):
 def create_bridge(controller, renderer):
     """Share the real QML bridge with the R14 GUI driver, without a mock runtime."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
+    from drawtemp.player.action_clock import ActionStepClock
+    from time import monotonic_ns
 
     class PlayerBridge(QObject):
         stateChanged = Signal()
@@ -98,10 +122,47 @@ def create_bridge(controller, renderer):
             self.animator = AnimationDirector()
             self._pending_recovery = None  # ephemeral confirmation, never gameplay
             self._recovery_notice = {}
+            self._platform_clock = ActionStepClock(hz=60, max_catchup=6)
+            self._platform_last_ns = None
+            self._platform_last_jump = False
+            self._platform_last_attack = False
+            self._platform_buffer_jump = False
+            self._platform_buffer_attack = False
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
             return self.controller.state()
+
+        @Slot(int, result="QVariantMap")
+        def authoredHud(self, width):
+            """Same read-only runtime layout projection consumed by Studio Qt Quick."""
+            from drawtemp.player.r51_hud import hud_for_player
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return hud_for_player(self.controller, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot(str)
+        def authoredUiIntent(self, intent):
+            from drawtemp.player.r51_hud import perform_ui_intent
+            self.invoke(perform_ui_intent, self.controller, intent)
+
+        @Slot(int, result="QVariantMap")
+        def authoredMenu(self, width):
+            """Resolve a static title-screen UI; no fake GameSession is created."""
+            from drawtemp.player.r51_hud import menu_for_player
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return menu_for_player(self.controller, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot(str)
+        def authoredMenuIntent(self, intent):
+            """Recheck authored New/Continue permissions before changing R12 state."""
+            from drawtemp.player.r51_hud import perform_menu_intent
+            self.invoke(perform_menu_intent, self.controller, intent)
 
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
@@ -233,6 +294,7 @@ def create_bridge(controller, renderer):
                          {"new_game", "load", "load_autosave", "continue_game",
                           "restore_backup", "restore_autosave_backup", "title"})
                 if reset or self.controller.show_title:
+                    self.platformClockReset()
                     self.animator.cancel()
                 elif (before is not None and after is not None and
                       after.revision != before.revision):
@@ -360,6 +422,101 @@ def create_bridge(controller, renderer):
         def startMission(self, mission):
             self.invoke(self.controller.start_mission, mission)
 
+        @Slot()
+        def platformClockReset(self):
+            """Drop UI wall-time and input edges; gameplay state is untouched."""
+            self._platform_clock.reset()
+            self._platform_last_ns = None
+            self._platform_last_jump = False
+            self._platform_last_attack = False
+            self._platform_buffer_jump = False
+            self._platform_buffer_attack = False
+
+        @Slot(int, bool, bool)
+        def platformStep(self, move, jump, attack):
+            """One explicit canonical R32 tick for accessible/test controls."""
+            self.platformClockReset()
+            self.invoke(self.controller.platform_step, move, jump, attack)
+
+        @Slot(str)
+        def platformTravel(self, link_id):
+            self.platformClockReset()
+            self.invoke(self.controller.platform_travel, link_id)
+
+        @Slot(int, bool, bool)
+        def platformPulse(self, move, jump, attack):
+            """60 Hz logical steps from monotonic wall time, not Qt render FPS.
+
+            The view samples held controls, but jump and attack are edge
+            commands; a midair jump cannot auto-fire each rendering refresh.
+            """
+            if (type(move) is not int or move not in (-1, 0, 1)
+                    or type(jump) is not bool or type(attack) is not bool):
+                self._display_error(ValueError("Invalid platform controller input"))
+                self.stateChanged.emit()
+                return
+            state = self.controller.state()
+            if (state["screen"] != "platform" or
+                    state["platform"]["state"].get("boss", {}).get(
+                        "player_defeated", False)):
+                self.platformClockReset()
+                return
+            self._platform_buffer_jump |= jump and not self._platform_last_jump
+            self._platform_buffer_attack |= attack and not self._platform_last_attack
+            self._platform_last_jump = jump
+            self._platform_last_attack = attack
+            now = monotonic_ns()
+            if self._platform_last_ns is None:
+                self._platform_last_ns = now
+                return
+            steps = self._platform_clock.advance(
+                max(0, now - self._platform_last_ns))
+            self._platform_last_ns = now
+            if not steps:
+                return
+            try:
+                for i in range(steps):
+                    self.controller.platform_step(
+                        move,
+                        self._platform_buffer_jump if i == 0 else False,
+                        self._platform_buffer_attack if i == 0 else False)
+                    if i == 0:
+                        self._platform_buffer_jump = False
+                        self._platform_buffer_attack = False
+                    status = self.controller.session.platform_state()["state"].get("boss", {})
+                    if status.get("defeated") or status.get("player_defeated"):
+                        self.platformClockReset()
+                        break
+            except Exception as exc:
+                self.platformClockReset()
+                self._display_error(exc)
+            self.stateChanged.emit()
+
+        @Slot(str)
+        def routeTransition(self, link_id):
+            """Travel through the existing R25 GameSession scene graph."""
+            self.invoke(self.controller.route_transition, link_id)
+
+        @Slot(int)
+        def rogueliteMove(self, room_id):
+            self.invoke(self.controller.roguelite_move, room_id)
+
+        @Slot()
+        def rogueliteClaim(self):
+            self.invoke(self.controller.roguelite_claim)
+
+        @Slot()
+        def rogueliteCheckpoint(self):
+            self.invoke(self.controller.roguelite_checkpoint)
+
+        @Slot()
+        def rogueliteDie(self):
+            self.invoke(self.controller.roguelite_die)
+
+        @Slot()
+        def rogueliteRestart(self):
+            self.invoke(self.controller.roguelite_restart)
+
         @Slot(int, int)
         def exploreMove(self, dx, dy):
             self.invoke(self.controller.explore_move, dx, dy,
@@ -368,6 +525,18 @@ def create_bridge(controller, renderer):
         @Slot(int)
         def worldWait(self, ticks):
             self.invoke(self.controller.world_wait, ticks)
+
+        @Slot(int)
+        def systemWait(self, ticks):
+            self.invoke(self.controller.system_wait, ticks)
+
+        @Slot(str, str, int)
+        def systemTrade(self, merchant_id, action, quantity):
+            self.invoke(self.controller.system_trade, merchant_id, action, quantity)
+
+        @Slot(str)
+        def systemFulfill(self, quest_id):
+            self.invoke(self.controller.system_fulfill, quest_id)
 
         @Slot(str)
         def exploreInteract(self, target):

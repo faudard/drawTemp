@@ -8,13 +8,50 @@ Item {
     clip: true
     readonly property var camera: renderer.cameraState
     readonly property bool topDown: renderer.projectionMode === "top_down"
+    readonly property bool sideView: renderer.projectionMode === "side"
+    readonly property bool flatView: topDown || sideView
 
     onWidthChanged: if (width > 0 && height > 0) renderer.resizeViewport(width, height)
     onHeightChanged: if (width > 0 && height > 0) renderer.resizeViewport(width, height)
     Component.onCompleted: if (width > 0 && height > 0)
                                renderer.resizeViewport(width, height)
 
-    Rectangle { anchors.fill: parent; color: "#192c29" }
+    Rectangle { anchors.fill: parent; color: "#192c29"; z: -300000 }
+
+    // R52.A: shared decorative pass, always behind interactive terrain.
+    Repeater {
+        model: renderer.depthLayers
+        delegate: Rectangle {
+            required property var modelData
+            readonly property var layer: modelData
+            readonly property real zoom: viewport.camera.zoom
+            visible: viewport.flatView
+            width: layer.width * zoom
+            height: layer.height * zoom
+            x: viewport.width / 2 + (viewport.camera.panX + layer.sx * zoom) * layer.parallax - width / 2
+            y: viewport.height / 2 + (viewport.camera.panY + layer.sy * zoom) * layer.parallax - height / 2
+            z: -200000 + layer.depthIndex
+            color: layer.color
+            opacity: layer.opacity
+        }
+    }
+
+    // R52.B1: ambient tint overlays the scene graph, never the picking model.
+    // This Rectangle has no pointer handlers or direct Gameplay bindings.
+    Rectangle {
+        anchors.fill: parent
+        z: 90000
+        readonly property var tint: renderer.lightingOverlay
+        color: tint.color
+        opacity: tint.opacity
+        visible: opacity > 0
+    }
+    Timer {
+        interval: 50
+        repeat: true
+        running: renderer.lightingAnimating
+        onTriggered: renderer.advanceLighting(interval)
+    }
 
     Repeater {
         model: renderer.items
@@ -26,13 +63,26 @@ Item {
             readonly property bool actor: row.kind === "actor"
             readonly property bool object: row.kind === "object"
             readonly property real unit: viewport.camera.zoom
-            readonly property real side: tile ? 64 : actor ? 40 : 30
-            x: viewport.width / 2 + viewport.camera.panX + row.sx * unit - side * unit / 2
-            y: viewport.height / 2 + viewport.camera.panY + row.sy * unit - side * unit / 2
-            width: side * unit
-            height: side * unit
+            readonly property real extentX: tile ? 64 : actor ? 40 : 30
+            readonly property real extentY: viewport.sideView && tile ? 24 : extentX
+            x: viewport.width / 2 + viewport.camera.panX + row.sx * unit - extentX * unit / 2
+            y: viewport.height / 2 + viewport.camera.panY + row.sy * unit - extentY * unit / 2
+            width: extentX * unit
+            height: extentY * unit
             z: row.zOrder
-            visible: viewport.topDown && (tile || actor || object)
+            visible: viewport.flatView && (tile || actor || object)
+
+            // Cosmetic side-on ledge; no gameplay collision or pointer handler.
+            Rectangle {
+                visible: projected.tile && viewport.sideView && row.height > 0
+                x: 0
+                // Inset visual lip stays inside pickable 64x24 tile bounds.
+                width: projected.width
+                height: Math.min(8, Math.max(0, row.height) * 4) * projected.unit
+                y: projected.height - height
+                color: "#34424a"
+                z: 1
+            }
 
             Rectangle {
                 anchors.fill: parent

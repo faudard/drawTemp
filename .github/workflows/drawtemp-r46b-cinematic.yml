@@ -1,0 +1,59 @@
+name: DrawTemp R46.B Cinematic Studio Pro
+
+on:
+  pull_request:
+    paths:
+      - "drawtemp/cinematics/document.py"
+      - "drawtemp/cinematics/timeline.py"
+      - "drawtemp/studio/qt_cinematic.py"
+      - "drawtemp/studio/cinematic_timeline.py"
+      - "tests_standalone/test_drawtemp_r46b_cinematic_studio.py"
+      - ".github/workflows/drawtemp-r46b-cinematic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  r46b-headless:
+    name: R46.B immutable trim and R11 regression / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: Verify R46.B and R11 canonical timeline and shared editor history
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r46b_cinematic_studio.R46BTimelineCoreTests
+          tests_standalone.test_r11_qt_cinematics.R11DocumentTests
+          tests_standalone.test_r11_timeline_editing -v
+
+  r46b-qt:
+    name: R46.B Qt Quick Studio/Player smoke / Linux software
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      DRAWTEMP_QT_GUI_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt runtime
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install -e ".[qt6]"
+      - name: Verify Qt timeline zoom, trim, voice and subtitles
+        run: >-
+          python -m unittest
+          tests_standalone.test_drawtemp_r46b_cinematic_studio.R46BQtSmokeTests
+          tests_standalone.test_r11_qt_cinematics.R11QtSmokeTests -v
+
+# Physical GPU/audio, human playtest and distribution remain separate R46.C gates.

@@ -15,6 +15,8 @@ import time
 def main(argv=None):
     parser = argparse.ArgumentParser(description="R32 interactive platform preview")
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--r40-metroidvania", action="store_true",
+                        help="Load the original R40 R32/R33 physical pickup and double-jump slice")
     parser.add_argument("--save-dir", type=Path,
                         default=Path.home() / ".drawtemp" / "r32-platform-preview")
     args = parser.parse_args(argv)
@@ -33,7 +35,11 @@ def main(argv=None):
     from drawtemp.player.platform_reference import platform_demo_project
     from sporebound.game_session import GameSession
 
-    content, project = platform_demo_project()
+    if args.r40_metroidvania:
+        from drawtemp.sdk.r40_starters import create_starter_pair
+        content, project = create_starter_pair("r40-metroidvania")
+    else:
+        content, project = platform_demo_project()
     app = QApplication([sys.argv[0]])
 
     class PlatformWindow(QMainWindow):
@@ -45,10 +51,14 @@ def main(argv=None):
             self.pressed = set()
             self.edge_jump = False
             self.edge_interact = False
+            self.edge_attack = False
             self.clock = ActionStepClock(hz=60)
             self.last_ns = time.monotonic_ns()
             self.paused = False
-            self.setWindowTitle("DrawTemp R32 • plateforme (preview non certifiée)")
+            self.setWindowTitle(
+                "DrawTemp R40 • metroidvania (preview non certifiée)"
+                if args.r40_metroidvania else
+                "DrawTemp R32 • plateforme (preview non certifiée)")
             body = QWidget()
             layout = QVBoxLayout(body)
             self.hud = QLabel()
@@ -82,6 +92,8 @@ def main(argv=None):
                 self.edge_jump = True
             elif key == Qt.Key_E:
                 self.edge_interact = True
+            elif key == Qt.Key_F:
+                self.edge_attack = True
             elif key == Qt.Key_P:
                 self.paused = not self.paused
                 self.reset_clock()
@@ -140,9 +152,11 @@ def main(argv=None):
             try:
                 for _ in range(n):
                     self.game.route_platform_step(
-                        horizontal, jump=self.edge_jump, interact=self.edge_interact)
+                        horizontal, jump=self.edge_jump, interact=self.edge_interact,
+                        attack=self.edge_attack)
                     self.edge_jump = False
                     self.edge_interact = False
+                    self.edge_attack = False
             except Exception as exc:
                 self.paused = True
                 self.hud.setText("Simulation refusée : " + str(exc))
@@ -174,6 +188,23 @@ def main(argv=None):
                 self.display.addRect(x * factor, y * factor,
                                      w * factor, h * factor,
                                      brush=QBrush(QColor(color)))
+            if "boss" in state:
+                boss = state["boss"]
+                if not boss["defeated"]:
+                    b = boss["rect"]
+                    color = "#bb567a" if boss["window"] == "recover" else "#9563bc"
+                    self.display.addRect(
+                        *(value * factor for value in b),
+                        brush=QBrush(QColor(color)))
+                    if boss["window"] in ("telegraph", "strike"):
+                        danger = boss["attack_rect"]
+                        tint = QColor(
+                            "#f59d47" if boss["window"] == "telegraph"
+                            else "#e54545")
+                        tint.setAlpha(105)
+                        self.display.addRect(
+                            *(value * factor for value in danger),
+                            brush=QBrush(tint))
             body = state["actor"]
             w, h = authored["hero"]["size"]
             self.display.addRect(body["x"] * factor, body["y"] * factor,
@@ -182,10 +213,20 @@ def main(argv=None):
             self.world.fitInView(self.display.itemsBoundingRect(), Qt.KeepAspectRatio)
             self.hud.setText(
                 "A/D ou ←/→ : marcher • Espace : sauter • E : interrupteur • "
-                "Entrée : portail • P : pause • Ctrl+S/L : sauvegarder/reprendre"
+                "F : frapper le gardien • Entrée : portail • P : pause • "
+                "Ctrl+S/L : sauvegarder/reprendre"
                 + " | Tick " + str(state["tick"])
                 + " | Portes ouvertes : " + str(len(disabled))
-                + (" | Portail disponible" if state["available_routes"] else ""))
+                + (" | Plume acquise" if self.game.progress.story_flags.get(
+                    "r33_pickup_feather") is True else "")
+                + (" | Saut aérien disponible : " +
+                   str(state["air_jumps_left"]) if "air_jumps_left" in state else "")
+                + (" | Portail disponible" if state["available_routes"] else "")
+                + (" | Gardien : " + str(state["boss"]["hp"]) + " PV • Phase " +
+                   str(state["boss"]["phase"]) + " • " +
+                   state["boss"]["window"] + " • Hero " +
+                   str(state["boss"]["hero_hp"]) + " PV"
+                   if "boss" in state else ""))
 
     window = PlatformWindow()
     window.resize(890, 540)

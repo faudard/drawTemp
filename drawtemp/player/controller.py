@@ -183,9 +183,135 @@ class PlayerController:
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 platform controls")
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
+        return self._changed()
+
+    def route_transition(self, link_id):
+        """R40.B.2: use the Player's authoritative R25 scene-routing path."""
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if snapshot.mode != "campaign" or snapshot.scene is not None:
+            raise ValueError("Resolve the current encounter before travelling")
+        if self.session.platform_state(expected_revision=snapshot.revision):
+            self.session.platform_travel(link_id,
+                                         expected_revision=snapshot.revision)
+        else:
+            self.session.route_transition(link_id,
+                                          expected_revision=snapshot.revision)
+        self.selected = [0, 0]
+        return self._changed()
+
+    def platform_step(self, move=0, jump=False, attack=False):
+        """One fixed R32 command; avoid sixty full autosave writes per second.
+
+        Render-only state is projected on demand; manual saves and every
+        60th committed frame still use the existing canonical PlayerSlotStore.
+        Boss victory/death checkpoints are also autosaved immediately.
+        """
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        previous = self.session.platform_state(
+            expected_revision=snapshot.revision)
+        if previous is None:
+            raise ValueError("No active R32 platform scene")
+        was_terminal = (previous["state"].get("boss", {}).get("defeated", False) or
+                        previous["state"].get("boss", {}).get("player_defeated", False))
+        self.session.platform_step(move, jump, attack,
+                                   expected_revision=snapshot.revision)
+        self._pending_target = None
+        self.forecast = ""
+        self.message = ""
+        now = self.session.snapshot()
+        after = self.session.platform_state(expected_revision=now.revision)
+        boss = after["state"].get("boss", {})
+        terminal = boss.get("defeated", False) or boss.get("player_defeated", False)
+        if now.revision % 60 == 0 or (terminal and not was_terminal):
+            self._checkpoint()
+        return self.state()
+
+    def platform_travel(self, link_id):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if not self.session.platform_state(expected_revision=snapshot.revision):
+            raise ValueError("No active R32 platform scene")
+        self.session.platform_travel(link_id,
+                                     expected_revision=snapshot.revision)
+        self.selected = [0, 0]
+        return self._changed()
+
+    def roguelite_move(self, room_id):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_move(room_id,
+                                    expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_claim(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_claim(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_checkpoint(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_checkpoint(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_die(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_die(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def roguelite_restart(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        self.session.roguelite_restart(expected_revision=snapshot.revision)
+        return self._changed()
+
+    def system_wait(self, ticks=1):
+        """Explicit Player economy advance on the current exploration scene."""
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 economy can advance only during exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        self.session.system_advance(ticks, expected_revision=state.revision)
+        return self._changed()
+
+    def system_trade(self, merchant_id, action, quantity, transaction_id=None):
+        """Player economy uses one revisioned GameSession transaction."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 merchant requires active exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        if transaction_id is None:
+            # A monotonic, session-persisted journal index survives save/load
+            # unlike a GUI-only counter or random UI timestamp.
+            journal = self.session.system_state(
+                expected_revision=state.revision)["journal"]
+            transaction_id = "r55-player-" + str(len(journal))
+        self.session.system_trade(
+            merchant_id, action, quantity, transaction_id,
+            expected_revision=state.revision)
+        return self._changed()
+
+    def system_fulfill(self, quest_id):
+        """Deliver a quest through the campaign inventory, once."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("R55 quest delivery requires active exploration")
+        if self.session.system_state(expected_revision=state.revision) is None:
+            raise ValueError("System economy is not configured")
+        self.session.system_fulfill(quest_id, expected_revision=state.revision)
         return self._changed()
 
     def world_wait(self, ticks=1):
@@ -201,6 +327,8 @@ class PlayerController:
 
     def explore_interact(self, point_id):
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 trigger interaction")
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
         stage = thaw(state.exploration)
@@ -214,6 +342,8 @@ class PlayerController:
     def explore_actor(self, actor_id, action="talk"):
         self._require_cinematic_completed()
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 platform interaction")
         self.session.explore_actor(actor_id, action, expected_revision=state.revision)
         return self._changed()
 
@@ -590,8 +720,11 @@ class PlayerController:
                 "settings": self.preferences.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
+                "routes": [],
+                "platform": {"enabled": False},
+                "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
-                "living_world": None, "cinematic": {}, "revision": 0,
+                "living_world": None, "systems": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.campaign_id.endswith("_journey"):
@@ -646,6 +779,62 @@ class PlayerController:
         }
         base["scene"] = thaw(snapshot.scene) if snapshot.scene else {}
         base["exploration"] = thaw(snapshot.exploration) if snapshot.exploration else {}
+        system_snapshot = self.session.system_state(
+            expected_revision=snapshot.revision)
+        if system_snapshot is not None:
+            # Only the current resource/capacity projection goes to Qt/QML.
+            # Never copy the authoritative command journal into a render frame.
+            economy = thaw(system_snapshot)
+            current = base["exploration"].get("scene_id")
+            system_spec = self.project.extensions[
+                "org.drawtemp.systems"]["data"]
+            base["systems"] = {
+                "enabled": True, "tick": economy["tick"],
+                "stocks": economy["stocks"],
+                "merchants": [
+                    {"id": row["id"], "resource": row["resource"],
+                     "buy_price": row["buy_price"],
+                     "sell_price": row["sell_price"]}
+                    for row in system_spec["merchants"] if row["scene"] == current
+                ],
+                "quests": [
+                    {"id": row["id"], "resource": row["resource"],
+                     "quantity": row["quantity"],
+                     "fulfilled": progress["story_flags"].get(row["flag"]) is True}
+                    for row in system_spec["quests"]
+                ],
+            }
+        # Optional read-only R25 routes, never a second Player-owned cursor.
+        # Preserve route buttons even when an exploration exit is completed.
+        base["routes"] = thaw(self.session.route_options(
+            expected_revision=snapshot.revision))
+        platform = self.session.platform_state(
+            expected_revision=snapshot.revision)
+        if platform is not None:
+            base["platform"] = {"enabled": True, **thaw(platform)}
+        # Project-owned R34 recipe, GameSession-owned run/meta/journal.
+        # This is a detached QML view, not an alternate runtime/registry.
+        if "org.drawtemp.roguelite" in self.project.extensions:
+            run = thaw(self.session.roguelite_state(
+                expected_revision=snapshot.revision))
+            rooms = {room["id"]: room for room in run["layout"]["rooms"]}
+            position = run["position"]
+            held = set(run["keys"])
+            moves = []
+            for target in rooms[position]["neighbors"]:
+                lock = next((
+                    row for row in run["layout"]["locks"]
+                    if {row["a"], row["b"]} == {position, target}), None)
+                available = lock is None or lock["key"] in held
+                moves.append({"id": target, "role": rooms[target]["role"],
+                              "available": available})
+            base["roguelite"] = {
+                "enabled": True, "state": run,
+                "moves": moves,
+                "can_claim": (run["status"] == "active" and
+                              rooms[position]["loot"] > 0 and
+                              position not in run["claimed"]),
+            }
         if self.session.living_world_state() is not None:
             current = base["exploration"].get("scene_id")
             base["living_world"] = thaw(self.session.living_world_state(
@@ -689,6 +878,8 @@ class PlayerController:
                                snapshot.exploration["completed"]):
             base["screen"] = "dialogue"
             base["choices"] = thaw(self.session.choices())
+        elif base["platform"]["enabled"]:
+            base["screen"] = "platform"
         elif snapshot.exploration and not snapshot.exploration["completed"]:
             base["screen"] = "exploration"
         elif snapshot.battle:

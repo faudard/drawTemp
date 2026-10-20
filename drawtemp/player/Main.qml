@@ -37,6 +37,7 @@ ApplicationWindow {
     property color muted: highContrast ? "#f3ead6" : "#b2b8b8"
     property color gold: "#e7c78b"
     property bool tacticalOverlayEnabled: true
+    property bool showClassicMenu: false
 
     // Non-puzzle maps keep their legacy tactical interactions unchanged.
     function legacyInteractions() {
@@ -201,6 +202,73 @@ ApplicationWindow {
         onActivated: pausePopup.open()
     }
 
+    // R51.B2 authored title menu: declared widgets, same Qt Quick renderer,
+    // canonical R12 new/continue commands. Never hide the legacy fallback.
+    R51Layout {
+        id: customTitleMenu
+        objectName: "r51-title-menu"
+        z: 19
+        width: Math.min(560, root.width * 0.65)
+        height: Math.min(420, root.height * 0.55)
+        anchors.centerIn: parent
+        property var menuPayload: {
+            var stateRevision = root.playerData.revision
+            if (root.playerData.screen !== "title")
+                return { "available": false }
+            return player.authoredMenu(Math.max(1, Math.round(width)))
+        }
+        visible: root.playerData.screen === "title" &&
+                 menuPayload.available === true && !root.showClassicMenu
+        projection: menuPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: menuPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (root.inputLocked ||
+                (menuPayload.permitted_actions || []).indexOf(action) === -1) return
+            if (action === "menu.new_game" || action === "menu.continue")
+                player.authoredMenuIntent(action)
+            else if (action === "menu.options") optionsPopup.open()
+            else if (action === "menu.quit") Qt.quit()
+        }
+    }
+    Button {
+        objectName: "r51-classic-menu-toggle"
+        z: 22
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 20
+        visible: root.playerData.screen === "title" &&
+                 customTitleMenu.menuPayload.available === true
+        text: root.showClassicMenu ? "Interface personnalisée" : "Menu classique"
+        onClicked: root.showClassicMenu = !root.showClassicMenu
+    }
+
+    // R51.B opt-in authored HUD. Only genuine CT Player commands are enabled;
+    // unspecified v1 intents remain disabled. Legacy UI is never hidden here.
+    R51Layout {
+        id: authoredHud
+        objectName: "r51-player-hud"
+        z: 20
+        width: Math.min(440, root.width * 0.34)
+        height: Math.min(250, root.height * 0.31)
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        property var authoredPayload: {
+            var revision = root.playerData.revision
+            if (root.playerData.screen !== "battle")
+                return { "available": false }
+            return player.authoredHud(Math.max(1, Math.round(width)))
+        }
+        visible: authoredPayload.available === true
+        projection: authoredPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: authoredPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (!root.inputLocked) player.authoredUiIntent(action)
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
@@ -242,7 +310,8 @@ ApplicationWindow {
         Rectangle { Layout.fillWidth: true; height: 1; color: "#6d6860" }
 
         ColumnLayout {
-            visible: root.playerData.screen === "title"
+            visible: root.playerData.screen === "title" &&
+                     (!customTitleMenu.menuPayload.available || root.showClassicMenu)
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -447,6 +516,84 @@ ApplicationWindow {
                 color: root.ivory
                 Layout.alignment: Qt.AlignHCenter
             }
+            // R40.B.2: R34 run data belongs to GameSession; Player only
+            // reads a detached snapshot and dispatches guarded commands.
+            ColumnLayout {
+                visible: root.playerData.roguelite.enabled
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 400
+                spacing: 8
+                property var run: root.playerData.roguelite.state || ({})
+                Label {
+                    text: "DONJON PROCÉDURAL · RUN " +
+                          ((parent.run.run_index || 0) + 1)
+                    color: root.gold
+                    font.bold: true
+                    font.pixelSize: 20 * root.textScale
+                    Layout.fillWidth: true
+                }
+                Label {
+                    color: root.ivory
+                    text: "Salle " + parent.run.position +
+                          " · " + (parent.run.status || "inconnu") +
+                          " · clés " + (parent.run.keys || []).join(", ") +
+                          " · butin " + ((parent.run.inventory || {}).loot || 0)
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    color: root.gold
+                    text: "Métaprogression : " +
+                          ((parent.run.meta || {}).coins || 0) + " pièces, " +
+                          ((parent.run.meta || {}).wins || 0) + " victoire(s)"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                Repeater {
+                    model: root.playerData.roguelite.moves || []
+                    Button {
+                        objectName: "r40RogueRoom-" + modelData.id
+                        text: "Salle " + modelData.id + " · " +
+                              modelData.role +
+                              (modelData.available ? "" : " (verrouillée)")
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 modelData.available && !root.inputLocked
+                        Layout.fillWidth: true
+                        Accessible.description: text
+                        onClicked: player.rogueliteMove(modelData.id)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        objectName: "r40RogueClaim"
+                        text: "Ramasser"
+                        enabled: root.playerData.roguelite.can_claim && !root.inputLocked
+                        onClicked: player.rogueliteClaim()
+                    }
+                    Button {
+                        text: "Checkpoint"
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 !root.inputLocked
+                        onClicked: player.rogueliteCheckpoint()
+                    }
+                    Button {
+                        text: "Abandonner"
+                        enabled: (root.playerData.roguelite.state || {}).status === "active" &&
+                                 !root.inputLocked
+                        onClicked: player.rogueliteDie()
+                    }
+                }
+                Button {
+                    objectName: "r40RogueRestart"
+                    text: "Nouvelle tentative"
+                    enabled: ["won", "dead"].indexOf(
+                                 (root.playerData.roguelite.state || {}).status) !== -1 &&
+                             !root.inputLocked
+                    Layout.fillWidth: true
+                    onClicked: player.rogueliteRestart()
+                }
+            }
             Label {
                 visible: root.playerData.journey.enabled
                 text: root.playerData.journey.completed ?
@@ -469,6 +616,21 @@ ApplicationWindow {
                            modelData.available ? "Accessible" : "Verrouillé")
                     Layout.alignment: Qt.AlignHCenter
                     Accessible.description: text
+                }
+            }
+            // Completed routed stages can still offer exits without
+            // creating a second campaign or forcing an unrelated CT mission.
+            Repeater {
+                model: root.playerData.routes || []
+                Button {
+                    objectName: "r40CampaignRoute-" + modelData.id
+                    text: "Rejoindre · " + modelData.title +
+                          (modelData.available ? "" : " (verrouillé)")
+                    enabled: modelData.available && !root.inputLocked
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 380
+                    Accessible.description: text
+                    onClicked: player.routeTransition(modelData.id)
                 }
             }
             Repeater {
@@ -522,7 +684,7 @@ ApplicationWindow {
         }
 
         RowLayout {
-            visible: ["exploration", "battle", "result"].indexOf(root.playerData.screen) !== -1
+            visible: ["exploration", "platform", "battle", "result"].indexOf(root.playerData.screen) !== -1
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 18
@@ -535,6 +697,7 @@ ApplicationWindow {
                 clip: true
                 TacticalBoard {
                     id: board
+                    visible: root.playerData.screen !== "platform"
                     anchors.fill: parent
                     anchors.margins: 8
                     battle: root.playerData.battle
@@ -555,7 +718,24 @@ ApplicationWindow {
                             player.selectCell(x, y)
                     }
                 }
+                PlatformViewport {
+                    id: platformViewport
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    visible: root.playerData.screen === "platform"
+                    platform: root.playerData.platform || ({})
+                    smokeMode: root.smokeMode
+                    suspended: root.inputLocked
+                    onPulse: function(move, jump, attack) {
+                        player.platformPulse(move, jump, attack)
+                    }
+                    onTravel: function(linkId) {
+                        player.platformTravel(linkId)
+                    }
+                    onResetClock: player.platformClockReset()
+                }
                 Rectangle {
+                    visible: root.playerData.screen !== "platform"
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.margins: 13
@@ -585,7 +765,9 @@ ApplicationWindow {
                         width: 282
                         spacing: 14
                         Label {
-                            text: root.playerData.screen === "exploration" ?
+                            text: root.playerData.screen === "platform" ?
+                                  (root.playerData.exploration.title || "Plateformes") :
+                                  root.playerData.screen === "exploration" ?
                                   (root.playerData.exploration.title || "Exploration") :
                                   (root.playerData.battle.mission_id || "Combat")
                             color: root.gold
@@ -610,7 +792,11 @@ ApplicationWindow {
                             onActivated: player.previewOutfit(renderer.characterId, currentText)
                         }
                         Label {
-                            text: root.playerData.screen === "exploration" ?
+                            text: root.playerData.screen === "platform" ?
+                                  "Plateformes 60 Hz : A/D ou flèches, Espace pour sauter, " +
+                                  "F pour attaquer le boss, Entrée sur un portail. " +
+                                  "Ctrl+S pour sauvegarder. Le double-saut exige la plume." :
+                                  root.playerData.screen === "exploration" ?
                                   "Déplacement : " + root.binding("explore_up") + "/" +
                                   root.binding("explore_left") + "/" +
                                   root.binding("explore_down") + "/" +
@@ -669,6 +855,102 @@ ApplicationWindow {
                                     wrapMode: Text.WordWrap
                                     color: root.muted
                                     text: modelData.id + " · " + modelData.activity
+                                }
+                            }
+                        }
+                        ColumnLayout {
+                            // R55 opt-in canonical economy; never display journals
+                            // or run simulation on a render frame.
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.systems !== null &&
+                                     root.playerData.systems !== undefined
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "SYSTEM DESIGNER · TICK " +
+                                      (root.playerData.systems ?
+                                       root.playerData.systems.tick : 0)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Avancer l'économie d'un tick"
+                                Layout.fillWidth: true
+                                enabled: !root.inputLocked
+                                onClicked: player.systemWait(1)
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       Object.keys(root.playerData.systems.stocks || {}).sort() : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.ivory
+                                    text: modelData + " · " +
+                                          root.playerData.systems.stocks[modelData]
+                                }
+                            }
+                            Label {
+                                text: "MARCHANDS"
+                                font.bold: true
+                                color: root.gold
+                                visible: root.playerData.systems &&
+                                         root.playerData.systems.merchants.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       (root.playerData.systems.merchants || []) : []
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.resource +
+                                              " · achat " + modelData.buy_price +
+                                              " / vente " + modelData.sell_price
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Button {
+                                            text: "Acheter 1"
+                                            enabled: !root.inputLocked
+                                            onClicked: player.systemTrade(modelData.id, "buy", 1)
+                                        }
+                                        Button {
+                                            text: "Vendre 1"
+                                            enabled: !root.inputLocked
+                                            onClicked: player.systemTrade(modelData.id, "sell", 1)
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "LIVRAISONS"
+                                font.bold: true
+                                color: root.gold
+                                visible: root.playerData.systems &&
+                                         root.playerData.systems.quests.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       (root.playerData.systems.quests || []) : []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.quantity +
+                                              " " + modelData.resource +
+                                              (modelData.fulfilled ? " · terminée" : "")
+                                        color: root.ivory
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                    Button {
+                                        text: "Livrer"
+                                        enabled: !root.inputLocked && !modelData.fulfilled
+                                        onClicked: player.systemFulfill(modelData.id)
+                                    }
                                 }
                             }
                         }
@@ -821,6 +1103,28 @@ ApplicationWindow {
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
                                 enabled: !modelData.visited
                                 onClicked: player.exploreInteract(modelData.id)
+                            }
+                        }
+                        Label {
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.routes || []).length > 0
+                            text: "DESTINATIONS · PASSAGES VALIDÉS PAR LA CAMPAGNE"
+                            color: root.gold
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Repeater {
+                            model: root.playerData.screen === "exploration" ?
+                                   (root.playerData.routes || []) : []
+                            Button {
+                                objectName: "r40ExploreRoute-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Voyager · " + modelData.title +
+                                      (modelData.available ? "" : " (verrouillé)")
+                                enabled: modelData.available && !root.inputLocked
+                                Accessible.description: text
+                                onClicked: player.routeTransition(modelData.id)
                             }
                         }
                         Repeater {

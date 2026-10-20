@@ -50,9 +50,10 @@ def _overlap(a, b):
 
 def validate_platform_scene(scene):
     """Fail closed on unexpected keys, out-of-bounds shapes and budgets."""
-    _require(type(scene) is dict and set(scene) == {
-        "id", "width", "height", "gravity", "hero", "colliders"
-    }, "Invalid physics scene schema")
+    required = {"id", "width", "height", "gravity", "hero", "colliders"}
+    _require(type(scene) is dict and
+             required <= set(scene) <= required | {"boss"},
+             "Invalid physics scene schema")
     _require(_id(scene["id"]), "Invalid scene identity")
     width, height = scene["width"], scene["height"]
     _require(_integer(width, SCALE * 3, SCALE * 128)
@@ -115,6 +116,9 @@ def validate_platform_scene(scene):
                      "Invalid moving-platform travel")
         if not row["trigger"] and not row["one_way"] and _overlap(actor, rect):
             _require(False, "Hero overlaps a solid at spawn")
+    if "boss" in scene:
+        from .platform_boss import validate_platform_boss
+        validate_platform_boss(scene["boss"], width, height)
     for row in rows:
         if "opens" in row:
             _require(_id(row["opens"]) and row["opens"] != row["id"]
@@ -134,7 +138,11 @@ class PlatformPhysics:
     mode owner may attach this capability; this module never alters CT state.
     """
 
-    def __init__(self, scene, *, initial_disabled=()):
+    def __init__(self, scene, *, initial_disabled=(), max_air_jumps=0):
+        _require(type(max_air_jumps) is int and 0 <= max_air_jumps <= 1,
+                 "Air-jump count must be zero or one")
+        self.max_air_jumps = max_air_jumps
+        self.air_jumps_left = max_air_jumps
         self.scene = validate_platform_scene(scene)
         self.scene_digest = _hash(self.scene)
         _require(type(initial_disabled) in (tuple, list)
@@ -168,6 +176,10 @@ class PlatformPhysics:
             self.actor["ground_id"] = ground
             self.actor["coyote_left"] = hero["coyote"]
         self.inside_triggers = self._triggers()
+        self.boss = None
+        if "boss" in self.scene:
+            from .platform_boss import PlatformBoss
+            self.boss = PlatformBoss(self.scene["boss"])
 
     def _rect(self):
         h = self.scene["hero"]
@@ -260,32 +272,42 @@ class PlatformPhysics:
                        if row.get("route") and row["id"] in active})
 
     def snapshot(self):
-        return deepcopy({
+        result = {
             "version": VERSION, "scene": self.scene["id"], "tick": self.tick,
             "tick_hz": TICK_HZ, "actor": self.actor, "movers": self.movers,
             "inside_triggers": self.inside_triggers,
             "disabled_colliders": sorted(self.disabled_colliders),
             "available_routes": self.available_routes(),
-        })
+        }
+        if self.max_air_jumps:
+            result["air_jumps_left"] = self.air_jumps_left
+        if self.boss is not None:
+            result["boss"] = self.boss.snapshot()
+        return deepcopy(result)
 
     def digest(self):
         return _hash(self.snapshot())
 
     def step(self, command):
         _require(self.tick < MAX_TICKS, "Physics tick budget exhausted")
-        _require(type(command) is dict and set(command) <= {"tick", "move", "jump", "interact"}
+        _require(type(command) is dict and set(command) <= {"tick", "move", "jump", "interact", "attack"}
                  and type(command.get("tick")) is int
                  and command["tick"] == self.tick + 1, "Expected next logical tick")
         move, jump = command.get("move", 0), command.get("jump", False)
         interact = command.get("interact", False)
+        attack = command.get("attack", False)
         _require(type(move) is int and move in (-1, 0, 1)
-                 and type(jump) is bool and type(interact) is bool,
+                 and type(jump) is bool and type(interact) is bool
+                 and type(attack) is bool and (self.boss is not None or not attack),
                  "Invalid platform input")
         frame = {"tick": self.tick + 1, "move": move, "jump": jump,
                  "interact": interact}
+        if self.boss is not None:
+            frame["attack"] = attack
         # No arbitrary callbacks or external systems during this deterministic step.
         previous = deepcopy((self.tick, self.actor, self.movers,
-                             self.inside_triggers, self.disabled_colliders))
+                             self.inside_triggers, self.disabled_colliders,
+                             self.air_jumps_left, self.boss))
         events = []
         try:
             self.tick += 1
@@ -304,10 +326,15 @@ class PlatformPhysics:
                 self.actor["ground_id"] = support
                 self.actor["coyote_left"] = self.scene["hero"]["coyote"]
                 self.actor["vy"] = 0
+                self.air_jumps_left = self.max_air_jumps
             elif self.actor["grounded"]:
                 self.actor["grounded"] = False
                 self.actor["ground_id"] = None
-            if jump and (self.actor["grounded"] or self.actor["coyote_left"] > 0):
+            can_ground_jump = self.actor["grounded"] or self.actor["coyote_left"] > 0
+            can_air_jump = not can_ground_jump and self.air_jumps_left > 0
+            if jump and (can_ground_jump or can_air_jump):
+                if can_air_jump:
+                    self.air_jumps_left -= 1
                 self.actor["vy"] = -self.scene["hero"]["jump"]
                 self.actor["grounded"] = False
                 self.actor["ground_id"] = None
@@ -324,6 +351,7 @@ class PlatformPhysics:
                         self.actor["grounded"] = True
                         self.actor["ground_id"] = hit
                         self.actor["coyote_left"] = self.scene["hero"]["coyote"]
+                        self.air_jumps_left = self.max_air_jumps
                         events.append({"kind": "land", "collider": hit,
                                        "tick": self.tick})
                     else:
@@ -344,12 +372,16 @@ class PlatformPhysics:
                         self.disabled_colliders.add(target)
                         events.append({"kind": "door_open", "collider": target,
                                        "switch": row["id"], "tick": self.tick})
+            if self.boss is not None:
+                events.extend(self.boss.advance(
+                    self._rect(), attack=attack, tick=self.tick))
             self.commands.append(frame)
             self.last_events = deepcopy(events)
             return deepcopy(events)
         except Exception:
             (self.tick, self.actor, self.movers,
-             self.inside_triggers, self.disabled_colliders) = previous
+             self.inside_triggers, self.disabled_colliders,
+             self.air_jumps_left, self.boss) = previous
             raise
 
     def recording(self):
@@ -357,20 +389,27 @@ class PlatformPhysics:
                 "commands": deepcopy(self.commands), "state_digest": self.digest()}
         if self.initial_disabled:
             body["initial_disabled"] = list(self.initial_disabled)
+        if self.max_air_jumps:
+            body["max_air_jumps"] = self.max_air_jumps
         return {**body, "digest": _hash(body)}
 
     @classmethod
     def from_recording(cls, raw, *, expected_scene=None):
         _require(type(raw) is dict and
-                 set(raw) in ({"version", "scene", "commands", "state_digest", "digest"},
-                              {"version", "scene", "commands", "state_digest",
-                               "digest", "initial_disabled"})
+                 {"version", "scene", "commands", "state_digest", "digest"}
+                 <= set(raw) <= {"version", "scene", "commands", "state_digest",
+                                "digest", "initial_disabled", "max_air_jumps"}
                  and type(raw["version"]) is int and raw["version"] == VERSION,
                 "Unsupported physics recording")
         _require(type(raw["digest"]) is str
                  and _hash({k: v for k, v in raw.items() if k != "digest"})
                  == raw["digest"], "Physics checkpoint digest mismatch")
-        game = cls(raw["scene"], initial_disabled=raw.get("initial_disabled", ()))
+        _require("max_air_jumps" not in raw or
+                 (type(raw["max_air_jumps"]) is int and
+                  raw["max_air_jumps"] == 1),
+                 "Unsupported R32 air-jump recording")
+        game = cls(raw["scene"], initial_disabled=raw.get("initial_disabled", ()),
+                   max_air_jumps=raw.get("max_air_jumps", 0))
         if expected_scene is not None:
             _require(game.scene_digest == _hash(validate_platform_scene(expected_scene)),
                      "Physics authored scene changed")

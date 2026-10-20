@@ -1,0 +1,55 @@
+name: DrawTemp R38.3 Typed Refactor
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/r38_refactor.py'
+      - 'drawtemp/studio/r38_refactor_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_drawtemp_r38_refactor.py'
+      - 'docs/R38_3_TYPED_REFACTOR.md'
+      - '.github/workflows/r38-typed-refactor.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typed-headless:
+    name: R38.3 headless / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - run: python -m unittest tests_standalone.test_drawtemp_r38_refactor.RefactorTests -v
+      - run: python -m unittest tests_standalone.test_drawtemp_r38_search.GlobalSearchHeadlessTests -v
+      - run: python -m unittest tests_standalone.test_drawtemp_r38_prefabs.PrefabVariantTests -v
+
+  typed-qt:
+    name: R38.3 Qt offscreen / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - run: python -m unittest tests_standalone.test_drawtemp_r38_refactor.RefactorQtTests -v

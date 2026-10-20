@@ -1,0 +1,48 @@
+name: R51.B Qt HUD Designer
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/studio/r51_layout_draft.py'
+      - 'drawtemp/studio/r51_designer_qt.py'
+      - 'drawtemp/player/r51_hud.py'
+      - 'drawtemp/player/R51*.qml'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r51b_*.py'
+      - '.github/workflows/r51b-qt-hud.yml'
+  push:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  headless-layout-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Declarative UI, safe Player intents and legacy CT
+        run: python -m unittest -v tests_standalone.test_r51a_ui_layout tests_standalone.test_r51b_layout_designer tests_standalone.test_r25_foundation tests_standalone.test_player_hud_layout_r710
+  qt-software-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      DRAWTEMP_R51_QT_GATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: Offscreen Studio/Player shared QML smoke (not physical GPU)
+        run: python -m unittest -v tests_standalone.test_r51b_qt

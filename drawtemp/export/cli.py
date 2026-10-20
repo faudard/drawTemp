@@ -8,6 +8,20 @@ from .r15 import ExportError, export_game, preflight, verify_bundle
 from .templates import create_template, TEMPLATES
 from .migration import migration_preview, import_project
 from .extensions import inspect_extension
+from .publishing import GAME_FAMILIES, PC_TARGETS, publication_plan, build_provenance
+
+
+def _publication_json(path):
+    if path.stat().st_size > 8 * 1024 * 1024:
+        raise ExportError("Publication input exceeds 8 MiB")
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ExportError("Duplicate publication JSON key: " + key)
+            result[key] = value
+        return result
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
 
 
 def main(argv=None):
@@ -36,8 +50,69 @@ def main(argv=None):
     migrate.add_argument("--output", type=Path)
     plugin = cmd.add_parser("inspect-extension", help="Validate declarative extension API")
     plugin.add_argument("--manifest", type=Path, required=True)
+    publish = cmd.add_parser("publish-plan", help="R39 PC publication preflight (not certification)")
+    publish.add_argument("--bundle", required=True, type=Path)
+    publish.add_argument("--provenance", required=True, type=Path)
+    publish.add_argument("--revision", required=True)
+    publish.add_argument("--target", required=True, choices=PC_TARGETS)
+    publish.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    provenance = cmd.add_parser("build-provenance", help="Generate a byte-bound R39 build declaration")
+    provenance.add_argument("--bundle", required=True, type=Path)
+    provenance.add_argument("--dependencies", required=True, type=Path)
+    provenance.add_argument("--revision", required=True)
+    provenance.add_argument("--target", required=True, choices=PC_TARGETS)
+    evidence = cmd.add_parser("build-evidence", help="Collect a native build dossier; NO-GO remains explicit")
+    evidence.add_argument("--bundle", required=True, type=Path)
+    evidence.add_argument("--output", required=True, type=Path)
+    evidence.add_argument("--revision", required=True)
+    evidence.add_argument("--target", choices=PC_TARGETS)
+    evidence.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    evidence.add_argument("--dependencies", type=Path)
+    evidence.add_argument("--require-preflight", action="store_true",
+                          help="Exit 2 when evidence is collected but strict preflight is blocked")
+    matrix = cmd.add_parser("publication-matrix", help="Aggregate same-SHA build reports; never release approval")
+    matrix.add_argument("--directory", required=True, type=Path)
+    matrix.add_argument("--revision", required=True)
+    matrix.add_argument("--family", required=True, choices=GAME_FAMILIES)
+    matrix.add_argument("--targets", nargs="+", choices=PC_TARGETS)
+    matrix.add_argument("--require-preflight", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "publication-matrix":
+            from .publication_matrix import publication_matrix
+            directory = args.directory.resolve(strict=True)
+            if not directory.is_dir():
+                raise ExportError("Evidence directory required")
+            reports = []
+            for path in sorted(directory.rglob("build-evidence.json")):
+                if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+                    raise ExportError("Symlinked matrix evidence is not supported")
+                if len(reports) >= len(PC_TARGETS):
+                    raise ExportError("Too many build reports")
+                reports.append(_publication_json(path))
+            result = publication_matrix(reports, revision=args.revision, family=args.family,
+                                        targets=args.targets)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 2 if args.require_preflight and result["publication_preflight"] != "passed" else 0
+        if args.command == "build-evidence":
+            from .build_evidence import collect_build_evidence, host_target
+            dependencies = _publication_json(args.dependencies) if args.dependencies else None
+            result = collect_build_evidence(args.bundle, args.output, revision=args.revision,
+                                            target=args.target or host_target(), family=args.family,
+                                            dependencies=dependencies)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 2 if args.require_preflight and result["publication_preflight"] != "passed" else 0
+        if args.command == "build-provenance":
+            result = build_provenance(args.bundle, _publication_json(args.dependencies),
+                                      revision=args.revision, target=args.target)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "publish-plan":
+            provenance = _publication_json(args.provenance)
+            result = publication_plan(args.bundle, provenance, revision=args.revision,
+                                      target=args.target, family=args.family)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         if args.command == "template":
             print(create_template(args.kind, args.output))
             return 0
