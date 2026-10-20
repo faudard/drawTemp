@@ -119,6 +119,13 @@ class R36ReleaseRightsTests(unittest.TestCase):
                 json.dumps({"version": 1, "sprites": {"s_idle": annotation}}),
                 encoding="utf-8")
             self.assertTrue(preflight(path, require_licenses=True)["passed"])
+            annotation["license"] = "CC-BY-4.0"
+            (folder / "r4-annotations.json").write_text(
+                json.dumps({"version": 1, "sprites": {"s_idle": annotation}}),
+                encoding="utf-8")
+            mismatch = preflight(path, require_licenses=True)
+            self.assertFalse(mismatch["passed"])
+            self.assertIn("license differs", str(mismatch["errors"]))
             annotation["license"] = "UNVERIFIED"
             (folder / "r4-annotations.json").write_text(
                 json.dumps({"version": 1, "sprites": {"s_idle": annotation}}),
