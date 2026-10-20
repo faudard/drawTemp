@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -63,6 +65,10 @@ class R50CatalogWidget(QWidget):
         self.open_button.setObjectName("r50b-open")
         self.open_button.clicked.connect(self.open_created)
         actions.addWidget(self.open_button)
+        self.play_button = QPushButton("Jouer dans Player Qt (R50.B)")
+        self.play_button.setObjectName("r50b-play-action")
+        self.play_button.clicked.connect(self.play_created)
+        actions.addWidget(self.play_button)
         outer.addLayout(actions)
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
@@ -98,6 +104,9 @@ class R50CatalogWidget(QWidget):
         self.open_button.setEnabled(
             bool(self._created.get(entry["id"]) and
                  self._created[entry["id"]].is_file()))
+        self.play_button.setEnabled(
+            entry["id"] == "action_combat_prototype"
+            and self.open_button.isEnabled())
 
     def _output(self, result):
         self.report.setPlainText(json.dumps(
@@ -125,3 +134,40 @@ class R50CatalogWidget(QWidget):
             self.openRequested.emit(str(path))
         else:
             self.report.setPlainText("Aucun projet créé pour cette entrée.")
+
+    def play_created(self):
+        """Open only the authored R26 project in a separate, opt-in Qt Player.
+
+        Existing profile slots always load and verify. A missing slot can
+        start explicitly through --new, but a backup-only slot is NEVER
+        silently overwritten or replaced.
+        """
+        if self.genre.currentData() != "action_combat_prototype":
+            self.report.setPlainText("Ce genre ne possède pas de Player Qt R50.B.")
+            return
+        path = self._created.get("action_combat_prototype")
+        if path is None or not path.is_file():
+            self.report.setPlainText("Créez d'abord le prototype R26.")
+            return
+        try:
+            from drawtemp.player.r50b_action_app import _default_profile
+            from drawtemp.player.r50b_action_controller import (
+                load_authored_action_pair,
+            )
+            from sporebound.persistence import SessionStore
+            from sporebound.player_controller import PlayerController
+            content, project = load_authored_action_pair(path)
+            campaign = project.campaigns[0]["id"]
+            player = PlayerController(content, project, _default_profile(path))
+            slot = player.path_for(campaign, 1)
+            store = SessionStore(slot)
+            args = ["-m", "drawtemp.player.r50b_action_app",
+                    "--content", str(path), "--campaign", campaign]
+            if not slot.exists() and not store.backup.exists():
+                args.append("--new")
+            subprocess.Popen([sys.executable, *args], close_fds=True)
+            self.report.setPlainText(
+                "Player R50.B lancé (mode expérimental). "
+                "Aucun slot existant n'est écrasé.")
+        except (OSError, ValueError) as exc:
+            self.report.setPlainText("Lancement Player refusé : " + str(exc))
