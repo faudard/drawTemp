@@ -194,6 +194,14 @@ class AssistedDungeonQtTests(unittest.TestCase):
         self.assertEqual(len(prepared.proofs), 3)
         self.assertTrue(all(p["graph_parity"] for p in prepared.proofs))
         self.assertTrue(self.dialog.spatial_apply_button.isEnabled())
+        self.assertIn("Carte R74.C2",
+                      self.dialog.candidate_graph.accessibleDescription())
+        self.assertGreater(len(self.dialog.candidate_graph.scene().items()), 20)
+        self.assertIn('"graph_parity": true',
+                      self.dialog.diff_report.toPlainText().lower())
+        self.dialog.variant_table.selectRow(1)
+        self.assertIn('"seed": ' + str(prepared.proofs[1]["seed"]),
+                      self.dialog.diff_report.toPlainText())
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
         self.assertEqual(self.document.read_bytes(), self.bytes_before)
         self.dialog.physical_prefix.setText("changed")
