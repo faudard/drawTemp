@@ -291,6 +291,11 @@ class GameSession:
         require(self._survival is not None, "Survival is not configured")
         return self._survival.snapshot()
 
+    def survival_condition(self):
+        """R63.C derived failure/recovery status, no persisted shadow state."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.condition()
+
     def _survival_preflight(self):
         require(self._survival is not None and self.mode == "campaign"
                 and self.scene_router.enabled
