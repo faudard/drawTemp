@@ -55,5 +55,5 @@ def read_regular_snapshot(path, *, limit: int) -> bytes:
         if source.is_symlink():
             raise UnsafeSnapshotError("Input became a symlink")
         return result
-    except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
+    except OSError as exc:
         raise UnsafeSnapshotError("Input cannot be read as a regular file") from exc
