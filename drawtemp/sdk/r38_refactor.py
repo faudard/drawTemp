@@ -241,6 +241,9 @@ def _apply_typed(content, project, family, mid, old_id, new_id):
         require(not suspicious(envelope.get("data", {})),
                 "Unmigrated typed dependency in extension " + namespace)
 
+    require(len(changes) <= MAX_CHANGES, "Refactor change budget exceeded")
+    require(len({change.path for change in changes}) == len(changes),
+            "Conflicting duplicate refactor paths")
     return tuple(changes)
 
 
