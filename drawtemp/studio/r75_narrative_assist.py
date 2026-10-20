@@ -222,11 +222,21 @@ class NarrativeAssistController:
             deepcopy(proposal["source"]), deepcopy(proposal["hook"]),
             tuple(scene["id"] for scene in proposal["scenes"]), paths)
         self._plan, self._review = plan, review
+        self._review_digest = self._digest_review(review)
         return review
+
+    @staticmethod
+    def _digest_review(review: NarrativeReview):
+        return sha256(json.dumps(
+            review.to_dict(), sort_keys=True, ensure_ascii=False,
+            separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def apply(self, review: NarrativeReview, *, approved=False):
         if self._plan is None or self._review is not review:
             reject("stale_review", "Review is stale, foreign or already consumed")
+        if self._digest_review(review) != self._review_digest:
+            self.invalidate()
+            reject("tampered_review", "Reviewed evidence changed since preview")
         if approved is not True:
             reject("approval_required", "Human approval must be explicit")
         plan = self._plan
@@ -236,6 +246,7 @@ class NarrativeAssistController:
     def invalidate(self):
         self._plan: AuthoringPlan | None = None
         self._review: NarrativeReview | None = None
+        self._review_digest: str | None = None
 
 
 def three_endings_template(mission_id: str, *, prefix="r75"):
