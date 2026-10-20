@@ -8,17 +8,16 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
-import shutil
 import stat
 from tempfile import TemporaryDirectory
 
 from .publishing import publication_plan
 from .r15 import ExportError
 
-_SEMVER = re.compile(r"(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\Z")
-_SHA = re.compile(r"[0-9a-f]{64}\\Z")
+_SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
+_SHA = re.compile(r"[0-9a-f]{64}\Z")
 _RELEASE_FIELDS = {
     "schema", "kind", "version", "revision", "target", "family",
     "manifest_sha256", "dependencies_sha256", "save_schema",
@@ -225,7 +224,7 @@ def snapshot_saves(source, destination):
             raise ExportError("Save tree changed during snapshot")
         record = {"schema": 1, "kind": "drawtemp-r59-save-snapshot",
                   "files": files}
-        (stage / "snapshot.json").write_bytes(_canonical(record) + b"\\n")
+        (stage / "snapshot.json").write_bytes(_canonical(record) + b"\n")
         verify_save_snapshot(stage)
         if output.exists() or output.is_symlink():
             raise ExportError("Destination appeared during snapshot")
