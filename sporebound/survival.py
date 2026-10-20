@@ -96,6 +96,26 @@ def validate_survival(spec, scenes):
         require(not (set(row["inputs"]) & set(row["outputs"])),
                 "Crafting may not consume and produce the same item")
         recipes.add(row["id"])
+    # Forbid transmutation cycles; finite nodes are the only material sources.
+    # This keeps crafting acyclic and prevents recipe-driven item duplication.
+    edges = {name: set() for name in items}
+    for recipe in spec["recipes"]:
+        for source in recipe["inputs"]:
+            edges[source].update(recipe["outputs"])
+    visiting, visited = set(), set()
+
+    def visit(item):
+        require(item not in visiting, "Cyclic survival crafting graph")
+        if item in visited:
+            return
+        visiting.add(item)
+        for target in sorted(edges[item]):
+            visit(target)
+        visiting.remove(item)
+        visited.add(item)
+
+    for item in sorted(items):
+        visit(item)
     require(type(spec["foods"]) is list and len(spec["foods"]) <= 16,
             "Too many survival foods")
     food_items = set()
@@ -176,7 +196,8 @@ class SurvivalRuntime:
         return changes
 
     def _command(self, kind, entry_id, transaction_id, scene, inventory, *, replay=False):
-        require(_id(transaction_id) and _id(entry_id) and type(scene) is str,
+        require(_id(transaction_id) and _id(entry_id)
+                and type(scene) is str and scene in self.scenes,
                 "Invalid survival command")
         previous = self.receipts.get(transaction_id)
         if previous is not None:
