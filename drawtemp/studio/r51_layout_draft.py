@@ -13,14 +13,16 @@ from sporebound.ui_layout_r51 import FIELDS, INTENTS, KINDS, UiLayoutError, vali
 def new_layout(kind="HUD_CT"):
     if kind not in KINDS:
         raise UiLayoutError("R51: unknown screen kind")
+    intent = "combat.end_turn" if kind == "HUD_CT" else "menu.continue"
+    label = "Fin du tour" if kind == "HUD_CT" else "Continuer"
     return {
         "kind": kind,
         "root": {
             "id": "root", "type": "column",
             "children": [
                 {"id": "welcome", "type": "text", "text": "Interface personnalisable"},
-                {"id": "main_action", "type": "button", "text": "Continuer",
-                 "action": "menu.continue"},
+                {"id": "main_action", "type": "button", "text": label,
+                 "action": intent},
             ],
         },
         "breakpoints": [{"min_width": 0, "columns": 1},
