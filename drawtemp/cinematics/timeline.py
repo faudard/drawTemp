@@ -49,5 +49,24 @@ class TimelineScale:
         snapped = self._quantize(absolute)
         return min(event_duration - 1, max(1, snapped - event_start))
 
+    def duration_at_width(self, width, max_duration):
+        """Convert a trim-handle width to one bounded, snapped R11 duration."""
+        require(type(max_duration) is int and 1 <= max_duration <= self.duration_ms,
+                "Invalid trim boundary")
+        # Clamp after quantization: a very short event must remain at least 1ms,
+        # while a final partial grid cell can still extend to the clip end.
+        raw = self.x_to_time(self.origin_x + width)
+        return max(1, min(max_duration, self._quantize(raw)))
+
+    def major_tick_ms(self, minimum_px=68):
+        """Adaptive ruler density for 0.5x..8x zoom and long R11 clips."""
+        require(type(minimum_px) in (int, float) and minimum_px > 0,
+                "Invalid ruler tick spacing")
+        for step in (100, 200, 500, 1000, 2000, 5000, 10000,
+                     15000, 30000, 60000, 120000, 180000):
+            if self.width_for(step) >= minimum_px:
+                return step
+        return 180000
+
     def seek(self, x):
         return min(self.duration_ms, max(0, self.x_to_time(x)))
