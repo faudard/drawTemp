@@ -129,6 +129,27 @@ class PendingPackageUpgradeTests(unittest.TestCase):
         self.assertTrue(result["acknowledged"])
         self.assertFalse((self.root / JOURNAL_NAME).exists())
 
+    def test_uncertain_editor_commit_never_deletes_live_package_bytes(self):
+        real_apply = self.editor.apply
+
+        def advance_then_fail(command):
+            real_apply(command)
+            raise RuntimeError("transition interrupted after apply")
+
+        with patch.object(self.editor, "apply", side_effect=advance_then_fail):
+            with self.assertRaisesRegex(RuntimeError, "after apply"):
+                apply_package_upgrade(self.plan, self.editor, self.root)
+        self.assertEqual(self.editor.revision, 2)
+        self.assertTrue((self.root / JOURNAL_NAME).exists())
+        self.assertTrue((self.root /
+                         "assets/packs/forest-pack/1.1.0/terrain/forest.png").is_file())
+        report = read_pending_upgrade(self.root)
+        self.assertEqual(report["to_version"], "1.1.0")
+        self.assertTrue(all(row["state"] == "verified" for row in report["files"]))
+        acknowledge_pending_upgrade(
+            self.root, self.editor, expected_sha256=report["journal_sha256"])
+        self.assertFalse((self.root / JOURNAL_NAME).exists())
+
     def test_regular_upgrade_and_python_failure_leave_no_marker(self):
         from pathlib import Path
         with patch.object(self.editor, "apply",
