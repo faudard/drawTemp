@@ -192,7 +192,14 @@ class ReferenceJourneyTests(unittest.TestCase):
             game.save(1)
             file = Path(folder) / "saves" / "slot_1.json"
             checkpoint = file.read_bytes()
-            replayed = GameSession.load(file, game.content, game.project)
+            # Primary slot verification (checks checksum, project, rules and
+            # canonical replay) must precede any test of the tactical journal.
+            inspected = game._store(1).inspect()
+            self.assertEqual(inspected.primary, "valid")
+            verified_slot = game._store(1).load()
+            self.assertEqual(verified_slot.recording(), game.session.recording())
+            replayed = GameSession.from_recording(
+                verified_slot.recording(), game.content, game.project)
             self.assertEqual(replayed.active_battle.loot, CHEST_LOOT)
             self.assertEqual(variables_from_journal(replayed.active_battle),
                              {FLAG: True})
@@ -226,7 +233,10 @@ class ReferenceJourneyTests(unittest.TestCase):
             again.load(1)
             self.assertEqual(again.session.snapshot().progress, final)
             self.assertEqual(file.read_bytes(), last)
-            checkpoint_game = GameSession.load(file, game.content, game.project)
+            checkpoint_slot = again._store(1)
+            self.assertEqual(checkpoint_slot.inspect().primary, "valid")
+            checkpoint_game = GameSession.from_recording(
+                checkpoint_slot.load().recording(), game.content, game.project)
             self.assertEqual(len(checkpoint_game.progress.story_history), 2)
 
     def test_objective_rejects_shortcut_to_exit_without_loot(self):
