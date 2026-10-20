@@ -694,10 +694,18 @@ class GameSession:
                 "R62 social action requires routed exploration without dialogue")
         definition = self._relationships.definitions.get(npc_id)
         require(definition is not None, "R62 social NPC is not authored")
-        scene, activity = self._living_world.npc_status(
-            npc_id, self.progress.story_flags)
-        require(scene == self.route_scene,
-                "R62 social NPC is outside the player's active scene")
+        pose = self._living_world.npc_pose(npc_id, self.progress.story_flags)
+        require(pose["scene"] == self.route_scene
+                and pose["activity"] != "unavailable",
+                "R62 social NPC is unavailable in the player's scene")
+        # R35 positioned NPCs require adjacency; legacy schedule-only NPCs
+        # have no position and keep their existing scene-level interaction.
+        if pose.get("pos") is not None:
+            player = self.route_state().get("position")
+            require(type(player) in (list, tuple) and len(player) == 2
+                    and sum(abs(player[i] - pose["pos"][i]) for i in range(2)) <= 1,
+                    "R62 social NPC is not within interaction reach")
+        activity = pose["activity"]
         require(kind != "talk" or definition["talk_activity"] in ("any", activity),
                 "R62 social NPC is not available for conversation")
         staged = deepcopy(self._relationships)
