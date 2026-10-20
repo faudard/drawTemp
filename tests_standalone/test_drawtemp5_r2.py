@@ -171,6 +171,10 @@ class QtShellTests(unittest.TestCase):
                 for key in ("r31_logic", "r38_preflight", "r43_ability",
                             "r77_lab", "r30_creator", "r57_translation"):
                     self.assertIn(window.commands[key], all_actions)
+                self.assertEqual(
+                    window.commands["r31_logic"].text(),
+                    "Logique visuelle et événements…")
+                self.assertIn("R31", window.commands["r31_logic"].toolTip())
                 window.set_language("en")
                 self.assertEqual(window._toolbar_buttons["maps"].text(), "Map")
                 self.assertIn("All workspaces", window.workspace_switcher.text())
