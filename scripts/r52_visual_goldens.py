@@ -149,7 +149,7 @@ def capture_matrix(args):
         png = destination / "actual" / (key + ".png")
         meta = destination / "metadata" / (key + ".json")
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
-                   QT_QUICK_BACKEND="software", QT_SCALE_FACTOR=str(dpi))
+                   QT_QUICK_BACKEND="software", QT_SCALE_FACTOR=str(float(dpi)))
         cmd = [sys.executable, str(Path(__file__).resolve()), "_child",
                "--target", target, "--mode", mode, "--dpi", str(dpi),
                "--phase", phase, "--png", str(png), "--meta", str(meta)]
