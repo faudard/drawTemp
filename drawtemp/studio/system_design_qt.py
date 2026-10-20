@@ -154,6 +154,10 @@ class SystemDesignerDialog(QDialog):
         self.inspector.setMaximumHeight(115)
         root.addWidget(self.inspector)
         inspect_row = QHBoxLayout()
+        self.connect_button = QPushButton("Relier des nœuds…")
+        self.connect_button.setAccessibleName("Créer une liaison au clavier")
+        self.connect_button.clicked.connect(self._choose_link)
+        inspect_row.addWidget(self.connect_button)
         self.edit_selected = QPushButton("Modifier la sélection")
         self.edit_selected.clicked.connect(self._edit_selected)
         inspect_row.addWidget(self.edit_selected)
@@ -369,6 +373,37 @@ class SystemDesignerDialog(QDialog):
         candidate = edit_link(
             self.document, source, target, scenes=self.scenes, remove=True)
         return self._push_draft(candidate)
+
+    def _choose_link(self):
+        """Keyboard-accessible alternative to mouse ports, with typed IDs."""
+        sources = [(kind, row["id"])
+                   for kind in ("resources", "producers")
+                   for row in self.document[kind]]
+        destinations = [(kind, row["id"])
+                        for kind in ("resources", "producers", "merchants", "quests")
+                        for row in self.document[kind]]
+        if not sources or not destinations:
+            self._status("Ajoutez des nœuds avant de créer une liaison.")
+            return
+        labels = [kind + " / " + ident for kind, ident in sources]
+        label, ok = QInputDialog.getItem(
+            self, "Créer une liaison", "Source :", labels, 0, False)
+        if not ok:
+            return
+        source = sources[labels.index(label)]
+        targets = [(kind, ident) for kind, ident in destinations
+                   if (source[0] == "resources" and kind in
+                       ("producers", "merchants", "quests"))
+                   or (source[0] == "producers" and kind == "resources")]
+        if not targets:
+            self._status("Aucune destination compatible.")
+            return
+        choices = [kind + " / " + ident for kind, ident in targets]
+        label, ok = QInputDialog.getItem(
+            self, "Créer une liaison", "Destination :", choices, 0, False)
+        if not ok:
+            return
+        self._port_connect(source, targets[choices.index(label)])
 
     def _port_connect(self, source, target):
         quantity = 1
