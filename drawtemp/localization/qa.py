@@ -20,9 +20,15 @@ from drawtemp.localization.r57 import (
 def audit_project(project, catalog):
     """Return deterministic machine-readable evidence, without mutating inputs."""
     current, drift = seeded_for_project(project, catalog)
+    # A persisted catalogue can contain obsolete or independently authored
+    # UI keys. The denominator must come from the canonical project, not from
+    # all historical entries; otherwise a stale key inflates coverage.
+    extracted, _ = seeded_for_project(project)
+    required_keys = set(extracted.data["entries"])
+    keys = sorted(required_keys)
+    additional_keys = sorted(set(current.data["entries"]) - required_keys)
     source = current.data["source_language"]
     target = next(lang for lang in sorted(LANGUAGES) if lang != source)
-    keys = sorted(current.data["entries"])
     issues = [
         {"key": key, "kind": kind}
         for key, kind in current.audit(target)
@@ -33,12 +39,15 @@ def audit_project(project, catalog):
         entry = current.data["entries"][key]
         forms = _forms(entry["source"])
         for count in (1, 2) if "one" in forms else (None,):
-            template = (forms["one"] if count == 1 else forms.get("other", ""))
-            args = {
-                parameter: "Test" for parameter in _parameters(template)
-                if parameter != "count"
-            }
+            # Distinct plural forms may use different named placeholders.
+            # Fill only the chosen variant, preserving integer {count}.
             try:
+                template = (forms["one"] if count == 1
+                            else forms.get("other", ""))
+                args = {
+                    parameter: "Test" for parameter in _parameters(template)
+                    if parameter != "count"
+                }
                 shown = current.render(
                     key, "qps-plocm", count=count, **args)
                 if not (shown.startswith("\u2067[!! ") and
@@ -56,6 +65,7 @@ def audit_project(project, catalog):
         "target_language": target,
         "keys_total": expected,
         "keys_translated": covered,
+        "additional_catalog_keys": additional_keys,
         "source_drift": sorted(drift),
         "issues": issues,
         "rtl_pseudo_failures": pseudo_failures,
