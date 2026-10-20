@@ -118,6 +118,22 @@ def create_bridge(controller, renderer):
             from drawtemp.player.r51_hud import perform_ui_intent
             self.invoke(perform_ui_intent, self.controller, intent)
 
+        @Slot(int, result="QVariantMap")
+        def authoredMenu(self, width):
+            """Resolve a static title-screen UI; no fake GameSession is created."""
+            from drawtemp.player.r51_hud import menu_for_player
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return menu_for_player(self.controller, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot(str)
+        def authoredMenuIntent(self, intent):
+            """Recheck authored New/Continue permissions before changing R12 state."""
+            from drawtemp.player.r51_hud import perform_menu_intent
+            self.invoke(perform_menu_intent, self.controller, intent)
+
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
             return self.animator.snapshot()
