@@ -905,9 +905,20 @@ ApplicationWindow {
                                 }
                             }
                             Label {
-                                visible: survivalHud.stats.needs &&
-                                         survivalHud.stats.needs.temperature <= 20
-                                text: "Froid critique : la fatigue augmente à chaque tick."
+                                objectName: "r63-condition-feedback"
+                                visible: survivalHud.stats.condition &&
+                                         survivalHud.stats.condition.phase !== "stable"
+                                text: {
+                                    var c = survivalHud.stats.condition || ({})
+                                    if (c.phase === "incapacitated")
+                                        return "Survie compromise : fabrication et récolte bloquées. " +
+                                               "Rejoignez un refuge et utilisez vos provisions pour récupérer."
+                                    if (survivalHud.stats.needs &&
+                                            survivalHud.stats.needs.temperature <= 20)
+                                        return "Froid dangereux : la fatigue augmente à chaque tick."
+                                    return "Besoins faibles : préparez nourriture ou refuge."
+                                }
+                                Accessible.name: text
                                 color: "#f9a99c"
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
