@@ -249,6 +249,17 @@ class PlayerController:
         self.session.rpg_finish(expected_revision=state.revision)
         return self._changed()
 
+    def travel_route(self, link_id):
+        """Travel only through authored and currently unlocked R25 links."""
+        self._require_cinematic_completed()
+        state = self._current()
+        authorized = thaw(self.session.route_destinations(
+            expected_revision=state.revision))
+        if link_id not in {link["id"] for link in authorized}:
+            raise ValueError("Destination is unavailable")
+        self.session.route_transition(link_id, expected_revision=state.revision)
+        return self._changed()
+
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
@@ -665,7 +676,8 @@ class PlayerController:
                 "gear": {"equipped": {}, "inventory": []},
                 "party": {"enabled": False, "heroes": [], "active": [],
                           "capacity": 0},
-                "rpg_available": [], "rpg": {}, "rpg_quest": {}}
+                "rpg_available": [], "rpg": {}, "rpg_quest": {},
+                "route_links": []}
         if self.campaign_id.endswith("_journey"):
             campaign = self.project.campaign(self.campaign_id)
             if campaign is not None:
@@ -678,6 +690,8 @@ class PlayerController:
         base["missions"] = list(snapshot.missions)
         base["rpg_available"] = list(self.session.rpg_available(
             expected_revision=snapshot.revision))
+        base["route_links"] = list(thaw(self.session.route_destinations(
+            expected_revision=snapshot.revision)))
         quest = self.session.rpg_quest_state(expected_revision=snapshot.revision)
         base["rpg_quest"] = thaw(quest) if quest is not None else {}
         if snapshot.mode == "rpg":
