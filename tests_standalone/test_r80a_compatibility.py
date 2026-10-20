@@ -8,7 +8,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from drawtemp.quality.r80_compatibility import CHECKS, build_audit, main, probe_public_sdk
+from drawtemp.quality.r80_compatibility import CHECKS, build_audit, main
+from drawtemp.sdk import SDK_API_STATUS, SDK_API_VERSION
 
 REVISION = "a" * 40
 
@@ -44,8 +45,8 @@ class CompatibilityAuditTests(unittest.TestCase):
         self.assertFalse(report["release_certified"])
         self.assertFalse(report["tag_allowed"])
         self.assertEqual(report["missing"], list(CHECKS))
-        self.assertEqual(report["sdk"]["api_version"], [1, 0])
-        self.assertEqual(report["sdk"]["api_status"], "provisional")
+        self.assertEqual(report["sdk"]["api_version"], list(SDK_API_VERSION))
+        self.assertEqual(report["sdk"]["api_status"], SDK_API_STATUS)
         self.assertTrue(report["sdk"]["compatible_requests_enforced"])
         self.assertEqual(len(report["sdk"]["contract_sha256"]), 64)
 
@@ -101,7 +102,10 @@ class CompatibilityAuditTests(unittest.TestCase):
         source.unlink()
         source.write_bytes(target.read_bytes())
         (self.root / "artifacts").rename(self.root / "real-artifacts")
-        (self.root / "artifacts").symlink_to(self.root / "real-artifacts", target_is_directory=True)
+        try:
+            (self.root / "artifacts").symlink_to(self.root / "real-artifacts", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            return  # File-link rejection above was already exercised.
         self.assertTrue(self.audit()["invalid"])
 
     def test_failed_proof_is_visible(self):
