@@ -1,6 +1,6 @@
-# R74.A–B — Assisted dungeon proposals and Qt review
+# R74.A–C1 — Assisted dungeon proposals, Qt review and bounded physical R27 sample
 
-**Status: R74.A–B implemented on feature branch, pending CI and real Qt onscreen testing; NOT a certified R74 release.**
+**Status: R74.A–B plus an incremental R74.C1 implementation on the feature branch; CI, physical Player walkthrough and clean-machine export not yet certified.**
 
 This increment composes the existing R34 deterministic room-graph solver and
 prefab matcher with the existing R34.C authoring transaction; it **does not**
@@ -98,13 +98,71 @@ The dedicated `.github/workflows/drawtemp-r74-assist.yml` checks these
 and R34 regressions on three OSes. Qt *offscreen* tests cannot stand in for
 human onscreen navigation, DPI/accessibility, real GPU or export validation.
 
+## R74.C1 — Three real physical key/door maps (partial)
+
+Within the R74 Qt dialog, **Proposer des variantes** with exactly three
+unique R34 proposals, then **Préparer 3 cartes R27**. A detached sandbox built
+from the current canonical project creates:
+
+- `<prefix>_dungeon_1` — Archives, locked room entrance x=5;
+- `<prefix>_dungeon_2` — Galerie, locked room entrance x=7;
+- `<prefix>_dungeon_3` — Sanctuaire, locked room entrance x=9.
+
+Every 16x16 mission has a **real R5 tilemap**, **real R27 locked door
+and collectible key**, player spawn adjacent to that door, and an extract
+goal behind its solid walls. The maps form a three-mission campaign using
+canonical `Content.next_missions` and `GameProject.campaigns`. Existing
+story, saves and Jeanne missions are retained unchanged.
+
+The R27 puzzle debugger proves a **bounded single-hero walk/collect/open
+witness** on authored physical cells before a live project write is even
+proposed. It discloses that combat AI is not modeled. The preview includes
+per-mission witness commands, state counts, canonical mission digest and R34
+source-seed/topology digest. A partial or inconclusive proof rejects the entire
+batch. The `PhysicalDungeonPreview` holds exactly one unapplied
+`AuthoringSession` transaction. **Créer les 3 cartes…** asks a separate
+default-**Non** modal confirmation; no disk save occurs. Undo and Redo use
+the same editor history, and a stale revision or pre-existing generated
+IDs fail closed.
+
+Headless API:
+
+```python
+from drawtemp.studio.r74_physical_dungeons import (
+    prepare_physical_dungeons, apply_physical_dungeons
+)
+
+physical = prepare_physical_dungeons(
+    assistant, suggestions, prefix="r74")
+print(physical.to_dict()["proofs"])  # each real R27 symbolic witness
+# Only with explicit author approval:
+applied = apply_physical_dungeons(assistant, physical)
+assistant.session.undo()
+```
+
+**Important scope:** These three different editable puzzle missions are
+derived from R74's seed-validated proposals, **not** a spatial instantiation of
+each 8-room R34 topology. `r34_graph_parity=false`. A solution in the
+symbolic R27 puzzle debugger is **not** proof of tactical AI survival, human
+playability, full campaign completion, graphics or export. An added GameSession
+test exercises key pickup and checkpoint save/load; the full three-dungeon
+Player/GUI gameplay trace and clean-machine package gate remain outstanding.
+
+### R74.C1 regression
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r74_physical_dungeons -v
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r74_assist_qt -v
+```
+
 ## Next R74 increments
 
 - **R74.B:** implemented in this branch, pending evidence and CI.
-- **R74.C:** instantiate canonical R27 missions and puzzles in R5 coordinates
-  under a single transaction, independently prove physical spawn→goal
-  reachability, author/play/save/reload three original dungeons, and certify
-  export/asset integrity on target systems.
+- **R74.C2:** map each R34 room/edge graph to a real R5 spatial arrangement
+  with all physical connections and gates, not only one room per proposal.
+- **R74.C3:** complete all three dungeons in a real Player session with
+  authored combat/puzzle progression, save/reload and canonical export, then
+  run on-screen, GPU, clean-machine and licensed-asset certification gates.
 
 Run headless regressions:
 
