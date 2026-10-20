@@ -222,6 +222,8 @@
 
 **Suivi incrémental R36.C1 (non certifiant) :** [rendu des vrais sprites PNG R28 via le résolveur R4/R3 existant, atlas/pivots, cache borné et télémétrie CPU p95/p99](drawtemp7/R36C1_SPRITES_CPU_PROFILE.md). Les tests GPU sur matériel, la parité Studio/Player et l'export avec droits vérifiés restent ouverts.
 
+**Suivi incrémental R36.C2 (non certifiant) :** [audit de provenance/licences R36 raccordé au préflight strict R15, 12 candidats de captures Qt Studio/Player et revue humaine via le contrat R14.5](drawtemp7/R36C2_EXPORT_VISUAL_GATES.md). La capture réelle, l'approbation indépendante des goldens et les benchmarks GPU restent ouverts tant que les runners n'ont pas exécuté les gates.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.
