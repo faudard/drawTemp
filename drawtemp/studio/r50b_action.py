@@ -139,6 +139,7 @@ def check_action_player_journey(content_path: str | Path) -> dict:
         profile = Path(temp) / "profile.json"
         player = PlayerController(content, project, profile)
         player.new_game(campaign, 1, seed=50)
+        starting_gold = player.session.progress.gold
         fresh = player.route_action_state()
         if fresh["tick"] != 0 or fresh["scene"] != SCENE:
             raise ActionJourneyError("Player did not start in authored R26 scene")
@@ -182,6 +183,47 @@ def check_action_player_journey(content_path: str | Path) -> dict:
             recorded["scene_action"]["runtime"], expected_scene=scene)
         if validated.snapshot() != second["state"]:
             raise ActionJourneyError("Replay of authored R26 action differs")
+        # R50.B settlement: reward belongs to Campaign exactly once, and
+        # the verified R26 replay remains in the same checkpoint after exit.
+        settled = restored.route_action_settle("after_action_to_ct")
+        if (settled["coins_awarded"] != 1 or
+                settled["campaign_gold"] != starting_gold + 1 or
+                settled["route"]["mode"] != "battle" or
+                restored.session.active_battle is None):
+            raise ActionJourneyError("R26 victory was not transferred to CT")
+        ct_checkpoint = restored.session.recording()
+        if ("scene_action" in ct_checkpoint or
+                len(ct_checkpoint.get("scene_action_history", [])) != 1 or
+                ct_checkpoint["scene_action_history"][0]["coin"] != 1):
+            raise ActionJourneyError("Missing R26 replay-bound reward ledger")
+        ct_reader = PlayerController(content, project, profile)
+        ct_reader.load_game(campaign, 1)
+        if (ct_reader.session.recording() != ct_checkpoint or
+                ct_reader.session.progress.gold != starting_gold + 1 or
+                ct_reader.session.active_battle is None):
+            raise ActionJourneyError("R26-to-CT checkpoint did not survive resume")
+        ct_reader.abandon_encounter()  # No unearned CT victory/reward.
+        after_ct = ct_reader.route_transition("ct_to_action")
+        if after_ct["scene"] != SCENE or after_ct["mode"] != "campaign":
+            raise ActionJourneyError("CT-to-exploration return diverged")
+        checkpoint_return = ct_reader.session.recording()
+        if (ct_reader.session.progress.gold != starting_gold + 1 or
+                len(checkpoint_return["scene_action_history"]) != 1):
+            raise ActionJourneyError("Action reward doubled during CT return")
+        try:
+            ct_reader.route_action_step({"tick": 1, "attack": True})
+        except RuleError:
+            pass
+        else:
+            raise ActionJourneyError("Settled R26 combat restarted and could farm")
+        if ct_reader.session.recording() != checkpoint_return:
+            raise ActionJourneyError("Rejected R26 replay changed return checkpoint")
+        final_reader = PlayerController(content, project, profile)
+        final_reader.load_game(campaign, 1)
+        if (final_reader.session.recording() != checkpoint_return or
+                final_reader.session.progress.gold != starting_gold + 1):
+            raise ActionJourneyError("Final Campaign reward did not persist")
+        final_digest = checkpoint_return["digest"]
 
     after = (sha256(path.read_bytes()).hexdigest(),
              sha256(manifest.read_bytes()).hexdigest())
@@ -195,7 +237,10 @@ def check_action_player_journey(content_path: str | Path) -> dict:
         "player_save_resume": True, "same_gamesession_checkpoint": True,
         "replay_verified": True,
         "checkpoint_digest": recorded["digest"],
-        "campaign_loot_integrated": False,
+        "campaign_loot_integrated": True,
+        "once_only_action_reward": True,
+        "r26_to_ct_to_exploration": True,
+        "final_checkpoint_digest": final_digest,
         "qt_onscreen_verified": False, "native_player_verified": False,
         "release_9_0_certified": False,
     }
