@@ -210,7 +210,8 @@ ApplicationWindow {
             Layout.fillWidth: true
             spacing: 16
             Label {
-                text: "✦  JEANNE D'ARC"
+                text: root.playerData.party.enabled ?
+                      "✦  " + root.playerData.title : "✦  JEANNE D'ARC"
                 color: root.gold
                 font.bold: true
                 font.letterSpacing: 3
@@ -852,6 +853,42 @@ ApplicationWindow {
                             }
                         }
                         ColumnLayout {
+                            objectName: "r41-village-quest"
+                            visible: root.playerData.screen === "exploration" &&
+                                     Boolean(root.playerData.rpg_quest.title)
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: root.playerData.rpg_quest.title || ""
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: (root.playerData.rpg_quest.completed ?
+                                      "Quête achevée" :
+                                      (root.playerData.rpg_quest.cleared || []).length +
+                                      " / " + (root.playerData.rpg_quest.required || []).length +
+                                      " rencontres terminées") +
+                                      (root.playerData.rpg_quest.completed ? "" :
+                                       " · Retour : " +
+                                       (root.playerData.rpg_quest.return_scene || ""))
+                                color: root.ivory
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                            }
+                            Button {
+                                objectName: "r41-claim-quest"
+                                text: "Terminer la quête · Obtenir la récompense"
+                                Layout.fillWidth: true
+                                visible: Boolean(root.playerData.rpg_quest.ready)
+                                enabled: !root.inputLocked
+                                Accessible.name: "Récupérer la récompense de la quête"
+                                onClicked: player.claimRpgQuest()
+                            }
+                        }
+                        ColumnLayout {
                             id: r41PartyHud
                             objectName: "r41-party-hud"
                             visible: root.playerData.party.enabled &&
@@ -866,6 +903,17 @@ ApplicationWindow {
                                 font.bold: true
                                 wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.party.recruitable || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-recruit-" + modelData.id
+                                    text: "Recruter · " + modelData.name
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Recruter " + modelData.name
+                                    onClicked: player.recruitPartyMember(modelData.id)
+                                }
                             }
                             Repeater {
                                 model: root.playerData.party.heroes || []
