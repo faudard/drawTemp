@@ -55,7 +55,9 @@ class ExplorationLabQtTests(unittest.TestCase):
         self.assertIsNotNone(page.findChild(type(self.dialog.analyze_button),
                                             "r77-lab-open-analysis"))
         before = self.author.snapshot().to_dict()
+        self.studio.show()
         self.dialog.show()
+        QApplication.processEvents()
         QTest.mouseClick(self.dialog.analyze_button, Qt.LeftButton)
         self.assertIsNotNone(self.dialog.view, self.dialog.status.text())
         self.assertTrue(self.dialog.view["source_verified"])
