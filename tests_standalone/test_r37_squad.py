@@ -190,6 +190,38 @@ class SquadCoordinationTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             p.validate(content)
 
+    def test_squad_authoring_atomic_undo_and_stale_rejection(self):
+        from drawtemp.sdk.authoring import AuthoringSession, AuthoringError
+        from drawtemp.studio.ai_squad_authoring import AISquadDesigner
+        content, project = fixture()
+        editor = AuthoringSession.new(content, project)
+        designer = AISquadDesigner(editor)
+        old = editor.snapshot().to_dict()["project"]
+        self.assertEqual(len(designer.members()), 3)
+        draft = designer.preview(
+            "scout", {"id": "castle_guard", "role": "protector",
+                      "radio_range": 5},
+            expected_revision=editor.revision)
+        self.assertEqual(editor.revision, 0)
+        self.assertEqual(editor.snapshot().to_dict()["project"], old)
+        designer.apply(draft)
+        changed = editor.snapshot().to_dict()["project"]
+        self.assertNotEqual(changed, old)
+        with self.assertRaises(AuthoringError):
+            designer.apply(draft)
+        editor.undo()
+        self.assertEqual(editor.snapshot().to_dict()["project"], old)
+        editor.redo()
+        self.assertEqual(editor.snapshot().to_dict()["project"], changed)
+        with self.assertRaises(ValueError):
+            designer.preview("scout", None, expected_revision=0)
+        removed = designer.preview("scout", None)
+        designer.apply(removed)
+        self.assertIsNone(next(
+            row for row in designer.members() if row["id"] == "scout")["squad"])
+        editor.undo()
+        self.assertEqual(editor.snapshot().to_dict()["project"], changed)
+
     def test_invalid_batch_rolls_back_all_agents_and_legacy_unchanged(self):
         content, project = fixture()
         game = GameSession.new(content, project, "main")
