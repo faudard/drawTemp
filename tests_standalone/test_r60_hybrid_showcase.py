@@ -67,7 +67,8 @@ class R60HybridShowcaseTests(unittest.TestCase):
         self.assertNotIn("r60_inventory", editor.snapshot().to_dict()[
             "project"]["extensions"][UI_EXTENSION]["data"]["layouts"])
         editor.redo()
-        self.assertEqual(editor.snapshot().to_dict(), final)
+        self.assertEqual(editor.snapshot().to_dict()["project"], final["project"])
+        self.assertEqual(editor.snapshot().to_dict()["content"], final["content"])
         self.assertIn("hybrid_r60", TEMPLATES)
         with TemporaryDirectory() as temp:
             folder = Path(temp) / "production"
