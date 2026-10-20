@@ -15,7 +15,7 @@ templates, and can be opened in the existing AuthoringSession.
 |---|---|---|---|
 | r40-srpg | Jeanne / SRPG | CT mission, lever and narrative | Full siege path, historical saves, certified Player |
 | r40-adventure | Original action-adventure | Three routed scenes, persistent waystone gates and real fixed-tick movement | Full puzzles/boss action combat, packaged Player/export |
-| r40-metroidvania | Original metroidvania | Three R25 routed scenes + optional R32 physical feather/double jump high portal | Physical-route completion without narrative bypass, boss and Player/export |
+| r40-metroidvania | Original metroidvania | R25/R32 high portal, earned double jump, original two-phase guardian and canonical victory flag | Final gameplay/Player/export certification |
 | r40-roguelite | Original roguelite | R34 seeded layout, GameSession run/meta/replay | Physical rooms, visual debugger and standalone Player |
 
 No competing engine, GameProject schema, quest registry, save owner or art
@@ -62,7 +62,7 @@ combat demonstration.
 The initial metroidvania source smoke checks the bounded R33 ability graph
 and the R25 narrative routes. **R40.B.3 adds a separate opt-in physical
 R32 pickup/double-jump path** using the same GameSession and save schema.
-The narrative shortcut, boss fight and final Player remain uncertified,
+The R40.B.4 physical boss and shortcut removal are source-level prototypes; the final Player remains uncertified,
 so this still cannot close the R40.4 release gate.
 
 ## R40.B.1 — Evidence-producing headless source audit
@@ -118,9 +118,9 @@ Commands:
 **Certification exclusions:** direct controller and offscreen QML tests are
 not human-visible Studio editing, hardware frame-time measurement, fully
 authored original boss encounters, licensed final graphics or installed
-Player bundles. Although R40.B.3 adds a real physical ability route in
-the R32 preview, the narrative shortcut and missing boss/production Player
-still prevent completed-metroidvania certification.
+Player bundles. R40.B.4 now removes the direct metroidvania shortcut and
+adds a deterministic two-phase guardian in the R32 preview; final production
+Player, polish and human playtesting remain uncertified.
 R40.12 stays **NO-GO** even if all these tests are green.
 
 ## R40.B.3 — Authored physical R32/R33 metroidvania preview
@@ -165,13 +165,58 @@ Automated headless source / replay checks:
     python -m unittest tests_standalone.test_r40_platform_ability -v
     python -m unittest tests_standalone.test_platform_physics_r32 tests_standalone.test_platform_journey_r32 -v
 
-**Important limits:** R40.A's earlier narrative `to_citadel` shortcut from
-the ruins remains in the starter for compatibility; it is not an 8.0-certified
-metroidvania traversal gate. The new `high_gate` is *physically gated*; the
-project as a whole is **not yet softlock-proof in the playable implementation**.
-Likewise this slice does not provide authentic enemies, damage, side-view boss
-phases, a final character-asset pipeline or an installed three-OS Qt Player.
-R40.B.3 physical proof is a partial milestone only; R40.12 remains NO-GO.
+**Status update (R40.B.4):** the old `to_citadel` shortcut was **removed
+from the metroidvania starter only**. The authored physical `high_gate` is
+now the sole way into the guardian chamber; the adventure starter's
+narrative journey remains unchanged. A deterministic two-phase guardian
+has been added to the R32 physical preview. Full-game softlock coverage,
+a final art/character pipeline and installed three-OS Qt Player are still
+missing; **R40.12 remains NO-GO**.
+
+## R40.B.4 — Real deterministic two-phase guardian (source prototype)
+
+The metroidvania starter no longer contains the R25
+`r40_ruins → r40_citadel` shortcut. Reaching the boss now requires the
+R33 feather, real R32 double-jump and contact with the physical high portal
+in the village. The normal top-down adventure's narrative route is unchanged.
+
+The optional `boss` field in an R32 authored platform scene is strictly
+bounded: boss and strike rectangles, max health, two phases, phase threshold,
+telegraph/strike/recovery durations and player HP. `PlatformBoss` advances
+*only* from the R32 fixed-step `attack` command; incoming strikes are
+telegraphed, hit the hero only on real AABB overlap, and leave deliberate
+recovery windows for player counterattacks. The phase changes at the authored
+HP threshold. No random effects, QML mutation or second save system.
+
+The R32 preview displays the strike zone, vulnerability color, boss HP,
+player HP and phase. **F** attacks while in range during recovery; other
+controls remain unchanged. `GameSession.route_platform_step(attack=True)`
+converts a genuine boss-defeat event into a Campaign.story_flags victory.
+The existing R32 `scene_platform` replay validates physics and boss actions
+from input commands; the load path compares the reconstructed boss outcome
+with the canonical Campaign victory flag. Rewritten attacks or fabricated
+victory flags are rejected even with recomputed outer checksums.
+
+Old non-boss R32 project snapshots, commands and recording format are
+unchanged. Boss authoring uses the pre-existing `drawtemp.physics` catalog
+and `GameSession` alone; this does **not** change tactical CT.
+
+Headless checks:
+
+    python -m unittest tests_standalone.test_r40_platform_boss -v
+    python -m unittest tests_standalone.test_r40_platform_ability tests_standalone.test_platform_physics_r32 tests_standalone.test_platform_journey_r32 -v
+    python -m drawtemp.quality.r40_headless --report r40-source-audit.json
+
+The four-genre source audit now requires actual feather pickup, physical
+double jump, high-gate traversal, two boss phases, victory and disk
+checkpoint restore, rather than passing metroidvania on abstract R33 BFS
+alone. **These tests are authored but have NOT been confirmed passing
+on GitHub Actions**, which currently fails before scheduling any jobs.
+
+Outstanding: gameplay tuning and accessibility, enemy varieties,
+production Player/QML integration, full human-playtested original game,
+native packaged clean-machine exports, 3-OS GPU performance and signatures.
+The boss is an original minimal encounter, **not** an 8.0-complete boss/game.
 
 ## Remaining R40.B and R40.C gates
 
