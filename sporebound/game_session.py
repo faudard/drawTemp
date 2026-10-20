@@ -388,6 +388,25 @@ class GameSession:
             self.progress, self.progress.story_flags, self.route_scene,
             shop_id, item_id, action, quantity, transaction_id)
 
+    def route_destinations(self):
+        """R25 portals currently reachable by the Player, no alternate graph."""
+        if (not self.scene_router.enabled or self.mode != "campaign"
+                or self.progress.story_pending or self.tactical_story_pending):
+            return []
+        from .narrative import matches
+        result = []
+        for row in self.scene_router.links.values():
+            if (row["source"] != self.route_scene
+                    or ("when" in row and not matches(row["when"], self.progress))):
+                continue
+            scene = row["destination"]
+            title = (self.project.exploration[scene]["title"]
+                     if scene in self.project.exploration
+                     else self.content.missions[scene].name)
+            result.append({"id": row["id"], "destination": scene,
+                           "title": title})
+        return result
+
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
         require(self.scene_router.enabled, "Scene routing is not enabled")
