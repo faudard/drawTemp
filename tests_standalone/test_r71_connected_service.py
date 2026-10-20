@@ -104,6 +104,17 @@ class ConnectedServiceR71BTests(unittest.TestCase):
         metrics["recent_events"].clear()
         self.assertTrue(svc.diagnostics()["recent_events"])
 
+    def test_reproducible_cli_report_and_redaction(self):
+        from scripts.r71_lab_report import build_report
+        a = build_report(seed=71, latency=2, jitter=1, loss=25, duplicate=10)
+        b = build_report(seed=71, latency=2, jitter=1, loss=25, duplicate=10)
+        self.assertEqual(a, b)
+        self.assertEqual(a["format"], "r71b-lab-report-v1")
+        self.assertEqual(a["scope"], "in_process_only")
+        self.assertEqual(a["authoritative"]["tick"], 8)
+        self.assertNotIn("ticket", json.dumps(a))
+        self.assertNotIn("secret", json.dumps(a))
+
     def test_queue_bounds_atomicity_and_network_metrics(self):
         svc = ConnectedLabService(make_lab())
         svc.connect(hello(), TICKETS["alice"])
