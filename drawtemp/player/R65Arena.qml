@@ -17,7 +17,7 @@ ApplicationWindow {
     color: "#111b21"
     title: "DrawTemp — R65.C Action Arena (prototype)"
 
-    property var state: arena.view
+    property var arenaData: arena.view
     property bool north: false
     property bool south: false
     property bool west: false
@@ -38,7 +38,7 @@ ApplicationWindow {
     }
     Connections {
         target: arena
-        function onStateChanged() { root.state = arena.view }
+        function onStateChanged() { root.arenaData = arena.view }
     }
     Timer {
         interval: 8
@@ -76,7 +76,7 @@ ApplicationWindow {
             else if (event.key === Qt.Key_P) { arena.pause(); clearInput() }
             else if (event.key === Qt.Key_F5) arena.save()
             else if (event.key === Qt.Key_F9) { arena.load(); clearInput() }
-            else if (event.key === Qt.Key_R && !root.state.hero.alive) {
+            else if (event.key === Qt.Key_R && !root.arenaData.hero.alive) {
                 arena.restart()
                 clearInput()
             } else return
@@ -123,7 +123,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 visible: !root.reducedMotion
                 Repeater {
-                    model: root.state.arena.projectiles || []
+                    model: root.arenaData.arena.projectiles || []
                     delegate: Rectangle {
                         required property var modelData
                         readonly property real zoomFactor: renderer.cameraState.zoom
@@ -140,7 +140,7 @@ ApplicationWindow {
                     }
                 }
                 Repeater {
-                    model: root.state.r65.projectiles || []
+                    model: root.arenaData.r65.projectiles || []
                     delegate: Rectangle {
                         required property var modelData
                         readonly property real zoomFactor: renderer.cameraState.zoom
@@ -172,25 +172,25 @@ ApplicationWindow {
                         color: "#fff0da"
                         font.pixelSize: 16
                         font.bold: true
-                        text: "PV " + root.state.hero.hp + "/" +
-                              root.state.hero.max_hp +
-                              "   Endurance " + root.state.hero.stamina +
-                              "   Tick " + root.state.tick
+                        text: "PV " + root.arenaData.hero.hp + "/" +
+                              root.arenaData.hero.max_hp +
+                              "   Endurance " + root.arenaData.hero.stamina +
+                              "   Tick " + root.arenaData.tick
                     }
                     Text {
                         color: "#ebc798"
                         font.pixelSize: 14
-                        text: "Boss — phase " + root.state.arena.boss.phase +
+                        text: "Boss — phase " + root.arenaData.arena.boss.phase +
                               " / 2    |    PV " +
-                              root.state.enemies[root.state.arena.boss_id].hp
+                              root.arenaData.enemies[root.arenaData.arena.boss_id].hp
                     }
                     Text {
                         color: "#a7dec9"
                         font.pixelSize: 13
                         text: "Gardes : " +
-                              root.state.enemies[root.state.arena.flanker_ids[0]].hp +
+                              root.arenaData.enemies[root.arenaData.arena.flanker_ids[0]].hp +
                               " / " +
-                              root.state.enemies[root.state.arena.flanker_ids[1]].hp
+                              root.arenaData.enemies[root.arenaData.arena.flanker_ids[1]].hp
                     }
                 }
             }
@@ -203,11 +203,11 @@ ApplicationWindow {
                 height: 42
                 radius: 8
                 color: "#cf76372b"
-                visible: root.state.arena.boss.casting
+                visible: root.arenaData.arena.boss.casting
                 Text {
                     anchors.centerIn: parent
-                    text: "BOSS — " + root.state.hint +
-                          " (" + root.state.arena.boss.windup + " ticks)"
+                    text: "BOSS — " + root.arenaData.hint +
+                          " (" + root.arenaData.arena.boss.windup + " ticks)"
                     color: "#ffffff"
                     font.bold: true
                 }
@@ -219,7 +219,7 @@ ApplicationWindow {
                 height: 128
                 radius: 14
                 color: "#ee17232b"
-                visible: root.state.victory || !root.state.hero.alive || root.state.paused
+                visible: root.arenaData.victory || !root.arenaData.hero.alive || root.arenaData.paused
                 Column {
                     anchors.centerIn: parent
                     spacing: 10
@@ -228,15 +228,15 @@ ApplicationWindow {
                         color: "#fff1c8"
                         font.bold: true
                         font.pixelSize: 22
-                        text: root.state.victory ? "Arène remportée" :
-                              !root.state.hero.alive ? "Défaite" : "Pause"
+                        text: root.arenaData.victory ? "Arène remportée" :
+                              !root.arenaData.hero.alive ? "Défaite" : "Pause"
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         color: "#d3e1d9"
                         font.pixelSize: 14
-                        text: root.state.victory ? "Sauvegarde disponible (F5)" :
-                              !root.state.hero.alive ? "R : revenir au checkpoint" :
+                        text: root.arenaData.victory ? "Sauvegarde disponible (F5)" :
+                              !root.arenaData.hero.alive ? "R : revenir au checkpoint" :
                               "P : reprendre"
                     }
                 }
@@ -258,7 +258,7 @@ ApplicationWindow {
                     color: "#f1e5cc"
                     font.pixelSize: 15
                     wrapMode: Text.WordWrap
-                    text: root.state.message
+                    text: root.arenaData.message
                 }
                 Text {
                     Layout.fillWidth: true
@@ -269,7 +269,7 @@ ApplicationWindow {
                 RowLayout {
                     spacing: 9
                     Button {
-                        text: root.state.paused ? "Reprendre (P)" : "Pause (P)"
+                        text: root.arenaData.paused ? "Reprendre (P)" : "Pause (P)"
                         focusPolicy: Qt.NoFocus
                         onClicked: { arena.pause(); root.clearInput() }
                     }
