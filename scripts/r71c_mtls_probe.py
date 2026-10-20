@@ -91,7 +91,7 @@ def main(argv=None):
             player=args.player, ticket=_read_ticket(args.ticket_file))
         _save_rotated_ticket(args.ticket_file, report.pop("rotated_ticket"))
     print(json.dumps(report, sort_keys=True, ensure_ascii=False, indent=2))
-    return 0
+    return 2 if args.mode == "client" and not report["command_accepted"] else 0
 
 
 if __name__ == "__main__":
