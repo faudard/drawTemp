@@ -128,6 +128,21 @@ class AdvancedAI:
             if "observation_kind" in changes:
                 require(changes["observation_kind"] in ("none", "seen", "heard"),
                         "Invalid R37 observation source")
+            if "last_known_scene" in changes:
+                require(type(changes["last_known_scene"]) is str
+                        and 0 < len(changes["last_known_scene"]) <= 64,
+                        "Invalid R37 last-known scene")
+            if "squad_source" in changes or "squad_signal" in changes:
+                require("squad" in agent
+                        and {"squad_source", "squad_signal"} <= set(changes)
+                        and type(changes["squad_source"]) is str
+                        and changes["squad_source"] != actor_id
+                        and changes["squad_source"] in self.agents
+                        and self.agents[changes["squad_source"]].get(
+                            "squad", {}).get("id") == agent["squad"]["id"]
+                        and type(changes["squad_signal"]) is str
+                        and changes["squad_signal"] in ("seen", "heard"),
+                        "Invalid R37 radio provenance")
         require(len(self.history) < MAX_WRITES,
                 "R37 AI blackboard write ledger is full")
         require(not self.history or type(tick) is int
