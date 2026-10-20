@@ -277,9 +277,10 @@ def prepare_preview(content_path, review, destination, *, approved=False):
 def export_native_preview(directory, receipt_sha256, runtime_dir, bundle):
     """Call existing R15 export only on verified optimized preview, not source."""
     receipt = _validate_receipt(directory, receipt_sha256)
+    _stage_root, output = _output_location(directory, bundle)
     result = export_game(
         Path(directory) / receipt["content_name"],
-        Path(runtime_dir), Path(bundle),
+        Path(runtime_dir), output,
         require_licenses=True, release=False,
     )
     verify_bundle(bundle, require_release=False)
