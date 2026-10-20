@@ -107,12 +107,15 @@ def _apply_typed(content, project, family, mid, old_id, new_id):
             changes.append(RefactorChange(prefix + ".unit_levels[" + old_id + "]",
                                           old_id, new_id))
         for index, unit in enumerate(mission["units"]):
-            for tag_index, tag in enumerate(unit.get("tags", ())):
+            tags = list(unit.get("tags", ()))
+            for tag_index, tag in enumerate(tags):
                 if tag == "formation:escort:" + old_id:
-                    unit["tags"][tag_index] = "formation:escort:" + new_id
+                    tags[tag_index] = "formation:escort:" + new_id
                     changes.append(RefactorChange(
                         prefix + ".units[" + str(index) + "].tags[" +
                         str(tag_index) + "]", tag, "formation:escort:" + new_id))
+            if tags != list(unit.get("tags", ())):
+                unit["tags"] = tags
 
     for index, group in enumerate(mission.get("editor_groups", ())):
         member_field = "object_ids" if family == "objects" else "unit_ids"
