@@ -50,8 +50,12 @@ distance topologique au focus et trois niveaux *conceptuels* :
 - `overview` : focus et voisins en zoom ≥50 % ;
 - `outline` : cellules distantes ou zoom réduit.
 
-Ce ne sont **pas** des niveaux de rendu 2D/2.5D réellement installés dans
-le renderer. L'estimation des octets de grille est une heuristique
+Le mode `detail` affiche en miniature les 8×4 premières cases de la
+scène d'exploration (cases bloquées marquées) ; `overview` affiche région et
+dimensions ; `outline` réduit la cellule à un repère. Le graphe est un
+viewport de diagnostic, **pas** un renderer de jeu certifié. Ce ne sont
+**pas** des niveaux de rendu 2D/2.5D réellement installés dans le renderer.
+L'estimation des octets de grille est une heuristique
 `width × height × 16 + blocked × 16`, pas une mesure GPU.
 
 **Précharger autour** dépose au plus 8 tickets sur le cache R54.A (focus,
