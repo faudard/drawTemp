@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from drawtemp.studio.system_design_authoring import (
     apply_system_design, forecast_system_design, preview_system_design)
-from sporebound.system_design import EXTENSION
+from sporebound.system_design import EXTENSION, validate_systems
 
 
 def _new_form(title, fields, parent):
@@ -56,6 +56,34 @@ def _new_form(title, fields, parent):
         else:
             result[key] = control.text().strip()
     return result
+
+
+def _amount_text(values):
+    return ", ".join(f"{key}:{value}" for key, value in sorted(values.items()))
+
+
+def _parse_amount_text(text, allowed):
+    """Parse typed resource ports without accepting Python/JSON expressions."""
+    if type(text) is not str or not text.strip():
+        raise ValueError("Les ports requièrent id:quantité séparés par des virgules.")
+    rows = text.split(",")
+    if len(rows) > 16:
+        raise ValueError("Maximum 16 ressources par port.")
+    values = {}
+    for item in rows:
+        parts = item.strip().split(":")
+        if len(parts) != 2:
+            raise ValueError("Format attendu: id:quantité, id:quantité")
+        key, digits = (p.strip() for p in parts)
+        if key not in allowed or key in values:
+            raise ValueError("Ressource inconnue ou port répété: " + key)
+        if not digits.isascii() or not digits.isdecimal():
+            raise ValueError("Quantité entière positive requise pour " + key)
+        value = int(digits)
+        if not 1 <= value <= 1000:
+            raise ValueError("Quantité hors de 1..1000 pour " + key)
+        values[key] = value
+    return values
 
 
 class SystemDesignerDialog(QDialog):
@@ -101,7 +129,10 @@ class SystemDesignerDialog(QDialog):
             add.clicked.connect(lambda checked=False, k=category: self.add_item(k))
             remove = QPushButton("Supprimer")
             remove.clicked.connect(lambda checked=False, k=category: self.remove_item(k))
+            edit = QPushButton("Modifier")
+            edit.clicked.connect(lambda checked=False, k=category: self.edit_item(k))
             row.addWidget(add)
+            row.addWidget(edit)
             row.addWidget(remove)
             layout.addLayout(row)
             self.tabs.addTab(page, title)
@@ -136,70 +167,97 @@ class SystemDesignerDialog(QDialog):
     def _resource_ids(self):
         return [r["id"] for r in self.document["resources"]]
 
-    def _dialog(self, category):
+    def _dialog(self, category, item=None):
+        item = item or {}
         ids = self._resource_ids()
+        editing = bool(item)
+        title = "Modifier" if editing else "Ajouter"
         if category == "resources":
-            return _new_form("Nouvelle ressource", [
-                ("id", "Identifiant", "text", "", None),
-                ("initial", "Stock initial", "number", 0, (0, 1_000_000)),
-                ("capacity", "Capacité", "number", 100, (1, 1_000_000)),
+            return _new_form(title + " la ressource", [
+                ("id", "Identifiant", "text", item.get("id", ""), None),
+                ("initial", "Stock initial", "number", item.get("initial", 0), (0, 1_000_000)),
+                ("capacity", "Capacité", "number", item.get("capacity", 100), (1, 1_000_000)),
             ], self)
         if not ids:
             QMessageBox.warning(self, "Dépendance", "Ajoutez d'abord une ressource.")
             return None
         if category == "producers":
-            return _new_form("Nouvel atelier", [
-                ("id", "Identifiant", "text", "", None),
-                ("source", "Consomme", "choice", ids[0], ids),
-                ("input_quantity", "Quantité consommée", "number", 1, (1, 1000)),
-                ("target", "Produit", "choice", ids[-1], ids),
-                ("output_quantity", "Quantité produite", "number", 1, (1, 1000)),
-                ("interval", "Tous les N ticks", "number", 2, (1, 256)),
+            return _new_form(title + " l'atelier", [
+                ("id", "Identifiant", "text", item.get("id", ""), None),
+                ("inputs", "Entrées (id:qté,...)", "text",
+                 _amount_text(item["inputs"]) if editing else ids[0] + ":1", None),
+                ("outputs", "Sorties (id:qté,...)", "text",
+                 _amount_text(item["outputs"]) if editing else ids[-1] + ":1", None),
+                ("interval", "Tous les N ticks", "number",
+                 item.get("interval", 2), (1, 256)),
             ], self)
         if category == "merchants":
             if not self.scenes:
                 QMessageBox.warning(self, "Scène", "Créez d'abord une scène.")
                 return None
-            return _new_form("Nouveau marchand", [
-                ("id", "Identifiant", "text", "", None),
-                ("resource", "Ressource échangée", "choice", ids[0], ids),
-                ("scene", "Scène", "choice", self.scenes[0], self.scenes),
-                ("buy_price", "Prix d'achat joueur", "number", 5, (0, 1_000_000)),
-                ("sell_price", "Prix de vente joueur", "number", 2, (0, 1_000_000)),
+            return _new_form(title + " le marchand", [
+                ("id", "Identifiant", "text", item.get("id", ""), None),
+                ("resource", "Ressource échangée", "choice",
+                 item.get("resource", ids[0]), ids),
+                ("scene", "Scène", "choice",
+                 item.get("scene", self.scenes[0]), self.scenes),
+                ("buy_price", "Prix d'achat joueur", "number",
+                 item.get("buy_price", 5), (0, 1_000_000)),
+                ("sell_price", "Prix de vente joueur", "number",
+                 item.get("sell_price", 2), (0, 1_000_000)),
             ], self)
-        return _new_form("Nouveau contrat de livraison", [
-            ("id", "Identifiant de quête", "text", "", None),
-            ("resource", "Ressource à livrer", "choice", ids[0], ids),
-            ("quantity", "Quantité", "number", 1, (1, 1000)),
-            ("flag", "Flag narratif une fois livré", "text", "", None),
+        return _new_form(title + " la livraison", [
+            ("id", "Identifiant de quête", "text", item.get("id", ""), None),
+            ("resource", "Ressource à livrer", "choice",
+             item.get("resource", ids[0]), ids),
+            ("quantity", "Quantité", "number",
+             item.get("quantity", 1), (1, 1000)),
+            ("flag", "Flag narratif une fois livré", "text",
+             item.get("flag", ""), None),
         ], self)
+
+    def _commit_row(self, category, result, index=None):
+        try:
+            if category == "producers":
+                row = {
+                    "id": result["id"],
+                    "inputs": _parse_amount_text(
+                        result["inputs"], set(self._resource_ids())),
+                    "outputs": _parse_amount_text(
+                        result["outputs"], set(self._resource_ids())),
+                    "interval": result["interval"]}
+            else:
+                row = result
+            candidate = deepcopy(self.document)
+            items = candidate[category]
+            if index is None:
+                items.append(row)
+            else:
+                items[index] = row
+            if candidate["resources"]:
+                validate_systems(candidate, self.scenes)
+            elif any(candidate[key] for key in ("producers", "merchants", "quests")):
+                raise ValueError("Le graphe requiert au moins une ressource.")
+        except (ValueError, TypeError, KeyError) as exc:
+            QMessageBox.warning(self, "Graphe invalide", str(exc))
+            return
+        self.document = candidate
+        self.refresh()
+        if index is not None:
+            self.lists[category].setCurrentRow(index)
 
     def add_item(self, category):
         result = self._dialog(category)
-        if result is None:
+        if result is not None:
+            self._commit_row(category, result)
+
+    def edit_item(self, category):
+        index = self.lists[category].currentRow()
+        if index < 0:
             return
-        if category == "producers":
-            row = {"id": result["id"],
-                   "inputs": {result["source"]: result["input_quantity"]},
-                   "outputs": {result["target"]: result["output_quantity"]},
-                   "interval": result["interval"]}
-        else:
-            row = result
-        if not row["id"] or any(item["id"] == row["id"]
-                                for item in self.document[category]):
-            QMessageBox.warning(self, "Identifiant", "Identifiant vide ou déjà utilisé.")
-            return
-        if category == "resources" and row["initial"] > row["capacity"]:
-            QMessageBox.warning(self, "Capacité", "Stock initial supérieur à la capacité.")
-            return
-        if category == "producers" and result["source"] == result["target"]:
-            QMessageBox.warning(self, "Cycle", "Un atelier ne peut boucler sur sa ressource.")
-            return
-        if category == "merchants" and row["sell_price"] > row["buy_price"]:
-            QMessageBox.warning(self, "Prix", "Prix de vente supérieur au prix d'achat.")
-            return
-        self.document[category].append(row)
-        self.refresh()
+        result = self._dialog(category, self.document[category][index])
+        if result is not None:
+            self._commit_row(category, result, index)
 
     def remove_item(self, category):
         index = self.lists[category].currentRow()
