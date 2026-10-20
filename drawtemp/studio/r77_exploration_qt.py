@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout,
+    QAbstractItemView, QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QSpinBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -136,7 +136,7 @@ class ExplorationLabDialog(QDialog):
         self.heatmap = QTableWidget()
         self.heatmap.setObjectName("r77-heatmap")
         self.heatmap.setAccessibleName("Heatmap des visites par cellule et seed")
-        self.heatmap.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.heatmap.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.heatmap.cellClicked.connect(self.select_heat_cell)
         heat_layout.addWidget(self.heatmap, 1)
         self.cell_info = QLabel("")
