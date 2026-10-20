@@ -118,7 +118,8 @@ class GameSession:
         ai_spec = self.project.extensions.get(ADVANCED_AI_EXTENSION)
         self._advanced_ai = (
             AdvancedAI(ai_spec["data"],
-                       living_world=spec["data"] if spec is not None else None)
+                       living_world=spec["data"] if spec is not None else None,
+                       content=self.content)
             if ai_spec is not None else None)
         self.battle = None
         self.fronts = None
