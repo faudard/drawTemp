@@ -1296,6 +1296,18 @@ class GameSession:
             session._rt_origin = origin
             session._rt_position = list(position)
             session._rt_journal = journal
+        # A completed boss in the active room must carry an authentic
+        # replay. A hash-recomputed Campaign flag without scene_platform is
+        # not sufficient evidence of a physical boss victory.
+        physics_catalog = (project.extensions.get("drawtemp.physics", {})
+                           .get("data", {}).get("scenes", {}))
+        authored_physics = physics_catalog.get(session.route_scene, {})
+        if "boss" in authored_physics:
+            from .exploration import _key
+            claimed = session.progress.story_flags.get(
+                _key(session.route_scene, "boss_defeated")) is True
+            require(not claimed or "scene_platform" in data,
+                    "R40 boss victory requires an authenticated R32 replay")
         if "scene_platform" in data:
             from .platform_physics import PlatformPhysics
             saved = data["scene_platform"]
