@@ -32,6 +32,7 @@ HEADLESS = (
     "tests_standalone.test_drawtemp_r31_logic_variables",
     "tests_standalone.test_drawtemp_r31_logic_campaign",
     "tests_standalone.test_drawtemp_r31_logic_vertical_slice",
+    "tests_standalone.test_drawtemp_r31_certification",
     "tests_standalone.test_drawtemp5_r9",
     "tests_standalone.test_drawtemp5_r1_authoring",
 )
