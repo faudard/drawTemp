@@ -180,6 +180,8 @@ class ModRegistry:
             version = _version(installed["manifest"]["version"])
             if not (_version(dep["min_version"]) <= version < _version(dep["max_version"])):
                 _fail("incompatible_dependency", dep["id"] + " version mismatch")
+            # A stale but installed dependency is not proof of integrity.
+            self._verify_live(dep["id"])
         paths = resource_paths if resource_paths is not None else {}
         if type(paths) is not dict or set(paths) != {r["id"] for r in mod["resources"]}:
             _fail("missing_resource", "Exact pinned resource pack mapping required")
@@ -223,6 +225,67 @@ class ModRegistry:
                 "grants": sorted(entry["grants"]), "enabled": entry["enabled"],
                 "rights_verified": False, "code_executed": False}
 
+    def _verify_live(self, mod_id, *, verified=None, visiting=None):
+        """Verify dependency closure and R30 archives at the point of use.
+
+        A ZIP hash verified at install time is not a permanent authorization:
+        the file may be removed or replaced later. Do not trust a grant to
+        bypass fresh verification before a proposed project transaction.
+        """
+        if verified is None:
+            verified = set()
+        if visiting is None:
+            visiting = set()
+        if mod_id in verified:
+            return
+        if mod_id in visiting:
+            _fail("dependency_cycle", "Circular mod dependency detected")
+        entry = self._entry(mod_id)
+        doc = entry["manifest"]
+        try:
+            validate_mod_manifest(doc)
+        except ModError as exc:
+            raise ModError("incompatible_manifest", str(exc)) from exc
+        current_sha = hashlib.sha256(json.dumps(
+            doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")).hexdigest()
+        if current_sha != entry["digest"]:
+            _fail("manifest_changed", "Installed manifest no longer matches its digest")
+        visiting.add(mod_id)
+        try:
+            for dependency in doc["dependencies"]:
+                child = self._entries.get(dependency["id"])
+                if child is None:
+                    _fail("missing_dependency", dependency["id"] + " is not installed")
+                version = _version(child["manifest"]["version"])
+                if not (_version(dependency["min_version"]) <= version <
+                        _version(dependency["max_version"])):
+                    _fail("incompatible_dependency",
+                          dependency["id"] + " has an incompatible version")
+                self._verify_live(
+                    dependency["id"], verified=verified, visiting=visiting)
+            for resource in doc["resources"]:
+                path = entry["resource_paths"].get(resource["id"])
+                if path is None or path.is_symlink() or not path.is_file():
+                    _fail("resource_changed", "Pinned R30 pack is missing or unsafe")
+                try:
+                    report = inspect_pack(path)
+                except (PackError, OSError, TypeError, ValueError) as exc:
+                    raise ModError("resource_changed",
+                                   "Pinned R30 pack failed reinspection") from exc
+                if (report.pack_id, report.version, report.archive_sha256) != (
+                        resource["id"], resource["version"], resource["sha256"]):
+                    _fail("resource_changed", "Pinned R30 archive was replaced")
+        finally:
+            visiting.remove(mod_id)
+        verified.add(mod_id)
+
+    def verify_runtime(self, mod_id):
+        """Explicit host-owned check; read-only and never certifies legal rights."""
+        self._verify_live(mod_id)
+        return {"id": mod_id, "integrity_verified": True,
+                "rights_verified": False, "release_certified": False}
+
     def enable(self, mod_id, *, grants):
         entry = self._entry(mod_id)
         declared = frozenset(entry["manifest"]["permissions"])
@@ -230,6 +293,7 @@ class ModRegistry:
                 any(type(item) is not str for item in grants) or
                 len(grants) != len(set(grants)) or frozenset(grants) != declared):
             _fail("permission_denied", "Explicit exact grants are required")
+        self._verify_live(mod_id)
         entry["grants"], entry["enabled"] = declared, True
         return self.status(mod_id)
 
@@ -242,6 +306,9 @@ class ModRegistry:
         entry = self._entry(mod_id)
         if not entry["enabled"] or "project.extensions.write" not in entry["grants"]:
             _fail("permission_denied", "Mod has no active write grant")
+        # Rehash the archives and traverse dependencies again after any
+        # user dialog or time gap since installation/consent.
+        self._verify_live(mod_id)
         mod = entry["manifest"]
         if mod["extension"] is None:
             _fail("no_contribution", "Mod does not declare an extension")
@@ -296,11 +363,6 @@ class ModRegistry:
             if entry["digest"] != expected_sha:
                 errors.append(mod_id + ": manifest_changed")
                 continue
-            try:
-                validate_mod_manifest(doc)
-            except ModError:
-                errors.append(mod_id + ": incompatible_manifest")
-                continue
             if doc["extension"] is not None and doc["namespace"] not in namespaces:
                 errors.append(mod_id + ": missing_namespace")
                 continue
@@ -310,27 +372,13 @@ class ModRegistry:
                 if type(namespace_data) is not dict:
                     errors.append(mod_id + ": invalid_namespace")
                     continue
-                # R47.A allows only an initial immutable declarative insert.
-                # A future mutable mod schema will require an explicit
-                # versioned migration instead of silently trusting edits.
                 if namespace_data != expected_data:
                     errors.append(mod_id + ": namespace_changed")
                     continue
-            damaged = False
-            for resource in doc["resources"]:
-                path = entry["resource_paths"].get(resource["id"])
-                try:
-                    if path is None or path.is_symlink() or not path.is_file():
-                        raise ValueError("Resource no longer exists")
-                    current = inspect_pack(path)
-                    if (current.pack_id, current.version, current.archive_sha256) != (
-                            resource["id"], resource["version"], resource["sha256"]):
-                        raise ValueError("Resource digest changed")
-                except (PackError, OSError, ValueError, TypeError):
-                    errors.append(mod_id + ": resource_changed")
-                    damaged = True
-                    break
-            if damaged:
+            try:
+                self._verify_live(mod_id)
+            except ModError as exc:
+                errors.append(mod_id + ": " + exc.code)
                 continue
             verified.append(mod_id)
         return {"compatible": not errors, "errors": errors,
