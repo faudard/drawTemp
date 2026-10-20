@@ -9,6 +9,8 @@ on:
       - 'drawtemp/sdk/simulation.py'
       - 'drawtemp/studio/survival_authoring.py'
       - 'tests_standalone/test_r63_survival.py'
+      - 'tests_standalone/test_r63_journey.py'
+      - 'examples/r63_survival_refuge.py'
       - 'tests_standalone/test_r63_player.py'
       - 'tests_standalone/test_r63_survival_gui.py'
       - 'drawtemp/studio/survival_designer_qt.py'
@@ -43,7 +45,10 @@ jobs:
       - name: R63 typed contracts, replay and VS-63
         run: >-
           python -m unittest tests_standalone.test_r63_survival
-          tests_standalone.test_r63_player -v
+          tests_standalone.test_r63_player
+          tests_standalone.test_r63_journey -v
+      - name: VS-63 two-scene cold weather and paid recovery
+        run: python -m examples.r63_survival_refuge
       - name: R55 economy / R25 movement compatibility
         run: python -m unittest tests_standalone.test_r55_system_design tests_standalone.test_r25_scene_router -v
   survival-qt:
