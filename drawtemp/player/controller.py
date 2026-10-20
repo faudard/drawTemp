@@ -183,6 +183,8 @@ class PlayerController:
     def explore_move(self, dx, dy):
         self._require_cinematic_completed()
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 platform controls")
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
         self.session.explore_move(dx, dy, expected_revision=state.revision)
@@ -285,6 +287,8 @@ class PlayerController:
 
     def explore_interact(self, point_id):
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 trigger interaction")
         if not state.exploration or state.exploration["completed"]:
             raise ValueError("Exploration is unavailable")
         stage = thaw(state.exploration)
@@ -298,6 +302,8 @@ class PlayerController:
     def explore_actor(self, actor_id, action="talk"):
         self._require_cinematic_completed()
         state = self._current()
+        if self.session.platform_state(expected_revision=state.revision) is not None:
+            raise ValueError("Physical scenes require R32 platform interaction")
         self.session.explore_actor(actor_id, action, expected_revision=state.revision)
         return self._changed()
 
