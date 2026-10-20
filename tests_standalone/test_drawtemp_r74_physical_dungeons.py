@@ -150,6 +150,14 @@ class R74PhysicalDungeonTests(unittest.TestCase):
             prepare_physical_dungeons(self.controller, self.controller._suggestions)
         self.assertEqual(duplicate.exception.code, "duplicate_mission")
 
+    def test_tampered_physical_witness_rejected_without_mutation(self):
+        preview = self.prepare()
+        preview.proofs[0]["witness"].clear()
+        with self.assertRaises(DungeonAssistError) as rejected:
+            apply_physical_dungeons(self.controller, preview)
+        self.assertEqual(rejected.exception.code, "modified_preview")
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+
     def test_physical_preview_belongs_to_its_original_session(self):
         preview = self.prepare()
         other = AssistedDungeonController(
