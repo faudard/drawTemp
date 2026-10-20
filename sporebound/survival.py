@@ -214,6 +214,24 @@ class SurvivalRuntime:
         self._advance(ticks)
         return self.snapshot()
 
+    def condition(self):
+        """Derived, non-persisted survival feedback for Player and test diagnostics.
+
+        At zero in any meter the player cannot harvest or craft, but eating
+        and resting remain available: authored supplies, not a free revive,
+        must recover the run. The result never creates another save ledger.
+        """
+        critical = tuple(key for key in ("energy", "hunger", "temperature")
+                         if self.needs[key] == 0)
+        warning = tuple(key for key in ("energy", "hunger", "temperature")
+                        if 0 < self.needs[key] <= 20)
+        phase = ("incapacitated" if critical else
+                 "warning" if warning else "stable")
+        return {"phase": phase, "critical": list(critical),
+                "warning": list(warning),
+                "can_work": not critical,
+                "can_recover": bool(critical or warning)}
+
     def _transfer(self, inventory, debits, credits):
         changes = {}
         for item in set(debits) | set(credits):
@@ -260,8 +278,12 @@ class SurvivalRuntime:
             debit = row["fuel"]
         else:
             debit = {row["item"]: 1}
+        # Running out of warmth or food makes harvesting and crafting fail,
+        # without preventing the explicit shelter/meal recovery route.
         require(self.needs["energy"] >= cost
-                and (kind in ("rest", "eat") or self.needs["hunger"] > 0),
+                and (kind in ("rest", "eat")
+                     or (self.needs["hunger"] > 0
+                         and self.needs["temperature"] > 0)),
                 "Survival needs too low for this action")
         if not replay:
             changes = self._transfer(inventory, debit, credit)
