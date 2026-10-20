@@ -32,6 +32,8 @@ ENEMY = "guard_wolf"
 def _configure(content, project):
     """Apply only canonical R25 profile/router and validated extension fields."""
     mission = content["missions"][0]["id"]
+    hero = next(u for u in content["missions"][0]["units"]
+                if u["team"] == "player")
     project["title"] = "Le guet de la clairière"
     project["subtitle"] = "Un prototype de combat action déterministe"
     project["story"]["entry_scenes"] = {}
@@ -53,7 +55,13 @@ def _configure(content, project):
                    mission: {"preset": "srpg"}},
     }
     project["scene_routes"] = {
-        "version": 1, "start": SCENE, "links": [],
+        "version": 1, "start": SCENE,
+        "links": [
+            {"id": "after_action_to_ct", "source": SCENE,
+             "destination": mission, "spawn": list(hero["pos"])},
+            {"id": "ct_to_action", "source": mission,
+             "destination": SCENE, "spawn": [0, 1]},
+        ],
     }
     project.setdefault("extensions", {})[EXTENSION] = {
         "schema_version": 1,
