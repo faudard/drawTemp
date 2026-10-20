@@ -7,6 +7,9 @@ on:
       - 'drawtemp/studio/r47_mods_qt.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r47b_qt.py'
+      - 'tests_standalone/test_drawtemp_r47f_player_optin.py'
+      - 'drawtemp/sdk/mod_preflight.py'
+      - 'drawtemp/player/qt_app.py'
       - 'docs/drawtemp5/R47B_QT_MOD_INSPECTOR.md'
       - '.github/workflows/drawtemp-r47b-qt.yml'
   push:
@@ -41,5 +44,6 @@ jobs:
         run: >-
           python -m unittest
           tests_standalone.test_drawtemp_r47b_qt
+          tests_standalone.test_drawtemp_r47f_player_optin
           tests_standalone.test_drawtemp_r47a_modding
           -v
