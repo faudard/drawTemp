@@ -19,6 +19,9 @@ ApplicationWindow {
     property var playerData: player.view
     property int currentSlot: 1
     property real textScale: playerData.settings.display.text_scale
+    property real subtitleScale: playerData.accessibility.subtitle_scale
+    property bool reduceMotion: playerData.accessibility.reduce_motion
+    property bool reduceFlashes: playerData.accessibility.reduce_flashes
     property bool highContrast: playerData.settings.display.high_contrast
     property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
                                recoveryPopup.opened || recoveryErrorPopup.opened
@@ -83,6 +86,13 @@ ApplicationWindow {
 
     // Window-level shortcuts remain active when buttons have keyboard focus.
     // Popups disable gameplay actions; QML never mutates tactical rules.
+    Shortcut {
+        objectName: "r57-keyboard-options"
+        sequence: "F10"
+        enabled: !optionsPopup.opened && !recoveryPopup.opened &&
+                 !recoveryErrorPopup.opened && !Boolean(root.playerData.cinematic.id)
+        onActivated: optionsPopup.open()
+    }
     Shortcut {
         sequence: root.binding("explore_up")
         enabled: root.playerData.screen === "exploration" && !root.inputLocked
@@ -297,7 +307,10 @@ ApplicationWindow {
                 color: root.muted
             }
             Button {
+                id: playerOptionsButton
+                objectName: "r57-open-options"
                 text: "Options"
+                Accessible.name: "Ouvrir les options et réglages d’accessibilité"
                 onClicked: optionsPopup.open()
             }
             Button {
@@ -464,7 +477,8 @@ ApplicationWindow {
                     Label {
                         text: root.playerData.scene.text || ""
                         color: root.ivory
-                        font.pixelSize: 19 * root.textScale
+                        font.pixelSize: 19 * root.textScale * root.subtitleScale
+                        Accessible.name: text
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -2167,7 +2181,7 @@ ApplicationWindow {
             anchors.bottom: cinematicControls.top
             anchors.leftMargin: 36; anchors.rightMargin: 36
             anchors.bottomMargin: 16
-            height: 132
+            height: Math.min(205, Math.round(132 * root.subtitleScale))
             color: "#121d2c"
             border.color: "#c1a878"
             border.width: 1
@@ -2184,7 +2198,8 @@ ApplicationWindow {
                 Label {
                     text: cinematicOverlay.frameData.dialogue || "..."
                     color: "#f5ead5"
-                    font.pixelSize: 18 * root.textScale
+                    font.pixelSize: 18 * root.textScale * root.subtitleScale
+                    Accessible.name: text
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -2195,8 +2210,9 @@ ApplicationWindow {
         Rectangle {
             anchors.fill: parent
             color: cinematicOverlay.frameData.transition === "dissolve" ? "#101a2b" : "#000000"
-            opacity: Math.max(cinematicOverlay.frameData.transitionOpacity || 0,
-                              cinematicOverlay.frameData.fadeOpacity || 0)
+            opacity: root.reduceFlashes ? 0 : Math.max(
+                cinematicOverlay.frameData.transitionOpacity || 0,
+                cinematicOverlay.frameData.fadeOpacity || 0)
             visible: opacity > 0
         }
 
@@ -2267,8 +2283,20 @@ ApplicationWindow {
 
     Popup {
         id: optionsPopup
+        objectName: "r57-a11y-options"
         modal: true
         focus: true
+        property var returnFocus: null
+        // Restore the former keyboard target instead of losing focus after Esc.
+        onAboutToShow: returnFocus = root.activeFocusItem
+        onOpened: languageSelect.forceActiveFocus()
+        onClosed: {
+            if (returnFocus && returnFocus.forceActiveFocus)
+                returnFocus.forceActiveFocus()
+            else
+                playerOptionsButton.forceActiveFocus()
+            returnFocus = null
+        }
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 36, 570)
         height: Math.min(root.height - 40, 690)
@@ -2294,6 +2322,12 @@ ApplicationWindow {
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
+            Label {
+                text: "F10 : ouvrir les options · Tab / Maj+Tab : parcourir · Échap : fermer"
+                color: root.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2308,9 +2342,69 @@ ApplicationWindow {
                         font.bold: true
                         font.letterSpacing: 1
                     }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Langue et pseudo-localisation"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            id: languageSelect
+                            objectName: "r57-player-language"
+                            Accessible.name: "Langue du Player"
+                            model: ["Français", "English", "Pseudo accents", "Pseudo RTL"]
+                            currentIndex: ["fr", "en", "qps-ploc", "qps-plocm"].indexOf(root.playerData.language)
+                            onActivated: player.selectLanguage(["fr", "en", "qps-ploc", "qps-plocm"][currentIndex])
+                        }
+                    }
                     Label { text: "Taille des textes"; color: root.ivory }
+                    Label {
+                        text: "Les sous-titres narratifs et cinématiques restent lisibles."
+                        color: root.muted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Taille des sous-titres"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        Slider {
+                            objectName: "r57-subtitle-scale"
+                            Accessible.name: "Agrandir les sous-titres"
+                            Layout.preferredWidth: 200
+                            from: 1.0; to: 2.0; stepSize: 0.1
+                            value: root.subtitleScale
+                            onPressedChanged: {
+                                if (!pressed)
+                                    player.setSubtitleScale(Math.round(value * 10) / 10)
+                            }
+                        }
+                        Label {
+                            text: Math.round(root.subtitleScale * 100) + " %"
+                            color: root.ivory
+                        }
+                    }
+                    CheckBox {
+                        objectName: "r57-reduce-motion"
+                        text: "Réduire les mouvements animés"
+                        Accessible.name: "Réduire les animations de combat et secousses"
+                        checked: root.reduceMotion
+                        onClicked: player.setAccessibilityBool("reduce_motion", checked)
+                    }
+                    CheckBox {
+                        objectName: "r57-reduce-flashes"
+                        text: "Réduire les flashs et fondus cinématiques"
+                        Accessible.name: "Réduire les effets lumineux et les fondus"
+                        checked: root.reduceFlashes
+                        onClicked: player.setAccessibilityBool("reduce_flashes", checked)
+                    }
                     Slider {
                         id: scaleSlider
+                        Accessible.name: "Taille du texte général"
                         Layout.fillWidth: true
                         from: 0.85; to: 1.35; stepSize: 0.05
                         value: root.playerData.settings.display.text_scale
@@ -2319,6 +2413,8 @@ ApplicationWindow {
                         }
                     }
                     CheckBox {
+                        objectName: "r57-high-contrast"
+                        Accessible.name: "Contraste élevé dans le Player"
                         text: "Contraste renforcé"
                         checked: root.highContrast
                         onClicked: player.setDisplayBool("high_contrast", checked)
@@ -2400,7 +2496,9 @@ ApplicationWindow {
                 visible: text.length > 0
             }
             Button {
+                objectName: "r57-options-close"
                 text: "Fermer"
+                Accessible.name: "Fermer les options du Player"
                 Layout.alignment: Qt.AlignRight
                 onClicked: optionsPopup.close()
             }

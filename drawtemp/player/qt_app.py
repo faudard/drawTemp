@@ -83,6 +83,13 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         directory = Path.home() / ".drawtemp" / "player5" / campaign
     controller = PlayerController(content, project, campaign, directory)
     controller.asset_project_path = project_manifest
+    # Optional localization sidecar, deliberately outside canonical saves.
+    controller.localization = None
+    if content_path is not None:
+        from drawtemp.localization import Catalog, sidecar_path
+        catalog_path = sidecar_path(source)
+        if catalog_path.exists() or catalog_path.is_symlink():
+            controller.localization = Catalog.load(catalog_path)
     return controller
 
 
@@ -141,7 +148,34 @@ def create_bridge(controller, renderer):
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
-            return self.controller.state()
+            from drawtemp.localization import localize_view
+            from drawtemp.player.r57_accessibility import filtered_cinematic_frame
+            state = self.controller.state()
+            access = state["accessibility"]
+            result = localize_view(
+                state, getattr(self.controller, "localization", None),
+                access["language"])
+            cinematic = result.get("cinematic")
+            if isinstance(cinematic, dict) and isinstance(cinematic.get("frame"), dict):
+                result["cinematic"] = dict(cinematic)
+                result["cinematic"]["frame"] = filtered_cinematic_frame(
+                    cinematic["frame"], access)
+            return result
+
+        @Slot(str)
+        def selectLanguage(self, language):
+            self.settings_update(self.controller.set_accessibility,
+                                 "language", language)
+
+        @Slot(str, bool)
+        def setAccessibilityBool(self, setting, enabled):
+            self.settings_update(self.controller.set_accessibility,
+                                 setting, enabled)
+
+        @Slot(float)
+        def setSubtitleScale(self, value):
+            self.settings_update(self.controller.set_accessibility,
+                                 "subtitle_scale", value)
 
         @Slot(int, result="QVariantMap")
         def authoredHud(self, width):
@@ -176,7 +210,9 @@ def create_bridge(controller, renderer):
 
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
-            return self.animator.snapshot()
+            from drawtemp.player.r57_accessibility import presentation_animation
+            return presentation_animation(self.animator.snapshot(),
+                                          self.controller.accessibility.view())
 
         @Property("QVariantMap", notify=stateChanged)
         def recoveryOffer(self):
