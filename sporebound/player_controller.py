@@ -244,6 +244,10 @@ class PlayerController:
         """Commit replay-proven R26 rewards and its route in one Player slot."""
         return self._apply(self.session.route_action_settle, link_id)
 
+    def route_abandon_ct(self, link_id):
+        """Abandon active CT and return to exploration as one saved command."""
+        return self._apply(self.session.route_abandon_ct, link_id)
+
     def explore_actor(self, actor_id, action):
         return self._apply(self.session.explore_actor, actor_id, action)
 
