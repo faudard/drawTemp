@@ -162,6 +162,55 @@ python -m unittest -v tests_standalone.test_r50b_action tests_standalone.test_ac
 python -m unittest -v tests_standalone.test_r50b_action tests_standalone.test_action_runtime_r26
 ```
 
+## R50.B — Player Qt expérimental branché sur le slot canonique
+
+Un Player graphique **opt-in** complète les parcours headless R50.B.
+Il réutilise le `TopDownViewport` R3 et le pont Qt R26 existants, mais
+**ne lit ni n'écrit** la sauvegarde autonome `action.json` de l'ancienne
+démo : toutes les commandes proviennent de `sporebound.PlayerController`,
+dont chaque tick est persisté dans le `GameSession` vérifié.
+
+```bash
+# Dans un dossier contenant game.json et game.game.json
+python -m drawtemp.player.r50b_action_app --content ./project/game.json --new
+# Reprise du même slot : ne pas passer --new
+python -m drawtemp.player.r50b_action_app --content ./project/game.json
+# Smoke Qt non visible : profil jetable, aucun écrasement
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  python -m drawtemp.player.r50b_action_app --content ./project/game.json --smoke
+
+# Entrée équivalente depuis le Player standard
+drawtemp-player5 --r50b-action --content ./project/game.json --new
+# Console script opt-in
+drawtemp-player-r50b --content ./project/game.json
+```
+
+- `R50BActionController` est une façade **sans dépendance Qt**.
+  `step(dx,dy,attack,dodge,guard,interact)` utilise exclusivement le
+  `PlayerController.route_action_step` de la campagne, pas un nouveau
+  `ActionRuntime.save`. Sauvegarde F5 et reprise F9 utilisent le même slot.
+- Le QML affiche la carte top-down, les personnages, PV, endurance, tick
+  R26, or de campagne, commandes et messages. ZQSD/WASD/flèches déplacent
+  le héros ; Espace attaque ; Maj esquive ; Ctrl garde ; P pause.
+- **Terminer R26 → CT** devient activable seulement après victoire réelle ;
+  la transaction délivre le montant prouvé et démarre la mission CT.
+  L'écran CT est pour l'instant un **handoff explicite**, pas une fausse
+  représentation jouable du moteur tactique : R l'abandonne sans gain
+  tactique puis retourne à la clairière en **un seul commit de slot** via
+  `route_abandon_ct`.
+- La sauvegarde est isolée par chemin de projet sous le profil utilisateur,
+  ou par `--profile`. `--new` refuse d'écraser un slot existant.
+  `--smoke` utilise un profil temporaire. Un respawn implicite après mort
+  est désactivé pour ne pas effacer une progression sans consentement.
+- Les binaires natifs figés refusent ce mode expérimental ; il ne saurait
+  justifier une certification hardware ou un bundle R15 propre.
+
+**Tests :** `tests_standalone.test_r50b_action_player` (états purs,
+commandes, persistance, rollback, handoff R26→CT et smoke QML offscreen).
+Ce test ne prouve **ni** une session Qt onscreen sur un poste utilisateur,
+**ni** l'ergonomie, la manette, le framerate réel, la distribution native
+ou l'intégration graphique du gameplay tactique CT. R50.C demeure NO-GO.
+
 ### Restant pour la vraie R50.B
 
 - R41.B : RPG classique jouable par menus, groupe et sauvegarde.
