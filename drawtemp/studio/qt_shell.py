@@ -606,6 +606,9 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_squad"])
         tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
+        qa_action = tools_menu.addAction("R56 • QA Lab du gameplay…")
+        qa_action.setObjectName("r56-qa-lab-action")
+        qa_action.triggered.connect(self.open_gameplay_qa_lab)
         tools_menu.addAction(self.commands["r63_survival"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -733,6 +736,11 @@ class StudioWindow(QMainWindow):
         """R38.4 read-only preflight on the current canonical editor revision."""
         from drawtemp.studio.r38_preflight_qt import PreflightDialog
         PreflightDialog(self).exec()
+
+    def open_gameplay_qa_lab(self):
+        """R56.B captures and replays a detached authoring snapshot, no edits."""
+        from drawtemp.studio.r56_qa_lab_qt import GameplayQALabDialog
+        GameplayQALabDialog(self).exec()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
