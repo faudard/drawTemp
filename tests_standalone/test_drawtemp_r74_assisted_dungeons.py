@@ -8,6 +8,7 @@ from drawtemp.sdk.reference import MISSION, reference_project
 from sporebound.roguelite import EXTENSION
 from drawtemp.studio.r74_assisted_dungeons import (
     AssistedDungeonController, DungeonAssistError,
+    compare_dungeon_suggestions,
 )
 
 
@@ -89,6 +90,22 @@ class AssistedDungeonTests(unittest.TestCase):
             self.assistant.apply(proposal)
         self.assertEqual(rejected.exception.code, "modified_suggestion")
         self.assertEqual(self.session.snapshot().to_dict(), self.initial)
+
+    def test_semantic_diff_is_stable_and_read_only(self):
+        first, second, _ = self.variants()
+        original = self.session.snapshot().to_dict()
+        unchanged = compare_dungeon_suggestions(first, first)
+        self.assertFalse(unchanged["topology_changed"])
+        self.assertEqual(unchanged["changed_rooms"], [])
+        self.assertEqual(unchanged["edges_added"], [])
+        changed = compare_dungeon_suggestions(first, second)
+        self.assertTrue(changed["topology_changed"])
+        self.assertEqual(changed["reference_seed"], first.seed)
+        self.assertEqual(changed["candidate_seed"], second.seed)
+        self.assertTrue(changed["logical_only"])
+        self.assertTrue(changed["changed_rooms"] or
+                        changed["edges_added"] or changed["edges_removed"])
+        self.assertEqual(self.session.snapshot().to_dict(), original)
 
     def test_provenance_and_reward_tamper_is_rejected(self):
         proposal = self.variants()[0]
