@@ -266,7 +266,7 @@ class OptimizerDialog(QDialog):
                 Path(self.project_output.text().strip()), approved=True)
             self.overview.setText(
                 "Projet optimisé vérifié R15 : " + self.staged_project["directory"] +
-                "\\nAucune certification release / golden humain / GPU / gameplay.")
+                "\nAucune certification release / golden humain / GPU / gameplay.")
             self._buttons()
             return True
         except (OptimizerError, ValueError, OSError) as exc:
