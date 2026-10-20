@@ -220,6 +220,8 @@
 
 **Suivi incrémental R36.B3 (non certifiant) :** [liaison optionnelle des Animation Controllers aux acteurs R26, diagnostic de contacts AABB R32 et masque d'occlusion par cases](drawtemp7/R36B3_ACTOR_COLLISION_OCCLUSION.md). La parité tactique/plateforme, les hitboxes de combat et les ombres GPU restent ouvertes.
 
+**Suivi incrémental R36.C1 (non certifiant) :** [rendu des vrais sprites PNG R28 via le résolveur R4/R3 existant, atlas/pivots, cache borné et télémétrie CPU p95/p99](drawtemp7/R36C1_SPRITES_CPU_PROFILE.md). Les tests GPU sur matériel, la parité Studio/Player et l'export avec droits vérifiés restent ouverts.
+
 ## 9. R37 — Advanced AI Studio (7.7)
 
 **But :** rendre les décisions ennemies conçues, expliquées et testables, sans boîte noire.
