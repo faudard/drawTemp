@@ -63,7 +63,7 @@ def _build_stage(content, project):
                   if unit["id"] == "renaud_mentor")
     mentor["hp"] = mentor["max_hp"] = 9
     mentor["attack"] = 1
-    mentor["speed"] = 3
+    mentor["speed"] = 1
 
     story = project["story"]
     introduction = next(scene for scene in story["scenes"]
