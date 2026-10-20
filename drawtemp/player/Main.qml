@@ -37,6 +37,7 @@ ApplicationWindow {
     property color muted: highContrast ? "#f3ead6" : "#b2b8b8"
     property color gold: "#e7c78b"
     property bool tacticalOverlayEnabled: true
+    property bool showClassicMenu: false
 
     // Non-puzzle maps keep their legacy tactical interactions unchanged.
     function legacyInteractions() {
@@ -201,6 +202,47 @@ ApplicationWindow {
         onActivated: pausePopup.open()
     }
 
+    // R51.B2 authored title menu: declared widgets, same Qt Quick renderer,
+    // canonical R12 new/continue commands. Never hide the legacy fallback.
+    R51Layout {
+        id: customTitleMenu
+        objectName: "r51-title-menu"
+        z: 19
+        width: Math.min(560, root.width * 0.65)
+        height: Math.min(420, root.height * 0.55)
+        anchors.centerIn: parent
+        property var menuPayload: {
+            var stateRevision = root.playerData.revision
+            if (root.playerData.screen !== "title")
+                return { "available": false }
+            return player.authoredMenu(Math.max(1, Math.round(width)))
+        }
+        visible: root.playerData.screen === "title" &&
+                 menuPayload.available === true && !root.showClassicMenu
+        projection: menuPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: menuPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (root.inputLocked ||
+                (menuPayload.permitted_actions || []).indexOf(action) === -1) return
+            if (action === "menu.new_game" || action === "menu.continue")
+                player.authoredMenuIntent(action)
+            else if (action === "menu.options") optionsPopup.open()
+            else if (action === "menu.quit") Qt.quit()
+        }
+    }
+    Button {
+        objectName: "r51-classic-menu-toggle"
+        z: 22
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 20
+        visible: root.playerData.screen === "title" &&
+                 customTitleMenu.menuPayload.available === true
+        text: root.showClassicMenu ? "Interface personnalisée" : "Menu classique"
+        onClicked: root.showClassicMenu = !root.showClassicMenu
+    }
+
     // R51.B opt-in authored HUD. Only genuine CT Player commands are enabled;
     // unspecified v1 intents remain disabled. Legacy UI is never hidden here.
     R51Layout {
@@ -268,7 +310,8 @@ ApplicationWindow {
         Rectangle { Layout.fillWidth: true; height: 1; color: "#6d6860" }
 
         ColumnLayout {
-            visible: root.playerData.screen === "title"
+            visible: root.playerData.screen === "title" &&
+                     (!customTitleMenu.menuPayload.available || root.showClassicMenu)
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter

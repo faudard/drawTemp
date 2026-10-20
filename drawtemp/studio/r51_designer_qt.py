@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
 from drawtemp.sdk.authoring import AuthoringError
 from drawtemp.studio.r51_layout_authoring import LayoutAuthoring
 from drawtemp.studio.r51_layout_draft import (
-    check_layout, edit_breakpoints, edit_layout, editor_sample, new_layout,
+    check_layout, edit_breakpoints, edit_layout, edit_gauge_bindings,
+    editor_sample, move_focus, new_layout,
 )
 from sporebound.ui_layout_r51 import FIELDS, INTENTS, KINDS, UiLayoutError
 
@@ -92,6 +93,16 @@ class R51DesignerDialog(QDialog):
         for path in sorted(FIELDS):
             self.binding.addItem(path + " (" + FIELDS[path] + ")", path)
         inspector.addRow("Binding texte", self.binding)
+        self.gauge_current = QComboBox()
+        self.gauge_current.setObjectName("r51-gauge-current")
+        self.gauge_maximum = QComboBox()
+        self.gauge_maximum.setObjectName("r51-gauge-maximum")
+        for path in sorted(FIELDS):
+            if FIELDS[path] == "int":
+                self.gauge_current.addItem(path, path)
+                self.gauge_maximum.addItem(path, path)
+        inspector.addRow("Valeur de jauge", self.gauge_current)
+        inspector.addRow("Maximum de jauge", self.gauge_maximum)
         self.action = QComboBox()
         for intent in sorted(INTENTS):
             self.action.addItem(intent, intent)
@@ -101,6 +112,16 @@ class R51DesignerDialog(QDialog):
         self.save_widget.clicked.connect(self.update_widget)
         inspector.addRow(self.save_widget)
         editor_layout.addLayout(inspector)
+        focus_row = QHBoxLayout()
+        self.focus_up = QPushButton("Focus précédent")
+        self.focus_up.setObjectName("r51-focus-up")
+        self.focus_up.clicked.connect(lambda: self.move_keyboard_focus("up"))
+        self.focus_down = QPushButton("Focus suivant")
+        self.focus_down.setObjectName("r51-focus-down")
+        self.focus_down.clicked.connect(lambda: self.move_keyboard_focus("down"))
+        focus_row.addWidget(self.focus_up)
+        focus_row.addWidget(self.focus_down)
+        editor_layout.addLayout(focus_row)
         split.addWidget(editor_panel)
 
         right_panel = QWidget()
@@ -242,10 +263,20 @@ class R51DesignerDialog(QDialog):
         self.binding.setCurrentIndex(max(0, self.binding.findData(path)))
         action = node.get("action", "") if node else ""
         self.action.setCurrentIndex(max(0, self.action.findData(action)))
-        for widget in (self.widget_id, self.widget_text, self.binding, self.action,
-                       self.save_widget):
-            widget.setEnabled(node is not None and node["type"] not in ("column", "row")
-                              if widget is not self.widget_id else node is not None)
+        current = node.get("binding", {}).get("path", "") if node else ""
+        maximum = node.get("max_binding", {}).get("path", "") if node else ""
+        self.gauge_current.setCurrentIndex(max(0, self.gauge_current.findData(current)))
+        self.gauge_maximum.setCurrentIndex(max(0, self.gauge_maximum.findData(maximum)))
+        kind = node["type"] if node else ""
+        self.widget_id.setEnabled(bool(node))
+        self.widget_text.setEnabled(kind in ("text", "button"))
+        self.binding.setEnabled(kind == "text")
+        self.action.setEnabled(kind == "button")
+        self.gauge_current.setEnabled(kind == "gauge")
+        self.gauge_maximum.setEnabled(kind == "gauge")
+        self.save_widget.setEnabled(bool(node))
+        self.focus_up.setEnabled(kind == "button")
+        self.focus_down.setEnabled(kind == "button")
         self._populating = False
 
     def _change(self, mutate):
@@ -332,6 +363,12 @@ class R51DesignerDialog(QDialog):
                 self._draft, "move", target=self._selected_id(),
                 direction=direction))
 
+    def move_keyboard_focus(self, direction):
+        node = self._selected_node()
+        if node is not None and self._draft is not None:
+            self._change(lambda: move_focus(
+                self._draft, node["id"], direction))
+
     def update_widget(self):
         node = self._selected_node()
         if node is None:
@@ -355,6 +392,16 @@ class R51DesignerDialog(QDialog):
             return
         if node["type"] == "button":
             changes.update(text=self.widget_text.text(), action=self.action.currentData())
+        if node["type"] == "gauge":
+            def edit():
+                draft = edit_gauge_bindings(
+                    self._draft, node["id"],
+                    self.gauge_current.currentData(),
+                    self.gauge_maximum.currentData())
+                return edit_layout(
+                    draft, "update", target=node["id"], changes=changes)
+            self._change(edit)
+            return
         self._change(lambda: edit_layout(
             self._draft, "update", target=node["id"], changes=changes))
 

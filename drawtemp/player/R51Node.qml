@@ -11,6 +11,8 @@ Item {
     property bool allowActions: false
     property var permittedActions: []
     signal intent(string action)
+    signal focusMove(int direction)
+    signal widgetFocused(string widgetId)
 
     implicitWidth: body.implicitWidth
     implicitHeight: body.implicitHeight
@@ -37,6 +39,8 @@ Item {
                     allowActions: nodeItem.allowActions
                     permittedActions: nodeItem.permittedActions
                     onIntent: function(action) { nodeItem.intent(action) }
+                    onFocusMove: function(direction) { nodeItem.focusMove(direction) }
+                    onWidgetFocused: function(widgetId) { nodeItem.widgetFocused(widgetId) }
                 }
             }
         }
@@ -53,7 +57,10 @@ Item {
                     spec: modelData
                     responsiveColumns: 1
                     allowActions: nodeItem.allowActions
+                    permittedActions: nodeItem.permittedActions
                     onIntent: function(action) { nodeItem.intent(action) }
+                    onFocusMove: function(direction) { nodeItem.focusMove(direction) }
+                    onWidgetFocused: function(widgetId) { nodeItem.widgetFocused(widgetId) }
                 }
             }
         }
@@ -81,6 +88,21 @@ Item {
             activeFocusOnTab: true
             Accessible.name: text
             onClicked: nodeItem.intent(nodeItem.spec.action)
+            onActiveFocusChanged: {
+                if (activeFocus) nodeItem.widgetFocused(nodeItem.spec.id)
+            }
+            Keys.onPressed: function(event) {
+                if (!enabled) return
+                if (event.key === Qt.Key_Down || event.key === Qt.Key_Right ||
+                    event.key === Qt.Key_Tab) {
+                    nodeItem.focusMove(1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Left ||
+                           event.key === Qt.Key_Backtab) {
+                    nodeItem.focusMove(-1)
+                    event.accepted = true
+                }
+            }
         }
     }
     Component {
