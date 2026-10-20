@@ -136,19 +136,36 @@ def _safe_existing(root, manifest, relative):
 
 def _snapshot_and_pack(editor, root, pack_id):
     snapshot, installed = _read_snapshot(editor, root)
-    # Legacy receipts lack reverse dependency edges: a multi-pack upgrade
-    # could silently break another pack's exact version/digest pin.
-    if len(installed) != 1:
-        _reject("dependency_unknown", "R58.B2 requires exactly one installed pack")
-    current = installed[0]
-    if current["id"] != pack_id:
+    current = next((row for row in installed if row["id"] == pack_id), None)
+    if current is None:
         _reject("unknown_package", "Selected installed pack does not match archive")
+    if len(installed) > 1:
+        # Multi-pack upgrades are safe only if every receipt records complete
+        # dependency provenance AND no dependent pins the selected version.
+        if any("dependencies" not in row for row in installed):
+            _reject("dependency_unknown",
+                    "Legacy receipt prevents safe multi-pack version change")
+        users = sorted(row["id"] for row in installed
+                       if row["id"] != pack_id and any(
+                           dep["id"] == pack_id for dep in row["dependencies"]))
+        if users:
+            _reject("dependency_in_use",
+                    "Existing package pins the old version: " + ", ".join(users))
     return snapshot, current
 
 
 def _check_compatibility(snapshot, current, manifest):
-    if manifest["dependencies"]:
-        _reject("dependency_unknown", "Isolated upgrades cannot introduce dependencies")
+    # R58.B3: existing dependencies must remain EXACTLY pinned. A change
+    # would require a new multi-package migration transaction and new proofs.
+    original = current.get("dependencies")
+    if original is None:
+        if manifest["dependencies"]:
+            _reject("dependency_unknown",
+                    "Legacy receipt cannot prove former package dependencies")
+    elif sorted(original, key=lambda dep: dep["id"]) != sorted(
+            manifest["dependencies"], key=lambda dep: dep["id"]):
+        _reject("dependency_migration_required",
+                "Cannot change dependency version/digest during isolated upgrade")
     assets = AssetRegistry(snapshot["project"].get("assets") or None).to_dict()
     old_ids = frozenset(current["asset_ids"])
     current_entries = {row["id"]: row for row in assets["entries"] if row["id"] in old_ids}
