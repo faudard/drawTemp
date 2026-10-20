@@ -4,7 +4,7 @@
 
 Ce premier lot propose un **jeu d'exemple entièrement original dans son habillage**, construit en combinant des contrats existants, sans nouvel état métier ni second moteur :
 
-- R53 : Elya/Oren/Mira, exploration en mouvement libre, combat RPG par commandes, transition vers bataille tactique CT réelle, retour par le routage R25.
+- R53 : Elya/Oren/Mira, combat RPG par commandes, transition vers bataille tactique CT réelle et retour par le routage R25. Le profil original R53 est `GRID_TURN`; pour R60, les trois scènes d’exploration optent explicitement pour `FREE_REALTIME + RPG_TURN` (autorisé par R25) tandis que la mission CT garde son profil `srpg`.
 - R55 : matière première `resin`, fabrication de `lantern` à partir de deux unités toutes les deux simulations ticks, achat de deux lanternes auprès du marchand du village, livraison de la quête `relight_beacon`; stocks et reçus déterministes, argent et inventaire sous le Campaign canonique.
 - R51 : trois écrans HUD déclaratifs (`r60_exploration`, `r60_tactical`, `r60_inventory`), breakpoints 640/1100, projections typées et contrôles explicitement autorisés.
 - R1/R15 : création depuis le Studio grâce au modèle Creator `hybrid_r60`, deux fichiers canoniques Content et GameProject v1, prévisualisation et application des modifications R55/R51 dans `AuthoringSession`, historique Undo/Redo.
