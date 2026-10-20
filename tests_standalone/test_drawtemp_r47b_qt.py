@@ -147,6 +147,26 @@ class QtModInspectorTests(unittest.TestCase):
         self.assertFalse(self.owner.mods.status("quest-mod")["enabled"])
         self.assertEqual(self.owner.session.snapshot().to_dict(), before)
 
+    def test_explicit_pack_recheck_reports_failure_without_applying(self):
+        from tests_standalone.test_drawtemp_r47c_two_games import self_authored_resource
+        with TemporaryDirectory() as temp:
+            pack, inspection = self_authored_resource(Path(temp), "qt-manifest-pack")
+            doc = manifest()
+            doc["resources"] = [{
+                "id": inspection.pack_id, "version": inspection.version,
+                "sha256": inspection.archive_sha256}]
+            self.dialog.install_descriptor(doc, {inspection.pack_id: pack})
+            self.dialog._verify_clicked()
+            self.assertIn("Intégrité des packs", self.dialog.notice.text())
+            self.assertIn("NON certifiés", self.dialog.notice.text())
+            errors = []
+            self.dialog._error = lambda exc: errors.append(exc)
+            pack.write_bytes(b"corrupted after import")
+            self.dialog._verify_clicked()
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].code, "resource_changed")
+            self.assertFalse(self.owner.mods.status("quest-mod")["enabled"])
+
     def test_no_stale_document_consent_in_main_window(self):
         from drawtemp.studio.qt_shell import StudioWindow
         from PySide6.QtCore import QSettings
