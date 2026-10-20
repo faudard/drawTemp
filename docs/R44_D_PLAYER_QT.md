@@ -49,3 +49,7 @@ pas une preuve de qualification GPU tri-OS, mais constitue le gate GUI reproduct
 - La vue Player indique le nombre de régions effectivement **visitées** (historique canonique `SceneRouter`) séparément du nombre de régions actuellement **accessibles** (conditions). Aucun compteur n'est stocké dans le checkpoint.
 - La validation ferme désormais les objets malformés (type `scene`, `kind`, `flag`) par `RuleError` au lieu de laisser fuiter des `TypeError` dans le parseur.
 - Tests dédiés au verrouillage/déverrouillage, à la non-mutation du checkpoint et aux valeurs JSON mal typées.
+
+### Protection des interactions d'objets
+
+Un objet déclaré `npc` ou sans point d'interaction exploratoire reste visible en tant que métadonnée, mais n'apparaît pas dans `object_ids` — la liste des commandes activables du Player. Les champs de progression R44 sont aussi initialisés à une valeur vide sûre sur l'écran titre, avant la création d'une session.

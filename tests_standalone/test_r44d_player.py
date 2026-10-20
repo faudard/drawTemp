@@ -136,6 +136,33 @@ class WorldAtlasPlayerTests(unittest.TestCase):
         self.assertEqual(visited["visited_regions"], ["grove", "valley"])
         self.assertEqual(visited["reachability"]["blocked_routes"], ["to_marsh"])
 
+    def test_decorative_npc_is_not_presented_as_clickable_world_object(self):
+        from copy import deepcopy
+        from sporebound.model import RuleError
+        from sporebound.world_graph44 import EXTENSION
+        project = deepcopy(self.project)
+        project.extensions[EXTENSION]["data"]["objects"].append({
+            "id": "guide", "scene": "valley", "kind": "npc",
+            "flag": "world44_guide_seen",
+        })
+        project.validate(self.content)
+        sim = Simulation.new(self.content, project, "main")
+        world = thaw(sim.world_atlas_state())
+        self.assertEqual(world["object_ids"], ["relic"])
+        self.assertEqual({x["id"] for x in world["objects"]}, {"guide", "relic"})
+        with self.assertRaises(SimulationError):
+            sim.world_interact("guide")
+        self.assertEqual(thaw(sim.world_atlas_state())["object_ids"], ["relic"])
+
+    def test_title_projection_has_complete_r44_defaults(self):
+        with TemporaryDirectory() as tmp:
+            controller = PlayerController(self.content, self.project, "main", Path(tmp))
+            title = controller.state()
+            self.assertEqual(title["screen"], "title")
+            self.assertEqual(title["world_atlas"]["region_total"], 0)
+            self.assertEqual(title["world_atlas"]["visited_regions"], [])
+            self.assertEqual(title["world_atlas"]["reachability"]["regions"], [])
+
     def test_old_project_has_no_world_atlas(self):
         from drawtemp.sdk.reference import reference_project
         content, project = reference_project()

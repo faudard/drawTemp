@@ -205,6 +205,16 @@ class Simulation:
         region = next(region for region in graph.raw["regions"]
                       if any(entry["id"] == scene for entry in region["scenes"]))
         objects = graph.object_states(session.progress, scene)
+        # Objects may be decorative/remote (especially NPCs). They remain
+        # visible in the atlas but must not be advertised as interactive unless
+        # they have a real non-exit exploration hotspot and supported action.
+        hotspots = {
+            point["id"] for point in session.project.exploration[scene]["interactions"]
+            if point["exit"] is False
+        }
+        object_actions = sorted(
+            ident for ident, obj in objects.items()
+            if ident in hotspots and obj["kind"] in ("chest", "door", "switch"))
         stage = session.route_state()
         position = stage["position"]
         # Current conditional reachability and past actual visits are separate:
@@ -243,7 +253,7 @@ class Simulation:
             "region_title": region["title"], "biome": region["biome"],
             "projection": region["projection"], "portals": portals,
             "objects": [{"id": ident, **obj} for ident, obj in sorted(objects.items())],
-            "object_ids": sorted(objects),
+            "object_ids": object_actions,
             "reachability": reachability,
             "region_total": len(graph.raw["regions"]),
             "visited_regions": visited_regions,

@@ -626,7 +626,9 @@ class PlayerController:
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "world_atlas": {"enabled": False, "scene": "", "region": "",
                                 "region_title": "", "portals": [], "objects": [],
-                                "object_ids": []},
+                                "object_ids": [], "reachability": {
+                                    "scenes": [], "regions": [], "blocked_routes": []},
+                                "region_total": 0, "visited_regions": []},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
