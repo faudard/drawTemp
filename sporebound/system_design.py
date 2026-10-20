@@ -32,7 +32,7 @@ def _amounts(data, resources):
     require(type(data) is dict and 1 <= len(data) <= 16,
             "R55 recipe needs a nonempty bounded resource map")
     for key, value in data.items():
-        require(key in resources and _integer(value, 1, 1000),
+        require(_id(key) and key in resources and _integer(value, 1, 1000),
                 "R55 recipe has an invalid typed resource amount")
 
 
@@ -94,7 +94,8 @@ def validate_systems(spec, scenes):
         require(type(row) is dict and set(row) ==
                 {"id", "resource", "scene", "buy_price", "sell_price"}
                 and _id(row["id"]) and row["id"] not in used
-                and row["resource"] in known and row["scene"] in scenes
+                and _id(row["resource"]) and row["resource"] in known
+                and type(row["scene"]) is str and row["scene"] in scenes
                 and _integer(row["buy_price"], 0, MAX_STOCK)
                 and _integer(row["sell_price"], 0, row["buy_price"]),
                 "Invalid R55 merchant, scene or price")
@@ -105,7 +106,8 @@ def validate_systems(spec, scenes):
         require(type(row) is dict and set(row) ==
                 {"id", "resource", "quantity", "flag"}
                 and _id(row["id"]) and row["id"] not in used
-                and row["resource"] in known and _integer(row["quantity"], 1, 1000)
+                and _id(row["resource"]) and row["resource"] in known
+                and _integer(row["quantity"], 1, 1000)
                 and _id(row["flag"]) and row["flag"] not in flags,
                 "Invalid R55 quest contract")
         used.add(row["id"])
@@ -242,6 +244,12 @@ class SystemEconomy:
                 and type(checkpoint["journal"]) is list
                 and len(checkpoint["journal"]) <= MAX_COMMANDS,
                 "Malformed R55 checkpoint")
+        require(_integer(checkpoint["tick"], 0, MAX_TICKS)
+                and type(checkpoint["stocks"]) is dict
+                and set(checkpoint["stocks"]) == set(self.resources)
+                and all(_integer(count, 0, self.resources[key]["capacity"])
+                        for key, count in checkpoint["stocks"].items()),
+                "Malformed or non-integer R55 persisted stock")
         replay = SystemEconomy(self.spec, self.scenes)
         for command in checkpoint["journal"]:
             require(type(command) is dict, "Malformed R55 operation journal")
@@ -255,6 +263,7 @@ class SystemEconomy:
                         {"kind", "id", "merchant", "action", "quantity",
                          "scene", "price", "tick"}, "Malformed R55 trade receipt")
                 mid, transaction_id = command["merchant"], command["id"]
+                require(_id(mid), "Invalid R55 merchant receipt ID")
                 merchant = replay.merchants.get(mid)
                 require(_id(transaction_id) and transaction_id not in replay.transaction_ids
                         and merchant is not None and command["scene"] == merchant["scene"]
