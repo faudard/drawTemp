@@ -36,7 +36,7 @@ def survival_document():
              "energy_cost": 4, "cold": 8, "pos": [0, 0]},
             {"id": "quarry", "scene": "arrival", "item": "stone",
              "stock": 2, "yield": 1, "tool": None, "wear": 0,
-             "energy_cost": 4, "cold": 0, "pos": [1, 0]},
+             "energy_cost": 4, "cold": 0, "pos": [0, 1]},
             {"id": "bush", "scene": "arrival", "item": "berries",
              "stock": 4, "yield": 2, "tool": None, "wear": 0,
              "energy_cost": 2, "cold": 0, "pos": [0, 2]},
@@ -61,6 +61,11 @@ def survival_document():
 def build_example():
     content, project = reference_project()
     project.story["entry_scenes"] = {}
+    project.story["scenes"].append({
+        "id": "outpost", "title": "Falaises glacées", "speaker": "Explorateur",
+        "text": "Le vent rend le retour difficile.",
+        "choices": [{"id": "continue", "label": "Continuer"}],
+    })
     for scene, title in (("arrival", "Refuge forestier"),
                          ("outpost", "Falaises glacées")):
         project.exploration[scene] = {
