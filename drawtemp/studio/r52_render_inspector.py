@@ -33,6 +33,7 @@ class RenderLookInspector(QWidget):
         self.camera = QComboBox(self)
         self.camera.setObjectName("r52_camera_preset")
         self._presets = renderer.cameraPresets
+        self.camera.addItem("Libre (caméra actuelle)", "custom")
         for preset in self._presets:
             label = preset["title"]
             if not preset["enabled"]:
@@ -133,7 +134,9 @@ class RenderLookInspector(QWidget):
         if index < 0:
             return
         try:
-            self.renderer.setCameraPreset(self.camera.itemData(index))
+            preset_id = self.camera.itemData(index)
+            if preset_id != "custom":
+                self.renderer.setCameraPreset(preset_id)
         except ValueError as exc:
             self.camera.blockSignals(True)
             self.camera.setCurrentIndex(self._selected_camera)
@@ -157,5 +160,6 @@ class RenderLookInspector(QWidget):
         self.renderer.refresh()
         self._fill(baseline["lighting"])
         self.camera.blockSignals(True)
-        self.camera.setCurrentIndex(self._selected_camera)
+        self.camera.setCurrentIndex(0)  # Restored view may be custom zoom/pan.
         self.camera.blockSignals(False)
+        self._selected_camera = 0
