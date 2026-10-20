@@ -281,7 +281,8 @@ ApplicationWindow {
             Layout.fillWidth: true
             spacing: 16
             Label {
-                text: "✦  JEANNE D'ARC"
+                text: root.playerData.party.enabled ?
+                      "✦  " + root.playerData.title : "✦  JEANNE D'ARC"
                 color: root.gold
                 font.bold: true
                 font.letterSpacing: 3
@@ -469,9 +470,23 @@ ApplicationWindow {
                         text: root.playerData.scene.text || ""
                         color: root.ivory
                         font.pixelSize: 19 * root.textScale * root.subtitleScale
-                        wrapMode: Text.WordWrap
                         Accessible.name: text
+                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                    }
+                    Label {
+                        text: "Réplique " + (root.playerData.dialogue_line.index + 1) +
+                              " / " + root.playerData.dialogue_line.count
+                        visible: root.playerData.dialogue_line.count > 1
+                        color: root.muted
+                        font.pixelSize: 13 * root.textScale
+                    }
+                    Button {
+                        objectName: "r42NextDialogueLine"
+                        text: "Suite de la conversation →"
+                        visible: root.playerData.dialogue_line.count > 1 &&
+                                 !root.playerData.dialogue_line.complete
+                        onClicked: player.nextDialogueLine()
                     }
                 }
             }
@@ -494,8 +509,11 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: root.playerData.choices.length === 0 ?
-                          "Explorez les lieux pour poursuivre le récit." : ""
+                    text: root.playerData.dialogue_line.count > 1 &&
+                          !root.playerData.dialogue_line.complete ?
+                          "Lisez les répliques avant de choisir." :
+                          (root.playerData.choices.length === 0 ?
+                           "Explorez les lieux pour poursuivre le récit." : "")
                     color: root.muted
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
@@ -639,6 +657,23 @@ ApplicationWindow {
                     onClicked: player.routeTransition(modelData.id)
                 }
             }
+            Label {
+                visible: (root.playerData.rpg_available || []).length > 0
+                text: "RENCONTRES RPG CLASSIQUE"
+                color: root.gold
+                font.bold: true
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Repeater {
+                model: root.playerData.rpg_available || []
+                Button {
+                    objectName: "r41-encounter-" + modelData
+                    text: "Combattre · " + modelData
+                    Layout.preferredWidth: 380
+                    Layout.alignment: Qt.AlignHCenter
+                    onClicked: player.startRpgEncounter(modelData)
+                }
+            }
             Repeater {
                 model: root.playerData.missions
                 Button {
@@ -687,6 +722,256 @@ ApplicationWindow {
                 }
             }
             Item { Layout.fillHeight: true }
+        }
+
+        ColumnLayout {
+            id: rpgBattle
+            objectName: "r41-rpg-battle"
+            visible: root.playerData.screen === "rpg_battle"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 10
+
+            function activeActor() {
+                var actors = root.playerData.rpg.actors || []
+                for (var i = 0; i < actors.length; ++i)
+                    if (actors[i].id === root.playerData.rpg.active) return actors[i]
+                return ({})
+            }
+            function activeSkills() {
+                return activeActor().skills || []
+            }
+            function eligibleTargets() {
+                var kind = r41Action.currentValue || "attack"
+                var actors = root.playerData.rpg.actors || []
+                var caster = activeActor()
+                var result = []
+                if (kind === "guard" || kind === "flee") return result
+                var skill = (root.playerData.rpg.skill_catalog || {})[r41Skill.currentText] || ({})
+                var allies = kind === "item" ||
+                             (kind === "skill" && (skill.target === "ally" || skill.target === "self"))
+                for (var i = 0; i < actors.length; ++i) {
+                    var actor = actors[i]
+                    if (actor.hp <= 0) continue
+                    if (allies && actor.team !== caster.team) continue
+                    if (!allies && actor.team === caster.team) continue
+                    if (kind === "item" && actor.hp >= actor.max_hp) continue
+                    if (kind === "skill" && skill.target === "self" && actor.id !== caster.id)
+                        continue
+                    result.push(actor)
+                }
+                return result
+            }
+            function submit() {
+                if (root.inputLocked || root.playerData.rpg.result) return
+                var kind = r41Action.currentValue || "attack"
+                if (kind === "skill" && !r41Skill.currentText) return
+                if (kind === "combo" && r53Combo.count === 0) return
+                if (kind === "item" && !(root.playerData.rpg.inventory.potion > 0)) return
+                if (kind !== "guard" && kind !== "flee" && r41Target.count === 0) return
+                player.rpgAction(kind, r41Target.currentValue || "",
+                                 kind === "skill" ? r41Skill.currentText :
+                                 (kind === "combo" ? r53Combo.currentText : ""))
+            }
+            function cycleTarget(delta) {
+                if (r41Target.count > 0)
+                    r41Target.currentIndex = (r41Target.currentIndex +
+                                              delta + r41Target.count) % r41Target.count
+            }
+
+            // Scoped shortcuts do not intercept the CT Player or exploration.
+            Shortcut {
+                sequence: "A"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 0
+            }
+            Shortcut {
+                sequence: "G"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 1
+            }
+            Shortcut {
+                sequence: "S"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 2
+            }
+            Shortcut {
+                sequence: "I"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 3
+            }
+            Shortcut {
+                sequence: "F"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: r41Action.currentIndex = 4
+            }
+            Shortcut {
+                sequence: "C"
+                enabled: rpgBattle.visible && !root.inputLocked &&
+                         !root.playerData.rpg.result &&
+                         (root.playerData.rpg.combos || []).length > 0
+                onActivated: r41Action.currentIndex = 5
+            }
+            Shortcut {
+                sequence: "Ctrl+Left"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: rpgBattle.cycleTarget(-1)
+            }
+            Shortcut {
+                sequence: "Ctrl+Right"
+                enabled: rpgBattle.visible && !root.inputLocked && !root.playerData.rpg.result
+                onActivated: rpgBattle.cycleTarget(1)
+            }
+            Shortcut {
+                sequence: "Return"
+                enabled: rpgBattle.visible && !root.inputLocked
+                onActivated: root.playerData.rpg.result ?
+                    player.finishRpgEncounter() : rpgBattle.submit()
+            }
+
+            Label {
+                text: "RPG CLASSIQUE · " + (root.playerData.rpg.id || "") +
+                      " · Tour " + (root.playerData.rpg.round || 1)
+                color: root.gold
+                font.bold: true
+                font.pixelSize: 26 * root.textScale
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                text: root.playerData.rpg.result ?
+                      "Résultat : " + root.playerData.rpg.result :
+                      "À jouer : " + (root.playerData.rpg.active || "—")
+                color: root.ivory
+                Layout.alignment: Qt.AlignHCenter
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: availableWidth
+                ColumnLayout {
+                    width: parent.width
+                    Repeater {
+                        model: root.playerData.rpg.actors || []
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 45
+                            color: modelData.team === "party" ? "#263b43" : "#48343a"
+                            radius: 6
+                            border.color: modelData.id === root.playerData.rpg.active ?
+                                              root.gold : "#56645f"
+                            Label {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                verticalAlignment: Text.AlignVCenter
+                                color: root.ivory
+                                text: modelData.name + " · " + modelData.team +
+                                      " · PV " + modelData.hp + "/" + modelData.max_hp +
+                                      " · PM " + modelData.mp + "/" + modelData.max_mp +
+                                      (modelData.hp === 0 ? " · KO" : "") +
+                                      (modelData.guard ? " · Garde" : "")
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                text: "Action : A attaque · G garde · S compétence · I potion · F fuite" +
+                      ((root.playerData.rpg.combos || []).length ? " · C combo" : "")
+                color: root.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ComboBox {
+                id: r41Action
+                objectName: "r41-action-picker"
+                Accessible.name: "Action du héros actif"
+                Layout.fillWidth: true
+                model: [
+                    { "label": "Attaque", "kind": "attack" },
+                    { "label": "Garde", "kind": "guard" },
+                    { "label": "Compétence", "kind": "skill" },
+                    { "label": "Potion", "kind": "item" },
+                    { "label": "Fuir", "kind": "flee" }
+                ].concat((root.playerData.rpg.combos || []).length ? [
+                    { "label": "Combo coopératif", "kind": "combo" }
+                ] : [])
+                textRole: "label"
+                valueRole: "kind"
+                enabled: !root.playerData.rpg.result
+            }
+            Label {
+                text: "Compétence"
+                color: root.muted
+                visible: r41Action.currentValue === "skill"
+            }
+            ComboBox {
+                id: r41Skill
+                objectName: "r41-skill-picker"
+                Layout.fillWidth: true
+                model: rpgBattle.activeSkills()
+                visible: r41Action.currentValue === "skill"
+                enabled: !root.playerData.rpg.result && count > 0
+                Accessible.name: "Compétence du héros actif"
+            }
+            Label {
+                text: "Combo coopératif · plusieurs héros dépensent leurs PM"
+                color: root.muted
+                wrapMode: Text.WordWrap
+                visible: r41Action.currentValue === "combo"
+            }
+            ComboBox {
+                id: r53Combo
+                objectName: "r53-rpg-combo-picker"
+                Layout.fillWidth: true
+                model: root.playerData.rpg.combos || []
+                visible: r41Action.currentValue === "combo"
+                enabled: !root.playerData.rpg.result && count > 0
+                Accessible.name: "Combo coopératif exécutable au tour actuel"
+            }
+            Label {
+                text: "Partenaires en récupération : " +
+                      (root.playerData.rpg.combo_skip || []).join(", ")
+                color: root.muted
+                visible: (root.playerData.rpg.combo_skip || []).length > 0
+                Layout.fillWidth: true
+            }
+            Label {
+                text: "Cible · Ctrl+← / Ctrl+→ pour changer"
+                color: root.muted
+                visible: r41Target.count > 0
+            }
+            ComboBox {
+                id: r41Target
+                objectName: "r41-target-picker"
+                Layout.fillWidth: true
+                model: rpgBattle.eligibleTargets()
+                textRole: "name"
+                valueRole: "id"
+                enabled: !root.playerData.rpg.result && count > 0
+                visible: count > 0
+                Accessible.name: "Cible vivante et compatible avec l'action"
+            }
+            Button {
+                objectName: "r41-rpg-submit"
+                text: "Valider l'action · Entrée"
+                Layout.fillWidth: true
+                enabled: !root.playerData.rpg.result &&
+                         (r41Action.currentValue === "guard" ||
+                          r41Action.currentValue === "flee" ||
+                          (r41Target.count > 0 &&
+                           (r41Action.currentValue !== "combo" || r53Combo.count > 0) &&
+                           (r41Action.currentValue !== "item" ||
+                            root.playerData.rpg.inventory.potion > 0)))
+                onClicked: rpgBattle.submit()
+            }
+            Button {
+                objectName: "r41-finish"
+                text: "Retour à l'exploration / campagne · Entrée"
+                visible: Boolean(root.playerData.rpg.result)
+                Layout.alignment: Qt.AlignHCenter
+                onClicked: player.finishRpgEncounter()
+            }
         }
 
         RowLayout {
@@ -764,6 +1049,8 @@ ApplicationWindow {
                 Layout.preferredWidth: 310
                 Layout.fillHeight: true
                 ScrollView {
+                    id: worldGameplayScroll
+                    objectName: "r44GameplayScroll"
                     anchors.fill: parent
                     anchors.margins: 14
                     contentWidth: availableWidth
@@ -781,6 +1068,208 @@ ApplicationWindow {
                             font.pixelSize: 20 * root.textScale
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+                        ColumnLayout {
+                            objectName: "r41-canonical-portals"
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.route_links || []).length > 0
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "VOYAGER · ROUTES ACCESSIBLES"
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.route_links || []
+                                Button {
+                                    objectName: "r41-route-" + modelData.id
+                                    text: "Aller à " + modelData.title
+                                    Layout.fillWidth: true
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Voyager vers " + modelData.title
+                                    onClicked: player.travelRoute(modelData.id)
+                                }
+                            }
+                        }
+                        ColumnLayout {
+                            objectName: "r41-routed-encounters"
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.rpg_available || []).length > 0
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "RENCONTRES RPG DANS CETTE SCÈNE"
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.rpg_available || []
+                                Button {
+                                    objectName: "r41-start-" + modelData
+                                    text: "Combattre · " + modelData
+                                    Layout.fillWidth: true
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Commencer la rencontre RPG " + modelData
+                                    onClicked: player.startRpgEncounter(modelData)
+                                }
+                            }
+                        }
+                        ColumnLayout {
+                            objectName: "r41-village-quest"
+                            visible: root.playerData.screen === "exploration" &&
+                                     Boolean(root.playerData.rpg_quest.title)
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: root.playerData.rpg_quest.title || ""
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: (root.playerData.rpg_quest.completed ?
+                                      "Quête achevée" :
+                                      (root.playerData.rpg_quest.cleared || []).length +
+                                      " / " + (root.playerData.rpg_quest.required || []).length +
+                                      " rencontres terminées") +
+                                      (root.playerData.rpg_quest.completed ? "" :
+                                       " · Retour : " +
+                                       (root.playerData.rpg_quest.return_scene || ""))
+                                color: root.ivory
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                            }
+                            Button {
+                                objectName: "r41-claim-quest"
+                                text: "Terminer la quête · Obtenir la récompense"
+                                Layout.fillWidth: true
+                                visible: Boolean(root.playerData.rpg_quest.ready)
+                                enabled: !root.inputLocked
+                                Accessible.name: "Récupérer la récompense de la quête"
+                                onClicked: player.claimRpgQuest()
+                            }
+                        }
+                        ColumnLayout {
+                            id: r41PartyHud
+                            objectName: "r41-party-hud"
+                            visible: root.playerData.party.enabled &&
+                                     root.playerData.screen === "exploration"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "GROUPE RPG · " +
+                                      root.playerData.party.active.length + "/" +
+                                      root.playerData.party.capacity + " actifs"
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                visible: ((root.playerData.r53_hybrid || {}).members || []).length > 0
+                                text: "R53 · Leader et formation"
+                                color: root.gold
+                                Accessible.description: text
+                            }
+                            Repeater {
+                                model: (root.playerData.r53_hybrid || {}).members || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r53-leader-" + modelData.id
+                                    text: (modelData.leader ? "★ Leader · " :
+                                           "Choisir comme leader · ") + modelData.id +
+                                          " · " + modelData.formation
+                                    enabled: !root.inputLocked && !modelData.leader
+                                    Accessible.name: modelData.leader ?
+                                        "Leader actuel " + modelData.id :
+                                        "Désigner " + modelData.id + " comme leader"
+                                    onClicked: player.switchPartyLeader(modelData.id)
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.party.recruitable || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-recruit-" + modelData.id
+                                    text: "Recruter · " + modelData.name
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Recruter " + modelData.name
+                                    onClicked: player.recruitPartyMember(modelData.id)
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.party.heroes || []
+                                delegate: Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-party-hero-" + modelData.id
+                                    text: (modelData.active ? "● " : "○ ") +
+                                          modelData.name + " · " + modelData.job +
+                                          " · XP " + modelData.xp
+                                    enabled: !root.inputLocked
+                                    onClicked: player.togglePartyMember(modelData.id)
+                                    Accessible.name: "Groupe RPG : " + modelData.name +
+                                                     (modelData.active ? ", actif" : ", réserve")
+                                }
+                            }
+                        }
+                        ColumnLayout {
+                            objectName: "r41-campaign-equipment"
+                            visible: root.playerData.party.enabled &&
+                                     root.playerData.screen === "exploration"
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "ÉQUIPEMENT RPG · STOCK DE CAMPAGNE"
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            ComboBox {
+                                id: r41EquipHero
+                                objectName: "r41-gear-hero"
+                                Layout.fillWidth: true
+                                model: root.playerData.party.heroes || []
+                                textRole: "name"
+                                valueRole: "id"
+                                Accessible.name: "Compagnon à équiper"
+                            }
+                            Repeater {
+                                model: root.playerData.gear.inventory || []
+                                Button {
+                                    Layout.fillWidth: true
+                                    objectName: "r41-equip-" + modelData.id
+                                    text: "Équiper " + modelData.name +
+                                          " (" + modelData.count + " en stock)"
+                                    enabled: !root.inputLocked &&
+                                             r41EquipHero.currentValue &&
+                                             modelData.count > 0
+                                    onClicked: player.equipHero(r41EquipHero.currentValue,
+                                                                 modelData.id)
+                                }
+                            }
+                            Repeater {
+                                model: ["weapon", "armor", "accessory"]
+                                Button {
+                                    Layout.fillWidth: true
+                                    property var equipment:
+                                        (root.playerData.party.equipment || {})[
+                                            r41EquipHero.currentValue] || ({})
+                                    property string currentItem:
+                                        equipment[modelData] || ""
+                                    text: modelData + ": " + currentItem +
+                                          (currentItem ? " · Retirer" : " —")
+                                    enabled: !root.inputLocked &&
+                                             r41EquipHero.currentValue &&
+                                             currentItem !== ""
+                                    onClicked: player.unequipHero(r41EquipHero.currentValue,
+                                                                   modelData)
+                                }
+                            }
                         }
                         Label {
                             visible: renderer.characterOutfits.length > 1
@@ -812,6 +1301,56 @@ ApplicationWindow {
                             color: root.ivory
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                        }
+                        ColumnLayout {
+                            objectName: "r44WorldAtlasPanel"
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.world_atlas.enabled
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                Layout.fillWidth: true
+                                text: "WORLD ATLAS · " + (root.playerData.world_atlas.region_title || "")
+                                color: root.gold
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                                Accessible.name: text
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: "Régions visitées : " +
+                                      root.playerData.world_atlas.visited_regions.length + " / " +
+                                      root.playerData.world_atlas.region_total +
+                                      " · accessibles : " +
+                                      root.playerData.world_atlas.reachability.regions.length
+                                color: root.ivory
+                                wrapMode: Text.WordWrap
+                                Accessible.name: text
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: "Biome : " + (root.playerData.world_atlas.biome || "") +
+                                      " · Vue : " + (root.playerData.world_atlas.projection || "")
+                                color: root.muted
+                                wrapMode: Text.WordWrap
+                            }
+                            Repeater {
+                                model: root.playerData.world_atlas.portals || []
+                                Button {
+                                    objectName: "r44Portal-" + modelData.id
+                                    Layout.fillWidth: true
+                                    text: (modelData.available ?
+                                           (modelData.in_reach ? "➜ " : "⌖ ") : "🔒 ") +
+                                          modelData.title + " · coût " + modelData.travel_cost
+                                    enabled: !root.inputLocked && modelData.available &&
+                                             modelData.in_reach
+                                    Accessible.description: modelData.available ?
+                                        (modelData.in_reach ?
+                                         "Passage disponible" : "Approchez la sortie") :
+                                        "Passage conditionnel verrouillé"
+                                    onClicked: player.worldTransition(modelData.id)
+                                }
+                            }
                         }
                         ColumnLayout {
                             visible: root.playerData.screen === "exploration" &&
@@ -1106,9 +1645,17 @@ ApplicationWindow {
                                    (root.playerData.exploration.interactions || []) : []
                             Button {
                                 Layout.fillWidth: true
+                                property bool r44Object: root.playerData.world_atlas.enabled &&
+                                    root.playerData.world_atlas.object_ids.indexOf(modelData.id) !== -1
+                                objectName: r44Object ? "r44Object-" + modelData.id :
+                                                       "r14Explore-" + modelData.id
                                 text: (modelData.visited ? "✓ " : "◇ ") + modelData.title
-                                enabled: !modelData.visited
-                                onClicked: player.exploreInteract(modelData.id)
+                                enabled: !root.inputLocked && !modelData.visited &&
+                                         (!root.playerData.exploration.completed || r44Object)
+                                onClicked: {
+                                    if (r44Object) player.worldInteract(modelData.id)
+                                    else player.exploreInteract(modelData.id)
+                                }
                             }
                         }
                         Label {
@@ -1731,7 +2278,7 @@ ApplicationWindow {
         objectName: "r57-a11y-options"
         modal: true
         focus: true
-        // Native keyboard Tab/Shift+Tab traverses the Qt Quick controls.
+        // Keyboard focus starts on the language selector when Options opens.
         onOpened: languageSelect.forceActiveFocus()
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 36, 570)

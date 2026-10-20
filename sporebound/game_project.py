@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R36: reject invalid controllers and dangling R28 animation IDs on load.
+        from .animation_graph import controllers_from_project
+        controllers_from_project(self)
+        from .animation_timeline import timelines_from_project
+        timelines_from_project(self)
         from .logic_campaign_bridge import validate_bridge
         validate_bridge(self, content)
         # R38.2: optional authored prefab instance provenance, validated on load.
@@ -156,6 +161,15 @@ class GameProject:
             validate_roguelite_spec(
                 self.extensions[ROGUELITE_EXTENSION]["data"],
                 content=content, project=self)
+        # R37.B opt-in AI policies share the canonical GameProject envelope.
+        from .advanced_ai import EXTENSION as ADVANCED_AI_EXTENSION, validate_advanced_ai
+        if ADVANCED_AI_EXTENSION in self.extensions:
+            from .living_world import EXTENSION as LIVING_WORLD_EXTENSION
+            world = self.extensions.get(LIVING_WORLD_EXTENSION)
+            validate_advanced_ai(
+                self.extensions[ADVANCED_AI_EXTENSION]["data"],
+                living_world=world["data"] if world is not None else None,
+                content=content)
         # R43: opt-in Ability schema is validated on every canonical load.
         # Legacy project JSON and native tactical skills remain untouched.
         if "org.drawtemp.abilities" in self.extensions:
@@ -197,6 +211,12 @@ class GameProject:
                     'Unknown strategic narrative trigger: ' + reference)
         from .exploration import validate_exploration
         validate_exploration(self.exploration, self.story)
+        from .action_scene_adapter import (
+            EXTENSION as ACTION_EXTENSION, validate_action_catalog,
+        )
+        if ACTION_EXTENSION in self.extensions:
+            validate_action_catalog(self.extensions[ACTION_EXTENSION]["data"],
+                                    project=self)
         from .living_world import EXTENSION, validate_living_world
         if EXTENSION in self.extensions:
             validate_living_world(
@@ -214,8 +234,17 @@ class GameProject:
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
         validate_game_modes(self.game_modes, content, self)
+        from .classic_party import EXTENSION as PARTY_EXTENSION, validate_classic_party
+        if PARTY_EXTENSION in self.extensions:
+            validate_classic_party(self.extensions[PARTY_EXTENSION]["data"],
+                                   content=content, project=self)
         from .scene_router import validate_scene_routes
         validate_scene_routes(self.scene_routes, content, self)
+        # R44.A: optional world atlas metadata; R25 remains sole route authority.
+        from .world_graph44 import EXTENSION as WORLD_GRAPH_EXTENSION, validate_world_graph
+        if WORLD_GRAPH_EXTENSION in self.extensions:
+            validate_world_graph(self.extensions[WORLD_GRAPH_EXTENSION]["data"],
+                                 content, self)
         from .world_streaming import EXTENSION as STREAM_EXTENSION, validate_world_streaming
         if STREAM_EXTENSION in self.extensions:
             validate_world_streaming(self.extensions[STREAM_EXTENSION]["data"], self)

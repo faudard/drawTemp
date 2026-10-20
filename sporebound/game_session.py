@@ -92,8 +92,36 @@ class GameSession:
         self.story = StoryBook(project.story, content, project.campaigns)
         self.exploration = Exploration(project.exploration, project.story)
         self.progress = project.new_game(campaign_id, content)
+        from .classic_party import EXTENSION as PARTY_EXTENSION, ClassicParty
+        party = self.project.extensions.get(PARTY_EXTENSION)
+        config = (party["data"]["campaigns"].get(campaign_id)
+                  if party is not None else None)
+        self._classic_party = ClassicParty(config) if config is not None else None
+        from .party_orchestration import PartyOrchestration
+        orchestration = (party["data"].get("orchestration")
+                         if config is not None else None)
+        self._party_orchestration = (PartyOrchestration(orchestration, config,
+                                                             campaign_id=campaign_id,
+                                                             campaigns=party["data"]["campaigns"])
+                                     if orchestration is not None else None)
+        # Only initial new-game construction seeds these items. Loaded saves
+        # replace Campaign through verified replay, never replenish stock.
+        if config is not None:
+            self.progress.inventory.update(
+                deepcopy(party["data"].get("starting_inventory", {})))
+        self._rpg_encounter = None  # R41.B2 opt-in, GameSession owns combat
+        if self._classic_party is not None:
+            for hero_id in self._classic_party.members:
+                self.progress.hero(hero_id)  # canonical R8 HeroProgress, not a second RPG database
         from .scene_router import SceneRouter
         self.scene_router = SceneRouter(self.project.scene_routes, self.content, self.project)
+        # R44.E: validate/compile the authored graph once per immutable project.
+        # World state itself is still only in Campaign.story_flags and R25 routes.
+        from .world_graph44 import EXTENSION as WORLDGRAPH_EXTENSION, WorldGraph
+        atlas_spec = self.project.extensions.get(WORLDGRAPH_EXTENSION)
+        self._world_graph = (WorldGraph(
+            atlas_spec["data"], self.content, self.project)
+            if atlas_spec is not None else None)
         self.route_scene = self.scene_router.start
         self.route_history = []
         self._route_starting = False
@@ -102,6 +130,8 @@ class GameSession:
         self._rt_position = None
         self._rt_journal = None
         self._platform = None  # R32 opt-in side-view adapter, never CT.
+        self._action = None  # R50.B opt-in R26 rules, recorded inside GameSession.
+        self._action_settlements = []  # Verifiable one-shot Campaign credits.
         # R34.C is opt-in, versioned and owned by this GameSession.
         from .roguelite import EXTENSION as ROGUELITE_EXTENSION, RogueliteRun
         run_spec = self.project.extensions.get(ROGUELITE_EXTENSION)
@@ -122,6 +152,15 @@ class GameSession:
         self._cinematic_pro = (
             CinematicProRuntime(self.project)
             if CINEMATIC_PRO_EXTENSION in self.project.extensions else None)
+        # R37.B: opt-in AI memory belongs to the canonical session, not a
+        # parallel engine or the renderer. Legacy projects remain unchanged.
+        from .advanced_ai import EXTENSION as ADVANCED_AI_EXTENSION, AdvancedAI
+        ai_spec = self.project.extensions.get(ADVANCED_AI_EXTENSION)
+        self._advanced_ai = (
+            AdvancedAI(ai_spec["data"],
+                       living_world=spec["data"] if spec is not None else None,
+                       content=self.content)
+            if ai_spec is not None else None)
         # R55: canonical GameSession-owned economy, opt-in for authored projects.
         from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
         system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
@@ -150,7 +189,8 @@ class GameSession:
     @property
     def mode(self):
         return "fronts" if self.fronts is not None else (
-            "battle" if self.battle is not None else "campaign")
+            "battle" if self.battle is not None else (
+                "rpg" if self._rpg_encounter is not None else "campaign"))
 
     @property
     def active_battle(self):
@@ -164,6 +204,38 @@ class GameSession:
     def active_scene(self):
         return self.story.active_scene(self.progress)
 
+    def narrative_state(self):
+        """Read-only R42 projection of typed flags from canonical Campaign."""
+        from .narrative_state_r42 import state_snapshot
+        return state_snapshot(self.project.story, self.progress)
+
+    def narrative_line(self):
+        """Read-only saved v2 dialogue cursor for Player, campaign or CT."""
+        if self.project.story.get('schema_version') != 2:
+            return None
+        scene = (self.tactical_scene() if self.tactical_story_pending
+                 else self.active_scene())
+        if scene is None:
+            return None
+        from .narrative_playback_r42 import current_line
+        return current_line(self.progress, scene)
+
+    def advance_narrative_line(self):
+        """Commit one presentation-only line step to the existing Campaign save."""
+        require(self.project.story.get('schema_version') == 2,
+                'Multi-line dialogue requires narrative v2')
+        scene = (self.tactical_scene() if self.tactical_story_pending
+                 else self.active_scene())
+        require(scene is not None, 'No dialogue to advance')
+        from .narrative_playback_r42 import advance_line
+        return advance_line(self.progress, scene)
+
+    def _require_narrative_line_complete(self):
+        if self.project.story.get('schema_version') == 2:
+            line = self.narrative_line()
+            require(line is not None and line['complete'],
+                    'Read all dialogue lines before choosing')
+
     def scene_profile(self, scene_id=None):
         """Read the canonical project profile without changing CT state."""
         if scene_id is not None:
@@ -174,6 +246,238 @@ class GameSession:
                     "Unknown game mode scene")
         from .game_modes import resolve_scene_profile
         return resolve_scene_profile(self.project.game_modes, scene_id)
+
+    def party_state(self):
+        """Detached R41 roster selection; HeroProgress/inventory stay in Campaign."""
+        require(self._classic_party is not None,
+                "This campaign has no RPG_TURN party configured")
+        return self._classic_party.snapshot()
+
+    def _party_edit_allowed(self):
+        require(self._classic_party is not None
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R41 party changes require an idle campaign without dialogue")
+
+    def party_recruit(self, hero_id):
+        """One transaction across party membership and existing HeroProgress."""
+        self._party_edit_allowed()
+        candidate = deepcopy(self._classic_party)
+        candidate.recruit(hero_id)
+        progress = deepcopy(self.progress)
+        progress.hero(hero_id)
+        self.progress, self._classic_party = progress, candidate
+        return self.party_state()
+
+    def party_set_active(self, hero_ids):
+        """Change active/reserve assignment without cloning hero stats/items."""
+        self._party_edit_allowed()
+        candidate = deepcopy(self._classic_party)
+        candidate.set_active(hero_ids)
+        orchestration = (deepcopy(self._party_orchestration)
+                         if self._party_orchestration is not None else None)
+        if orchestration is not None:
+            orchestration.activate(candidate.active)
+        self._classic_party, self._party_orchestration = candidate, orchestration
+        return self.party_state()
+
+    def party_orchestration_state(self, *, combat="RPG_TURN"):
+        """Detached leader/formation and available cooperative capability IDs."""
+        require(self._party_orchestration is not None,
+                "R53 orchestration is not configured")
+        state = self._party_orchestration.snapshot()
+        state["eligible_combos"] = self._party_orchestration.eligible_combos(combat)
+        state["pause_policy"] = self._party_orchestration.pause_policy
+        return state
+
+    def party_hybrid_state(self):
+        """R53.C: read-only cross-mode projection from three canonical owners.
+
+        Campaign has no persistent per-hero HP/MP. Such values are reported
+        only during an actual RPG or CT encounter; never synthesize them on
+        exploration or pretend they survived a mode transition.
+        """
+        require(self._party_orchestration is not None and self.scene_router.enabled,
+                "R53 hybrid view needs routed party orchestration")
+        mode = self.mode
+        require(mode in ("campaign", "rpg", "battle"),
+                "R53 hybrid projection does not support multi-front battles")
+        authored = self._party_orchestration.snapshot()
+        if mode == "rpg":
+            live = {a["id"]: a for a in self._rpg_encounter.view()["actors"]
+                    if a["team"] == "party"}
+            phase = "RPG_TURN"
+        elif mode == "battle":
+            live = {u.id: u for u in self.battle.units if u.team == "player"}
+            phase = "TACTICAL_CT"
+        else:
+            live = {}
+            phase = ("EXPLORATION" if self.route_scene in self.project.exploration
+                     else "ROUTE_TRANSIT")
+        rows = []
+        for uid, slot in zip(authored["active"], authored["formation"]):
+            actor = live.get(uid)
+            rows.append({
+                "id": uid, "leader": uid == authored["leader"],
+                "formation": slot,
+                "xp": self.progress.heroes[uid].xp,
+                "hp": actor["hp"] if mode == "rpg" and actor is not None
+                      else actor.hp if actor is not None else None,
+                "mp": actor["mp"] if mode == "rpg" and actor is not None
+                      else actor.mp if actor is not None else None,
+                "vitals_source": phase if actor is not None else "unavailable",
+            })
+        return {
+            "phase": phase, "scene": self.route_scene,
+            "history": list(self.route_history),
+            "members": rows,
+            "campaign_inventory": deepcopy(self.progress.inventory),
+            "campaign_gold": self.progress.gold,
+            "party_pause_policy": self._party_orchestration.pause_policy,
+            "active_combos": (self._rpg_encounter.available_combos()
+                              if mode == "rpg" else []),
+        }
+
+    def party_switch_leader(self, hero_id):
+        self._party_edit_allowed()
+        require(self._party_orchestration is not None, "R53 orchestration disabled")
+        candidate = deepcopy(self._party_orchestration)
+        candidate.switch_leader(hero_id)
+        self._party_orchestration = candidate
+        return self.party_orchestration_state()
+
+    def party_set_formation(self, slots):
+        self._party_edit_allowed()
+        require(self._party_orchestration is not None, "R53 orchestration disabled")
+        candidate = deepcopy(self._party_orchestration)
+        candidate.set_formation(slots)
+        self._party_orchestration = candidate
+        return self.party_orchestration_state()
+
+    def rpg_available(self):
+        """Discover only eligible, authored RPG encounters (no implicit routing)."""
+        from .classic_party import EXTENSION
+        spec = self.project.extensions.get(EXTENSION)
+        if (spec is None or self._classic_party is None
+                or self.mode != "campaign"
+                or self.progress.story_pending or self.tactical_story_pending):
+            return []
+        catalogue = spec["data"].get("encounters", {})
+        return sorted(eid for eid, row in catalogue.items()
+                      if (not self.scene_router.enabled
+                          or (self.route_scene == row["scene"]
+                              and self.route_scene in self.project.exploration))
+                      and not self.progress.story_flags.get("r41_" + eid, False))
+
+    def rpg_start(self, encounter_id):
+        """Begin RPG_TURN combat at the current routed exploration checkpoint."""
+        from .classic_encounter import ClassicEncounter
+        require(type(encounter_id) is str and encounter_id in self.rpg_available(),
+                "R41 encounter unavailable or already rewarded")
+        require(self._rt_journal is None and self._platform is None,
+                "R41 encounter cannot overlap a realtime/platform episode")
+        from .classic_party import EXTENSION
+        config = self.project.extensions[EXTENSION]["data"]["encounters"][encounter_id]
+        require(self.scene_profile(config["scene"])["combat"] == "RPG_TURN",
+                "R41 encounter is not in an RPG_TURN scene")
+        if self.scene_router.enabled:
+            require(self.route_scene == config["scene"]
+                    and self.route_scene in self.project.exploration,
+                    "R41 encounter must start in its authored route scene")
+        candidate = ClassicEncounter(
+            encounter_id, config, self._classic_party.active,
+            self.content, self.progress.inventory,
+            hero_progress=self.progress.heroes,
+            combo_specs=(self._party_orchestration.rpg_combo_specs()
+                         if self._party_orchestration is not None else None))
+        self._rpg_encounter = candidate
+        return self.rpg_state()
+
+    def rpg_state(self):
+        require(self._rpg_encounter is not None, "No active RPG_TURN encounter")
+        return self._rpg_encounter.view()
+
+    def rpg_action(self, action):
+        """One atomic R41 action, including campaign potion consumption."""
+        require(self.mode == "rpg", "No active RPG_TURN encounter")
+        candidate = deepcopy(self._rpg_encounter)
+        candidate.command(deepcopy(action))
+        progress = deepcopy(self.progress)
+        progress.inventory = deepcopy(candidate.inventory)
+        self.progress, self._rpg_encounter = progress, candidate
+        return self.rpg_state()
+
+    def rpg_finish(self):
+        """Exit a resolved encounter; victory rewards settle once in Campaign."""
+        require(self.mode == "rpg" and self._rpg_encounter.result is not None,
+                "Resolve RPG_TURN combat before returning to campaign")
+        candidate = deepcopy(self.progress)
+        encounter = self._rpg_encounter
+        flag = "r41_" + encounter.id
+        if encounter.result == "victory":
+            require(not candidate.story_flags.get(flag, False),
+                    "R41 encounter reward was already settled")
+            require(candidate.gold + encounter.reward_gold <= 1000000,
+                    "R41 reward exceeds campaign gold cap")
+            candidate.story_flags[flag] = True
+            candidate.gold += encounter.reward_gold
+            for uid in encounter.party:
+                candidate.hero(uid).xp += 50
+        self.progress = candidate
+        self._rpg_encounter = None
+        return {"id": encounter.id, "result": encounter.result,
+                "gold": candidate.gold}
+
+    def rpg_quest_state(self):
+        """Read a single template quest from canonical GameProject + Campaign.
+
+        No independent quest state, rewards register or private save extension:
+        all progress derives from R41 victory flags and the R9 story flag ledger.
+        """
+        from .classic_party import EXTENSION
+        spec = self.project.extensions.get(EXTENSION)
+        quest = spec["data"].get("quest") if spec is not None else None
+        if quest is None or self._classic_party is None:
+            return None
+        flags = self.progress.story_flags
+        cleared = [eid for eid in quest["encounters"]
+                   if flags.get("r41_" + eid) is True]
+        flag = "r41_quest_" + self.campaign_id
+        claimed = flags.get(flag) is True
+        ready = (not claimed and len(cleared) == len(quest["encounters"])
+                 and self.mode == "campaign"
+                 and not self.progress.story_pending
+                 and (not self.scene_router.enabled
+                      or self.route_scene == quest["return_scene"]))
+        return {"title": quest["title"], "completed": claimed,
+                "cleared": cleared, "required": list(quest["encounters"]),
+                "return_scene": quest["return_scene"],
+                "ready": ready, "reward_gold": quest["reward_gold"],
+                "reward_item": quest["reward_item"],
+                "reward_quantity": quest["reward_quantity"]}
+
+    def rpg_claim_quest(self):
+        """Exactly-once story reward; atomic, save/replay stable and routed."""
+        quest = self.rpg_quest_state()
+        require(quest is not None and quest["ready"],
+                "R41 quest requires two victories and a return to the village")
+        candidate = deepcopy(self.progress)
+        flag = "r41_quest_" + self.campaign_id
+        require(flag not in candidate.story_flags,
+                "R41 quest has already been claimed")
+        require(candidate.gold + quest["reward_gold"] <= 1000000,
+                "Quest gold exceeds campaign bounds")
+        existing = candidate.inventory.get(quest["reward_item"], 0)
+        require(type(existing) is int and 0 <= existing
+                and existing + quest["reward_quantity"] <= 1000000,
+                "Quest item reward exceeds campaign bounds")
+        candidate.story_flags[flag] = True
+        candidate.gold += quest["reward_gold"]
+        candidate.inventory[quest["reward_item"]] = (
+            existing + quest["reward_quantity"])
+        self.progress = candidate
+        return self.rpg_quest_state()
 
     def roguelite_state(self):
         """Detached run/meta snapshot; never expose mutable gameplay state."""
@@ -338,6 +642,351 @@ class GameSession:
             self.progress, self.progress.story_flags, self.route_scene,
             recipe_id, quantity, transaction_id)
 
+    def ai_state(self, actor_id=None):
+        """R37.B detached, opt-in memory inspection (no tactical mutation)."""
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        return self._advanced_ai.state(actor_id)
+
+    def _ai_suspicion(self, actor_id):
+        value = self._advanced_ai.state(actor_id)["values"].get("suspicion", 0)
+        require(type(value) is int and 0 <= value <= 3,
+                "R37 suspicion must be an integer in 0..3")
+        return value
+
+    def ai_boss_preview(self, director_id):
+        """R37.E: project-authored presentation of an actual CT boss encounter.
+
+        No second phase counter, no imaginary reinforcements and no implicit
+        execution. Battle remains authoritative for all triggers/telegraphs.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        catalog = self._advanced_ai.spec.get("boss_directors", [])
+        require(type(director_id) is str, "Invalid R37 director ID")
+        director = next((row for row in catalog
+                         if row["id"] == director_id), None)
+        require(director is not None, "Unknown R37 boss director")
+        require(self.mode == "battle" and self.battle is not None
+                and self.battle.mission.id == director["mission"],
+                "R37 boss director requires its own active CT encounter")
+        from .ai_boss_director import preview_boss_director
+        return preview_boss_director(self.battle, director)
+
+    def ai_boss_replay_audit(self, director_id, *, command_budget=512):
+        """R37.E3 certified preview from actual, bounded official Battle replay.
+
+        No separate command history, simulated phase progression or write.
+        A mismatch in tactical state OR boss signals fails closed.
+        """
+        require(type(command_budget) is int
+                and 1 <= command_budget <= 512,
+                "R37 boss audit requires a 1..512 command budget")
+        current = self.ai_boss_preview(director_id)
+        require(self.battle is not None
+                and len(self.battle.commands) <= command_budget,
+                "R37 boss audit exceeds its bounded command budget")
+        from .engine import Battle
+        from .ai_boss_director import preview_boss_director
+        director = next(row for row in
+                        self._advanced_ai.spec["boss_directors"]
+                        if row["id"] == director_id)
+        restored = Battle.replay(self.battle.recording(), rules=self.rules)
+        require(restored.digest() == self.battle.digest(),
+                "R37 boss audit found CT state replay divergence")
+        reproduced = preview_boss_director(restored, director)
+        require(current == reproduced,
+                "R37 boss audit found telegraph/phase divergence")
+        return {
+            "version": 1, "director_id": director_id,
+            "mission": self.battle.mission.id,
+            "battle_digest": self.battle.digest(),
+            "preview_digest": current["digest"],
+            "commands_checked": len(self.battle.commands),
+            "verified": True,
+            "phase_events": deepcopy(current["observed_phase_events"]),
+        }
+
+    def ai_squad_preview(self, squad_id):
+        """R37.D3 — direct same-scene radio sharing and role proposals only.
+
+        Positions and signal strength are taken from canonical R35 projections
+        and each actor's verified sensor/blackboard. No secondary NPC state,
+        full-map omniscience or implicit gameplay command execution.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        from .ai_squad import coordinate_squad
+        agents = sorted((
+            row for row in self._advanced_ai.agents.values()
+            if row.get("squad", {}).get("id") == squad_id),
+            key=lambda row: row["id"])
+        require(agents, "Unknown R37 authored squad")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 squad requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 squad scene is completed")
+        members = []
+        for agent in agents:
+            actor_id = agent["id"]
+            pose = self._living_world.npc_pose(
+                actor_id, self.progress.story_flags)
+            if pose["scene"] != self.route_scene or pose.get("pos") is None:
+                continue
+            perception = self.ai_perception_preview(actor_id)["perception"]
+            values = self._advanced_ai.state(actor_id)["values"]
+            fresh = perception["signal"]
+            if fresh in ("seen", "heard"):
+                known = list(perception["target"])
+                signal = fresh
+            elif (self._ai_suspicion(actor_id) > 0
+                  and values.get("last_known_scene") == self.route_scene
+                  and all(name in values
+                          for name in ("last_known_x", "last_known_y"))):
+                known = [values["last_known_x"], values["last_known_y"]]
+                signal = "memory"
+            else:
+                known = None
+                signal = "none"
+            members.append({
+                "actor_id": actor_id, "pos": list(pose["pos"]),
+                "role": agent["squad"]["role"],
+                "radio_range": agent["squad"]["radio_range"],
+                "signal": signal, "known_pos": known,
+            })
+        require(members, "No R37 squad members are present in this scene")
+        return coordinate_squad(stage, squad_id, members,
+                                scene=self.route_scene,
+                                tick=self._living_world.ticks)
+
+    def ai_squad_share(self, squad_id):
+        """Explicit atomic broadcast of *fresh* sightings to in-range peers.
+
+        Each recipient is written at most once per world tick. The regular
+        R37.B journal replay is the source of persistence; CT remains opt-out.
+        """
+        report = self.ai_squad_preview(squad_id)
+        recipients = [
+            row for row in report["members"]
+            if row["shared_from"] is not None and
+            row["received_signal"] in ("seen", "heard")]
+        require(recipients, "R37 squad has no deliverable fresh radio signals")
+        tick = report["tick"]
+        for row in recipients:
+            require(not any(
+                event["actor_id"] == row["actor_id"]
+                and event["tick"] == tick
+                and "squad_source" in event["changes"]
+                for event in self._advanced_ai.history),
+                "R37 squad already notified an actor this tick")
+        writes = []
+        for row in sorted(recipients, key=lambda item: item["actor_id"]):
+            signal = row["received_signal"]
+            known = row["known_pos"]
+            writes.append({
+                "actor_id": row["actor_id"],
+                "changes": {
+                    "alert": True, "suspicion": 3 if signal == "seen" else 2,
+                    "last_known_x": known[0], "last_known_y": known[1],
+                    "last_known_scene": report["scene"],
+                    "squad_source": row["shared_from"], "squad_signal": signal,
+                },
+            })
+        saved = self._advanced_ai.remember_batch(writes, tick=tick)
+        return {"preview": report, "delivered": [
+            {"actor_id": row["actor_id"], "source": row["shared_from"]}
+            for row in recipients], "blackboards": saved}
+
+    def ai_decision_context(self, actor_id):
+        """Derive observable facts from canonical CT or R35 exploration state.
+
+        Never trust client-supplied facts for authoritative decision previews.
+        No new AI simulation clock, LOS claims or campaign mutations.
+        """
+        require(self._advanced_ai is not None, "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        if agent["mode"] == "ct":
+            require(self.mode == "battle" and self.battle is not None,
+                    "CT AI requires an active tactical battle")
+            actor = self.battle.unit(actor_id)
+            require(actor.alive, "CT AI actor is not alive")
+            from .model import distance
+            opponents = sorted((unit for unit in self.battle.units
+                                if unit.alive and unit.team != actor.team),
+                               key=lambda unit: unit.id)
+            facts = {"hp": actor.hp, "has_opponents": bool(opponents)}
+            if opponents:
+                facts["distance"] = min(distance(actor.pos, foe.pos)
+                                        for foe in opponents)
+            tick = self.battle.tick
+        else:
+            require(self.mode == "campaign" and self._living_world is not None
+                    and self.scene_router.enabled
+                    and self.route_scene in self.project.exploration
+                    and not self.progress.story_pending,
+                    "Realtime AI requires an active R35 exploration scene")
+            pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+            same_scene = pose["scene"] == self.route_scene
+            facts = {"activity": pose["activity"], "same_scene": same_scene}
+            if same_scene and pose.get("pos") is not None:
+                player = self.exploration.state(
+                    self.progress, self.route_scene)["position"]
+                npc = pose["pos"]
+                facts["distance"] = abs(npc[0] - player[0]) + abs(npc[1] - player[1])
+            tick = self._living_world.ticks
+            if "squad" in agent:
+                preview = self.ai_squad_preview(agent["squad"]["id"])
+                own = next((row for row in preview["members"]
+                            if row["actor_id"] == actor_id), None)
+                if own is not None:
+                    facts.update({
+                        "squad_alert": own["known_pos"] is not None,
+                        "squad_role": own["role"],
+                        "squad_intent": own["intent"],
+                        "squad_reachable": own["reachable"],
+                    })
+            if "sensor" in agent:
+                memory = self._advanced_ai.state(actor_id)["values"]
+                if same_scene and pose.get("pos") is not None:
+                    perception = self.ai_perception_preview(actor_id)["perception"]
+                    facts.update({
+                        "enemy_visible": perception["visible"],
+                        "noise_heard": perception["heard"],
+                        "alert": perception["alert"],
+                        "target_reachable": perception["reachable"],
+                    })
+                else:
+                    facts.update({
+                        "enemy_visible": False, "noise_heard": False,
+                        "alert": self._ai_suspicion(actor_id) > 0,
+                        "target_reachable": False,
+                    })
+        board = self._advanced_ai.state(actor_id)
+        require(board["updated_tick"] <= tick,
+                "R37 blackboard is newer than the canonical game clock")
+        return {"schema_version": 1, "actor_id": actor_id,
+                "mode": agent["mode"], "tick": tick,
+                "seed": self.seed, "facts": facts}
+
+    def ai_decision_preview(self, actor_id):
+        """Read-only R37 policy explanation. Never invoke Battle.execute."""
+        context = self.ai_decision_context(actor_id)
+        return self._advanced_ai.preview(context)
+
+    def ai_perception_preview(self, actor_id):
+        """R37.D sensor from R35 NPC, canonical hero cell and verified R25 input.
+
+        Does not dispatch combat moves, infer LOS from Manhattan distance,
+        advance world time or mutate NPC memory.
+        """
+        require(self._advanced_ai is not None,
+                "R37 advanced AI is not enabled")
+        agent = self._advanced_ai.agent(actor_id)
+        require(agent["mode"] == "realtime" and "sensor" in agent,
+                "R37 perception requires an authored realtime sensor")
+        require(self.mode == "campaign" and self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending,
+                "R37 perception requires active routed exploration")
+        stage = self.exploration.state(self.progress, self.route_scene)
+        require(not stage["completed"], "R37 perception scene is completed")
+        pose = self._living_world.npc_pose(actor_id, self.progress.story_flags)
+        require(pose["scene"] == self.route_scene
+                and pose.get("pos") is not None,
+                "R37 NPC is not positioned in the player's scene")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        prior = None
+        if self._ai_suspicion(actor_id) > 0:
+            if (memory.get("last_known_scene") == self.route_scene
+                    and "last_known_x" in memory
+                    and "last_known_y" in memory):
+                prior = [memory["last_known_x"], memory["last_known_y"]]
+        movement = False
+        if self._rt_journal is not None:
+            journal = self._rt_journal.recording()
+            if journal["inputs"]:
+                latest = journal["inputs"][-1]
+                command = latest["command"]
+                movement = (
+                    latest["tick"] == self._rt_journal.tick
+                    and latest["source"] == "hero"
+                    and command["kind"] == "move"
+                    and (command["dx"] != 0 or command["dy"] != 0))
+        from .ai_perception import perceive_grid
+        report = perceive_grid(stage, pose["pos"], stage["position"],
+                               agent["sensor"], movement=movement,
+                               remembered=prior)
+        return {"actor_id": actor_id, "scene": self.route_scene,
+                "tick": self._living_world.ticks, "perception": report}
+
+    def ai_observe(self, actor_id):
+        """Commit one explicit observation per actor/world tick to R37 ledger.
+
+        Suspicion persists for three authored observations after sight and
+        two after sound. Each later explicit observation without a signal
+        decreases it once; there is no implicit frame-driven countdown.
+        """
+        report = self.ai_perception_preview(actor_id)
+        tick = report["tick"]
+        observation = report["perception"]
+        require(not any(
+            row["actor_id"] == actor_id and row["tick"] == tick
+            and "observation_kind" in row["changes"]
+            for row in self._advanced_ai.history),
+            "R37 AI already observed this actor at this world tick")
+        memory = self._advanced_ai.state(actor_id)["values"]
+        signal = observation["signal"]
+        suspicion = (3 if signal == "seen" else 2 if signal == "heard"
+                     else max(0, self._ai_suspicion(actor_id) - 1))
+        changes = {"suspicion": suspicion, "alert": suspicion > 0,
+                   "observation_kind": signal,
+                   "heard_noise": observation["heard"]}
+        if signal != "none":
+            changes["last_known_x"] = observation["target"][0]
+            changes["last_known_y"] = observation["target"][1]
+            changes["last_known_scene"] = report["scene"]
+        updated = self._advanced_ai.remember(actor_id, changes, tick=tick)
+        return {"observation": report, "blackboard": updated}
+
+    def ai_remember(self, actor_id, changes):
+        """Journal bounded R35 NPC memory against its authoritative world tick.
+
+        CT policy inspection is supported; writable CT memory awaits an
+        encounter-scoped replay adapter in R37.C to avoid tick-reset hazards.
+        """
+        context = self.ai_decision_context(actor_id)
+        require(context["mode"] == "realtime",
+                "CT memory writes require a future encounter-scoped adapter")
+        require(type(changes) is dict and not (
+                set(changes) & {
+                    "squad_source", "squad_signal",
+                    "last_known_scene", "observation_kind"}),
+                "R37 sensor and squad provenance must come from observation APIs")
+        return self._advanced_ai.remember(actor_id, changes,
+                                          tick=context["tick"])
+
+    def route_destinations(self):
+        """R25 portals currently reachable by the Player, no alternate graph."""
+        if (not self.scene_router.enabled or self.mode != "campaign"
+                or self.progress.story_pending or self.tactical_story_pending):
+            return []
+        from .narrative import matches
+        result = []
+        for row in self.scene_router.links.values():
+            if (row["source"] != self.route_scene
+                    or ("when" in row and not matches(row["when"], self.progress))):
+                continue
+            scene = row["destination"]
+            title = (self.project.exploration[scene]["title"]
+                     if scene in self.project.exploration
+                     else self.content.missions[scene].name)
+            result.append({"id": row["id"], "destination": scene,
+                           "title": title})
+        return result
+
     def route_state(self):
         """Return the active exploration state from canonical Campaign flags."""
         require(self.scene_router.enabled, "Scene routing is not enabled")
@@ -354,13 +1003,80 @@ class GameSession:
                 "Routed exploration interactions require an active scene")
         return self.exploration.interact(self.progress, self.route_scene, point_id)
 
+    def route_world_interact(self, object_id):
+        """R44.C: activate a declared world object via canonical exploration.
+
+        Only an existing non-exit interaction can change a world flag.
+        GameSession remains the sole state owner and rollback authority.
+        This is opt-in; historical R25/CT games are completely unchanged.
+        """
+        graph = self._world_graph
+        require(graph is not None and self.scene_router.enabled
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration,
+                "R44: active routed exploration and WorldGraph required")
+        require(type(object_id) is str, "R44: invalid object identifier")
+        entry = next((row for row in graph.raw["objects"]
+                      if row["scene"] == self.route_scene and row["id"] == object_id),
+                     None)
+        require(entry is not None and entry["kind"] in ("chest", "door", "switch"),
+                "R44: object is not an activatable exploration interaction")
+        point = next((row for row in self.project.exploration[self.route_scene]
+                      ["interactions"] if row["id"] == object_id), None)
+        require(point is not None and point["exit"] is False,
+                "R44: persistent objects must use an authored non-exit hotspot")
+        flag = entry["flag"]
+        activated = self.progress.story_flags.get(flag, False)
+        require(type(activated) is bool, "R44: invalid persistent object flag")
+        # Resolve position/proximity even for a repeated action.
+        stage = self.route_state()
+        require(sum(abs(a - b) for a, b in zip(stage["position"], point["pos"])) <= 1,
+                "R44: move closer to activate the object")
+        if activated:
+            return {"id": object_id, "world_flag": flag,
+                    "already_activated": True, "finished": False}
+        previous = deepcopy(self.progress)
+        try:
+            # This object is already verified as a non-exit authored hotspot.
+            # Completed atlas regions remain explorable on return; legacy R25
+            # interactions still reject completed scenes by default.
+            result = self.exploration.interact(
+                self.progress, self.route_scene, object_id, allow_completed=True)
+            self.progress.story_flags[flag] = True
+            return {**result, "world_flag": flag, "already_activated": False}
+        except Exception:
+            self.progress = previous
+            raise
+
+    def route_world_transition(self, link_id):
+        """R44: enforce an atlas exit hotspot before delegating to SceneRouter.
+
+        This opt-in action does not bypass the R25 route condition or mission
+        lifecycle. It records only the canonical R25 history in the checkpoint.
+        """
+        require(type(link_id) is str and self._world_graph is not None,
+                "R44: configured atlas portal required")
+        require(self.mode == "campaign"
+                and self.route_scene in self.project.exploration,
+                "R44: travel requires active routed exploration")
+        portal = self._world_graph.inspect_portal(
+            self.route_scene, link_id, self.progress)
+        position = self.route_state()["position"]
+        require(sum(abs(a - b) for a, b in zip(position, portal["source"])) <= 1,
+                "R44: approach the authored exit before traveling")
+        return self.route_transition(link_id)
+
     def route_move(self, dx, dy):
         """Legacy cardinal exploration remains available before free movement starts."""
         require(self.scene_router.enabled and self.mode == "campaign"
                 and not self.progress.story_pending
                 and self._rt_journal is None,
                 "Resolve encounter or free movement before cardinal movement")
-        return self.exploration.move(self.progress, self.route_scene, dx, dy)
+        return self.exploration.move(
+            self.progress, self.route_scene, dx, dy,
+            allow_completed=self._world_graph is not None)
 
     def route_realtime_state(self):
         """Detached subcell position for Player/Studio; no Qt dependency."""
@@ -387,7 +1103,8 @@ class GameSession:
         """
         from .fixed_clock import FixedTickJournal
         from .fixed_realtime import FreeMovement
-        require(self._platform is None, "Cannot mix R25 and R32 physics movement")
+        require(self._platform is None and self._action is None,
+                "Cannot mix R25 and R26/R32 movement")
         current = self.route_realtime_state()
         require(type(dx) is int and type(dy) is int
                 and dx in (-1, 0, 1) and dy in (-1, 0, 1),
@@ -432,6 +1149,93 @@ class GameSession:
             self._systems = staged_system
         return self.route_realtime_state()
 
+    def route_action_state(self):
+        """Read an R26 combat snapshot for the active routed action scene."""
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        require(self.scene_router.enabled and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending
+                and self.route_scene in self.project.exploration
+                and self._rt_journal is None and self._platform is None,
+                "R26 combat requires a routed, idle action exploration scene")
+        scene = authored_action_scene(self.project, self.route_scene)
+        from .action_settlement import settlement_keys
+        done, _ = settlement_keys(self.route_scene)
+        require(self.progress.story_flags.get(done) is not True,
+                "R26 combat already settled; reward replay is one-shot")
+        return (self._action.snapshot() if self._action is not None else
+                ActionRuntime(scene).snapshot())
+
+    def route_action_step(self, command):
+        """Run exactly one deterministic R26 tick, committed by PlayerController.
+
+        The action journal is an opt-in field of canonical GameSession, not
+        a separate save slot. Invalid commands never mutate this session.
+        """
+        from .action_runtime import ActionRuntime
+        from .action_scene_adapter import authored_action_scene
+        self.route_action_state()
+        scene = authored_action_scene(self.project, self.route_scene)
+        runtime = self._action
+        if runtime is None:
+            runtime = ActionRuntime(scene)
+        else:
+            require(runtime.scene == scene, "Action scene changed during gameplay")
+        events = runtime.step(command)
+        self._action = runtime
+        return {"state": runtime.snapshot(), "events": events}
+
+    def route_action_settle(self, link_id):
+        """Settle a genuine R26 victory and cross an R25 route atomically."""
+        from .action_settlement import (
+            MAX_SETTLEMENTS, settlement_keys, victory_coins,
+        )
+        require(self._action is not None and self.mode == "campaign" and
+                len(self._action_settlements) < MAX_SETTLEMENTS,
+                "No active R26 combat or settlement capacity exhausted")
+        source = self.route_scene
+        done, coin_flag = settlement_keys(source)
+        require(done not in self.progress.story_flags and
+                coin_flag not in self.progress.story_flags,
+                "R26 combat rewards have already been paid")
+        coins = victory_coins(self._action)
+        require(self.progress.gold + coins <= 1000000000,
+                "R26 reward exceeds the campaign gold budget")
+        route = self.scene_router.destination(source, link_id, self.progress)
+        require(route["source"] == source, "R26 exit must start in action scene")
+        record = {
+            "version": 1, "scene": source, "link": link_id,
+            "route_index": len(self.route_history),
+            "coin": coins, "runtime": self._action.recording(),
+        }
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.progress.gold += coins
+            self.progress.story_flags[done] = True
+            self.progress.story_flags[coin_flag] = coins
+            self._action_settlements.append(record)
+            self._action = None
+            moved = self.route_transition(link_id)
+            return {"route": moved, "coins_awarded": coins,
+                    "campaign_gold": self.progress.gold,
+                    "settled_scene": source}
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
+            raise
+
     def _platform_definition(self):
         """Resolve geometry only for a routed free-movement authored scene."""
         from .physics_scenes import EXTENSION
@@ -440,7 +1244,8 @@ class GameSession:
                 and not self.tactical_story_pending
                 and self.route_scene in self.project.exploration
                 and self.scene_profile(self.route_scene)["movement"] == "FREE_REALTIME"
-                and self._rt_journal is None,
+                and self._rt_journal is None
+                and self._action is None,
                 "Physics requires an active routed free-movement scene")
         extension = self.project.extensions.get(EXTENSION, {})
         authored = extension.get("data", {}).get("scenes", {}).get(self.route_scene)
@@ -545,10 +1350,18 @@ class GameSession:
         from .scene_router import MAX_HISTORY
         require(self.scene_router.enabled and self.mode == "campaign"
                 and not self.progress.story_pending
-                and not self.tactical_story_pending,
-                "Resolve encounter or dialogue before changing scenes")
+                and not self.tactical_story_pending
+                and self._action is None,
+                "Resolve encounter, action combat or dialogue before changing scenes")
         require(len(self.route_history) < MAX_HISTORY,
                 "Scene transition history limit reached")
+        from .action_scene_adapter import EXTENSION as ACTION_EXTENSION
+        from .action_settlement import settlement_keys
+        if self.route_scene in self.project.extensions.get(
+                ACTION_EXTENSION, {}).get("data", {}).get("scenes", {}):
+            done, _ = settlement_keys(self.route_scene)
+            require(self.progress.story_flags.get(done) is True,
+                    "Complete and settle action combat before exiting its scene")
         route = self.scene_router.destination(self.route_scene, link_id, self.progress)
         # R33 ability-gated route requirements are explicit project data.
         # For authored physical gates, enforce actual R32 overlap too;
@@ -616,6 +1429,42 @@ class GameSession:
              self._stream_world) = before
             raise
 
+    def route_abandon_ct(self, link_id):
+        """Explicitly abandon an R25-routed CT battle and return atomically.
+
+        Abandoned battles pay no tactical reward. Both the battle removal
+        and route navigation are rolled back on a rejected or failed exit.
+        The Player facade persists the resulting GameSession once.
+        """
+        require(self.scene_router.enabled and self.mode == "battle"
+                and self.route_scene in self.content.missions
+                and not self.tactical_story_pending,
+                "Only a routed, active CT encounter can be abandoned")
+        # Validate destination before the mutation, including narrative gates.
+        route = self.scene_router.destination(
+            self.route_scene, link_id, self.progress)
+        require(route["destination"] in self.project.exploration,
+                "CT abandonment must return to authored exploration")
+        before = deepcopy((
+            self.progress, self.battle, self.fronts, self.finalized,
+            self.settled_fronts, self.siege_id, self.route_scene,
+            self.route_history, self.tactical_story_pending,
+            self.tactical_story_queue, self._rt_origin, self._rt_position,
+            self._rt_journal, self._platform, self._action,
+            self._action_settlements,
+        ))
+        try:
+            self.abandon_encounter()
+            return self.route_transition(link_id)
+        except Exception:
+            (self.progress, self.battle, self.fronts, self.finalized,
+             self.settled_fronts, self.siege_id, self.route_scene,
+             self.route_history, self.tactical_story_pending,
+             self.tactical_story_queue, self._rt_origin, self._rt_position,
+             self._rt_journal, self._platform, self._action,
+             self._action_settlements) = before
+            raise
+
     def _tactical_story_progress(self):
         require(bool(self.tactical_story_pending), "No tactical dialogue pending")
         require(not self.progress.story_pending,
@@ -658,6 +1507,7 @@ class GameSession:
         """Atomically apply canonical StoryBook choice and resume the Battle."""
         require(self.mode == "battle", "No standalone tactical dialogue")
         require(self.battle is not None, 'Missing tactical battle')
+        self._require_narrative_line_complete()
         previous = deepcopy((self.progress, self.battle,
                              self.tactical_story_pending,
                              self.tactical_story_queue, self.finalized))
@@ -819,6 +1669,7 @@ class GameSession:
         return flow_inspect_campaign(self.progress, self.project.campaign_flow)
 
     def choose_story_option(self, choice_id):
+        self._require_narrative_line_complete()
         require(self.active_battle is None or self.active_battle.result is not None,
                 "Finish combat before choosing dialogue")
         stage = self.exploration_state()
@@ -903,6 +1754,9 @@ class GameSession:
         roster = {unit.id for mission in self.content.missions.values()
                   for unit in mission.units if unit.team == "player"}
         require(uid in roster, "Unknown playable hero")
+        if self._classic_party is not None:
+            require(uid in self._classic_party.members,
+                    "Cannot equip an unrecruited RPG party member")
 
     def equip_hero(self, uid, item_id):
         """Delegate inventory/slot/ownership rules to the existing Campaign."""
@@ -1172,6 +2026,25 @@ class GameSession:
             self._platform_definition()
             data["scene_platform"] = {"version": 1, "scene": self.route_scene,
                                       "physics": self._platform.recording()}
+        from .action_settlement import validate_settlements
+        validate_settlements(
+            self._action_settlements, project=self.project,
+            route_history=self.route_history, progress=self.progress,
+            current_action=self._action)
+        if self._action_settlements:
+            data["scene_action_history"] = deepcopy(self._action_settlements)
+        if self._action is not None:
+            require(self.scene_router.enabled and self.mode == "campaign"
+                    and self._rt_journal is None and self._platform is None,
+                    "Action checkpoint requires routed campaign without other simulators")
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            scene = authored_action_scene(self.project, self.route_scene)
+            ActionRuntime.from_recording(self._action.recording(),
+                                         expected_scene=scene)
+            data["scene_action"] = {
+                "version": 1, "scene": self.route_scene,
+                "runtime": self._action.recording()}
         if self._rt_journal is not None:
             require(self.scene_router.enabled and self.mode == "campaign"
                     and self.route_scene in self.project.exploration,
@@ -1183,6 +2056,18 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._classic_party is not None:
+            data["classic_party"] = self._classic_party.snapshot()
+        if self._party_orchestration is not None:
+            require(self._party_orchestration.active == self._classic_party.active,
+                    "R53 active group differs from R41 active roster")
+            data["party_orchestration"] = self._party_orchestration.snapshot()
+        if self._rpg_encounter is not None:
+            require(self.progress.inventory == self._rpg_encounter.inventory,
+                    "R41 checkpoint inventory diverges from canonical Campaign")
+            data["rpg_encounter"] = self._rpg_encounter.recording()
+        if self._advanced_ai is not None:
+            data["advanced_ai"] = self._advanced_ai.recording()
         if self._systems is not None:
             data["systems"] = self._systems.snapshot()
         if self._stream_world is not None:
@@ -1215,8 +2100,8 @@ class GameSession:
         require(isinstance(data, dict) and type(data.get("version")) is int
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
-        require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
+        require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1273,6 +2158,23 @@ class GameSession:
             require("roguelite" not in data,
                     "Unexpected R34 state in a legacy session")
         session.progress = Campaign.from_dict(data["progress"], ruleset=rules)
+        if session._classic_party is None:
+            require("classic_party" not in data,
+                    "Unexpected R41 party state in legacy checkpoint")
+        else:
+            require("classic_party" in data,
+                    "Missing party state for enabled RPG_TURN campaign")
+            session._classic_party.restore(data["classic_party"])
+            require(set(session._classic_party.members) <= set(session.progress.heroes),
+                    "Party recruitment has no canonical HeroProgress")
+        if session._party_orchestration is None:
+            require("party_orchestration" not in data,
+                    "Unexpected R53 state in unconfigured GameSession")
+        else:
+            require("party_orchestration" in data,
+                    "Missing R53 state from enabled GameSession")
+            session._party_orchestration.restore(
+                data["party_orchestration"], session._classic_party)
         if session._systems is not None:
             require(all(session.progress.story_flags.get(
                 session._systems.quests[quest_id]["flag"]) is True
@@ -1290,7 +2192,35 @@ class GameSession:
         require(set(session.progress.unlocked + session.progress.completed)
                 <= set(session.content.missions), "Unknown campaign mission")
         mode = data["mode"]
-        require(mode in {"campaign", "battle", "fronts"}, "Invalid session mode")
+        require(mode in {"campaign", "battle", "fronts", "rpg"}, "Invalid session mode")
+        if mode == "rpg":
+            from .classic_party import EXTENSION
+            from .classic_encounter import ClassicEncounter
+            require(session._classic_party is not None
+                    and type(data.get("rpg_encounter")) is dict
+                    and type(data["rpg_encounter"].get("id")) is str
+                    and data["tactical"] is None and not data["finalized"]
+                    and not data["settled_fronts"]
+                    and not session.progress.story_pending
+                    and not session.progress.story_flags.get(
+                        "r41_" + str(data["rpg_encounter"].get("id", "")), False),
+                    "Invalid R41 encounter mode/checkpoint")
+            encounter_id = data["rpg_encounter"]["id"]
+            spec = session.project.extensions[EXTENSION]["data"].get(
+                "encounters", {}).get(encounter_id)
+            require(spec is not None, "Unknown saved RPG encounter")
+            session._rpg_encounter = ClassicEncounter.replay(
+                data["rpg_encounter"], encounter_id=encounter_id,
+                config=spec, party=session._classic_party.active,
+                content=session.content,
+                hero_progress=session.progress.heroes,
+                combo_specs=(session._party_orchestration.rpg_combo_specs()
+                             if session._party_orchestration is not None else None))
+            require(session._rpg_encounter.inventory == session.progress.inventory,
+                    "R41 replay inventory disagrees with canonical Campaign")
+        else:
+            require("rpg_encounter" not in data,
+                    "Unexpected R41 encounter state outside RPG mode")
         pending = data.get("tactical_story_pending", "")
         queue = data.get("tactical_story_queue", [])
         require(isinstance(pending, str) and
@@ -1317,9 +2247,9 @@ class GameSession:
         require(isinstance(settled, list) and all(isinstance(s, str) for s in settled)
                 and len(set(settled)) == len(settled), "Invalid settlement log")
         require(type(data["finalized"]) is bool, "Invalid finalization flag")
-        if mode == "campaign":
+        if mode in ("campaign", "rpg"):
             require(data["tactical"] is None and not data["finalized"] and not settled,
-                    "Idle session has tactical state")
+                    "Non-tactical session has tactical state")
         elif mode == "battle":
             require(isinstance(data["tactical"], dict) and not settled,
                     "Invalid standalone battle state")
@@ -1416,7 +2346,9 @@ class GameSession:
             require("scene_route" in data,
                     "Routed project checkpoint is missing scene state")
             session.route_scene = session.scene_router.validate_checkpoint(
-                data["scene_route"], mode=mode, battle=session.battle)
+                data["scene_route"], mode=mode, battle=session.battle,
+                rpg_scene=(session._rpg_encounter.scene
+                           if session._rpg_encounter is not None else None))
             session.route_history = list(data["scene_route"]["history"])
             if session.route_scene in session.project.exploration:
                 session.exploration.state(session.progress, session.route_scene)
@@ -1478,6 +2410,25 @@ class GameSession:
                 _key(session.route_scene, "boss_defeated")) is True
             require(not claimed or "scene_platform" in data,
                     "R40 boss victory requires an authenticated R32 replay")
+        if "scene_action" in data:
+            from .action_scene_adapter import authored_action_scene
+            from .action_runtime import ActionRuntime
+            action_saved = data["scene_action"]
+            require(type(action_saved) is dict and
+                    set(action_saved) == {"version", "scene", "runtime"}
+                    and type(action_saved["version"]) is int
+                    and action_saved["version"] == 1
+                    and action_saved["scene"] == session.route_scene
+                    and mode == "campaign" and session.scene_router.enabled
+                    and session._rt_journal is None
+                    and "scene_platform" not in data
+                    and session.route_scene in project.exploration,
+                    "Invalid R26 action checkpoint identity or mode")
+            scene = authored_action_scene(project, session.route_scene)
+            session._action = ActionRuntime.from_recording(
+                action_saved["runtime"], expected_scene=scene)
+            require(session._action.tick > 0,
+                    "Action checkpoint must contain at least one accepted tick")
         if "scene_platform" in data:
             from .platform_physics import PlatformPhysics
             saved = data["scene_platform"]
@@ -1519,7 +2470,44 @@ class GameSession:
                     "R54 world history diverged from R25 route journal")
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
+        from .action_settlement import validate_settlements
+        history = data.get("scene_action_history", [])
+        require("scene_action_history" not in data or
+                (type(history) is list and bool(history)),
+                "Empty or malformed R26 settlement evidence")
+        validate_settlements(
+            history, project=project, route_history=session.route_history,
+            progress=session.progress, current_action=session._action)
+        session._action_settlements = deepcopy(history)
         session.world_state()
+        # Reconstruct each snapshot from its write ledger after the canonical
+        # combat / realtime clocks have been verified and loaded.
+        if session._advanced_ai is not None:
+            require("advanced_ai" in data,
+                    "R37 configured project checkpoint is missing AI state")
+            session._advanced_ai.restore(data["advanced_ai"])
+            for actor_id, agent in session._advanced_ai.agents.items():
+                updated = session._advanced_ai.blackboards[actor_id]["updated_tick"]
+                if agent["mode"] == "realtime":
+                    require(session._living_world is not None
+                            and updated <= session._living_world.ticks,
+                            "R37 AI memory exceeds replayed world time")
+                elif session.mode == "battle" and session.battle is not None:
+                    if any(unit.id == actor_id for unit in session.battle.units):
+                        require(updated <= session.battle.tick,
+                                "R37 CT memory exceeds replayed battle time")
+        else:
+            require("advanced_ai" not in data,
+                    "Unexpected R37 memory in legacy checkpoint")
+        if project.story.get('schema_version') == 2:
+            from .narrative_playback_r42 import validate_cursor
+            # The snapshot has already been restored and authenticated. A
+            # cursor outside the pending scene is not a valid resumable save.
+            pending = (session.tactical_scene() if session.tactical_story_pending
+                       else session.active_scene())
+            index = validate_cursor(session.progress, pending)
+            require(pending is not None or index == 0,
+                    'R42 save has an unbound dialogue cursor')
         return session
 
     @classmethod

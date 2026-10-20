@@ -1,0 +1,108 @@
+name: DrawTemp R44 World Builder gate
+
+on:
+  pull_request:
+    paths:
+      - 'sporebound/world_graph44.py'
+      - 'sporebound/game_project.py'
+      - 'sporebound/game_session.py'
+      - 'sporebound/exploration.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/studio/world_atlas_*.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'drawtemp/player/**'
+      - 'examples/r44_five_valleys.py'
+      - 'tests_standalone/test_r44*.py'
+      - 'tests_standalone/r44_gui_gate.py'
+      - '.github/workflows/drawtemp-r44-world-builder.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sporebound/world_graph44.py'
+      - 'sporebound/exploration.py'
+      - 'sporebound/game_session.py'
+      - 'drawtemp/sdk/simulation.py'
+      - 'drawtemp/player/**'
+      - 'drawtemp/studio/world_atlas_*.py'
+      - 'examples/r44_five_valleys.py'
+      - 'tests_standalone/test_r44*.py'
+      - '.github/workflows/drawtemp-r44-world-builder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  r44-headless:
+    name: WorldGraph and R25 regression (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e .
+      - name: Compile all R44 sources
+        run: >-
+          python -m compileall -q
+          sporebound/world_graph44.py
+          sporebound/game_project.py
+          sporebound/game_session.py
+          sporebound/exploration.py
+          drawtemp/sdk/simulation.py
+          drawtemp/player/controller.py
+          drawtemp/player/qt_app.py
+          drawtemp/studio/world_atlas_authoring.py
+          drawtemp/studio/world_atlas_qt.py
+          examples/r44_five_valleys.py
+          tests_standalone/test_r44_world_graph.py
+          tests_standalone/test_r44b_world_atlas.py
+          tests_standalone/test_r44c_five_valleys.py
+          tests_standalone/test_r44d_player.py
+      - name: Core, Player, legacy routes and saves
+        run: >-
+          python -m unittest
+          tests_standalone.test_r44_world_graph
+          tests_standalone.test_r44b_world_atlas
+          tests_standalone.test_r44c_five_valleys
+          tests_standalone.test_r44d_player
+          tests_standalone.test_r25_scene_router
+          tests_standalone.test_drawtemp5_r12
+          -v
+      - name: Five regions through real GameSession
+        run: python -m examples.r44_five_valleys --smoke
+
+  r44-qt:
+    name: Qt Player/Studio ( ${{ matrix.os }} )
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libdbus-1-3
+      - run: python -m pip install -e ".[qt6]"
+      - name: World Atlas Studio Qt offscreen (real widgets)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest tests_standalone.test_r44b_world_atlas_qt -v
+      - name: R44 native Qt Quick input, F5 and resume
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m tests_standalone.r44_gui_gate

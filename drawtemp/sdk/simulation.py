@@ -149,7 +149,10 @@ class Simulation:
             raise
 
     def choices(self):
-        """Only currently permitted story choices; never expose rule internals."""
+        """Only currently permitted choices, including R42 line completion."""
+        line = self._session.narrative_line()
+        if line is not None and not line['complete']:
+            return freeze([])
         if self._session.tactical_story_pending:
             return freeze(self._session.tactical_choices())
         return freeze(self._session.available_choices())
@@ -193,6 +196,86 @@ class Simulation:
         return self._apply("living_world_advance", ticks,
                            expected_revision=expected_revision)
 
+    def party_state(self, *, expected_revision=None):
+        """R41 read-only projection; no second roster or inventory owner."""
+        self._check_revision(expected_revision, "party_state")
+        if self._session._classic_party is None:
+            return None
+        return freeze(self._session.party_state())
+
+    def party_hybrid_state(self, *, expected_revision=None):
+        """Read detached R53 routed party status; no extra mutable authority."""
+        self._check_revision(expected_revision, "party_hybrid_state")
+        if self._session._party_orchestration is None or not self._session.scene_router.enabled:
+            return None
+        return freeze(self._session.party_hybrid_state())
+
+    def party_switch_leader(self, hero_id, *, expected_revision=None):
+        return self._apply("party_switch_leader", hero_id,
+                           expected_revision=expected_revision)
+
+    def party_set_formation(self, slots, *, expected_revision=None):
+        return self._apply("party_set_formation", slots,
+                           expected_revision=expected_revision)
+
+    def party_recruit(self, hero_id, *, expected_revision=None):
+        """R41 session-owned transactional recruitment with revision guard."""
+        return self._apply("party_recruit", hero_id,
+                           expected_revision=expected_revision)
+
+    def party_set_active(self, hero_ids, *, expected_revision=None):
+        """R41 active/reserve change; Campaign.heroes and CT are untouched."""
+        return self._apply("party_set_active", hero_ids,
+                           expected_revision=expected_revision)
+
+    def rpg_quest_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_quest_state")
+        state = self._session.rpg_quest_state()
+        return freeze(state) if state is not None else None
+
+    def rpg_claim_quest(self, *, expected_revision=None):
+        return self._apply("rpg_claim_quest", expected_revision=expected_revision)
+
+    def rpg_available(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_available")
+        return freeze(self._session.rpg_available())
+
+    def rpg_state(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "rpg_state")
+        if self._session.mode != "rpg":
+            return None
+        return freeze(self._session.rpg_state())
+
+    def route_destinations(self, *, expected_revision=None):
+        self._check_revision(expected_revision, "route_destinations")
+        return freeze(self._session.route_destinations())
+
+    def route_transition(self, link_id, *, expected_revision=None):
+        return self._apply("route_transition", link_id,
+                           expected_revision=expected_revision)
+
+    def rpg_route_state(self, *, expected_revision=None):
+        """Read the canonical route scene during combat for shared R3 rendering.
+
+        R41's battle UI never invents an independent map or world cursor.
+        """
+        self._check_revision(expected_revision, "rpg_route_state")
+        session = self._session
+        if session.mode != "rpg" or not session.scene_router.enabled:
+            return None
+        return freeze(session.route_state())
+
+    def rpg_start(self, encounter_id, *, expected_revision=None):
+        return self._apply("rpg_start", encounter_id,
+                           expected_revision=expected_revision)
+
+    def rpg_action(self, action, *, expected_revision=None):
+        return self._apply("rpg_action", action,
+                           expected_revision=expected_revision)
+
+    def rpg_finish(self, *, expected_revision=None):
+        return self._apply("rpg_finish", expected_revision=expected_revision)
+
     def roguelite_state(self, *, expected_revision=None):
         """Read-only deterministic R34 run view (not an alternate save schema)."""
         self._check_revision(expected_revision, 'roguelite_state')
@@ -216,6 +299,86 @@ class Simulation:
 
     def roguelite_restart(self, *, expected_revision=None):
         return self._apply('roguelite_restart', expected_revision=expected_revision)
+
+    def world_atlas_state(self):
+        """Read-only R44 projection. Never duplicate routing or saved state."""
+        session = self._session
+        graph = session._world_graph
+        if (graph is None or session.mode != "campaign" or
+                session.route_scene not in session.project.exploration or
+                session.active_scene() is not None):
+            return freeze({"enabled": False, "scene": "", "region": "",
+                           "region_title": "", "portals": [], "objects": [],
+                           "object_ids": [], "reachability": {
+                               "scenes": [], "regions": [], "blocked_routes": []},
+                           "region_total": 0, "visited_regions": []})
+        scene = session.route_scene
+        region = next(region for region in graph.raw["regions"]
+                      if any(entry["id"] == scene for entry in region["scenes"]))
+        objects = graph.object_states(session.progress, scene)
+        # Objects may be decorative/remote (especially NPCs). They remain
+        # visible in the atlas but must not be advertised as interactive unless
+        # they have a real non-exit exploration hotspot and supported action.
+        hotspots = {
+            point["id"] for point in session.project.exploration[scene]["interactions"]
+            if point["exit"] is False
+        }
+        object_actions = sorted(
+            ident for ident, obj in objects.items()
+            if ident in hotspots and obj["kind"] in ("chest", "door", "switch"))
+        stage = session.route_state()
+        position = stage["position"]
+        # Current conditional reachability and past actual visits are separate:
+        # neither is a mutable progress ledger, only projections of R25 + flags.
+        reachability = graph.reachable_scenes(scene, session.progress)
+        visited = {session.scene_router.start}
+        for route_id in session.route_history:
+            visited.add(session.scene_router.links[route_id]["destination"])
+        visited_regions = sorted({
+            region["id"] for region in graph.raw["regions"]
+            if any(entry["id"] in visited for entry in region["scenes"])
+        })
+        portals = []
+        for portal in graph.raw["portals"]:
+            link = session.scene_router.links[portal["route"]]
+            if link["source"] != scene:
+                continue
+            unlocked = True
+            try:
+                graph.inspect_portal(scene, portal["route"], session.progress)
+            except RuleError:
+                unlocked = False
+            target = link["destination"]
+            title = session.project.exploration.get(target, {}).get("title", target)
+            portals.append({
+                "id": portal["route"], "destination": target,
+                "title": title, "travel_cost": portal["travel_cost"],
+                "source": list(portal["source"]), "unlocked": unlocked,
+                "in_reach": sum(abs(a-b) for a, b in zip(
+                    position, portal["source"])) <= 1,
+                "available": unlocked,
+                "has_condition": "when" in link,
+            })
+        return freeze({
+            "enabled": True, "scene": scene, "region": region["id"],
+            "region_title": region["title"], "biome": region["biome"],
+            "projection": region["projection"], "portals": portals,
+            "objects": [{"id": ident, **obj} for ident, obj in sorted(objects.items())],
+            "object_ids": object_actions,
+            "reachability": reachability,
+            "region_total": len(graph.raw["regions"]),
+            "visited_regions": visited_regions,
+        })
+
+    def world_interact(self, object_id, *, expected_revision=None):
+        """R44 action uses the same rollback and revision guard as exploration."""
+        return self._apply("route_world_interact", object_id,
+                           expected_revision=expected_revision)
+
+    def world_transition(self, route_id, *, expected_revision=None):
+        """R44 portal + R25 condition, with no independent teleport ledger."""
+        return self._apply("route_world_transition", route_id,
+                           expected_revision=expected_revision)
 
     def explore_move(self, dx, dy, *, expected_revision=None):
         session = self._session
@@ -359,6 +522,16 @@ class Simulation:
     def acknowledge_scene_cinematic(self, clip_id, *, expected_revision=None):
         """Revision-checked acknowledgement with canonical transaction rollback."""
         return self._apply('acknowledge_scene_cinematic', clip_id,
+                           expected_revision=expected_revision)
+
+    def narrative_line(self, *, expected_revision=None):
+        """Detached persisted line projection; never exposes mutable Campaign."""
+        self._check_revision(expected_revision, 'narrative_line')
+        return freeze(self._session.narrative_line())
+
+    def advance_narrative_line(self, *, expected_revision=None):
+        """Revision-checked line progression with normal save/rollback."""
+        return self._apply('advance_narrative_line',
                            expected_revision=expected_revision)
 
     def choose_story_option(self, choice, *, expected_revision=None):
