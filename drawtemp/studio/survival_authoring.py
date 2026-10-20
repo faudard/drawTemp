@@ -25,8 +25,9 @@ def preview_survival_design(session, document, *, expected_revision=None):
             type(expected_revision) is not int
             or snap["revision"] != expected_revision):
         raise ValueError("Outdated R63 survival authoring revision")
-    scenes = set(snap["project"].get("exploration", {}))
-    spec = validate_survival(document, scenes) if document is not None else None
+    exploration = snap["project"].get("exploration", {})
+    scenes = set(exploration)
+    spec = validate_survival(document, scenes, exploration=exploration) if document is not None else None
 
     def edit(project):
         extensions = project.setdefault("extensions", {})
