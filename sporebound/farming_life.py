@@ -227,6 +227,7 @@ class FarmingLife:
                     and set(row) == ({"kind", "target", "id", "day", "crop"}
                                      if row.get("kind") == "plant"
                                      else {"kind", "target", "id", "day"})
+                    and _id(row["id"])
                     and _int(row["day"], replay.day, data["day"]),
                     "R62 malformed farm receipt")
             replay.sync(row["day"])
