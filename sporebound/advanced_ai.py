@@ -20,9 +20,11 @@ MAX_AGENTS = 32
 MAX_WRITES = 2048
 
 
-def validate_advanced_ai(spec, *, living_world=None):
+def validate_advanced_ai(spec, *, living_world=None, content=None):
     """Validate authored opt-in policies before a project or session is loaded."""
-    require(type(spec) is dict and set(spec) == {"version", "agents"}
+    require(type(spec) is dict
+            and set(spec) in ({"version", "agents"},
+                              {"version", "agents", "boss_directors"})
             and type(spec["version"]) is int and spec["version"] == VERSION
             and type(spec["agents"]) is list
             and 1 <= len(spec["agents"]) <= MAX_AGENTS,
@@ -74,14 +76,18 @@ def validate_advanced_ai(spec, *, living_world=None):
                            if n["id"] == agent["id"])
                 require(all("pos" in stop for stop in npc["schedule"]),
                         "R37 sensor requires a positioned R35 NPC schedule")
+    if "boss_directors" in spec:
+        from .ai_boss_director import validate_boss_directors
+        validate_boss_directors(spec["boss_directors"], content=content)
     return deepcopy(spec)
 
 
 class AdvancedAI:
     """Deterministic memory and read-only decisions; no separate game clock."""
 
-    def __init__(self, spec, *, living_world=None):
-        self.spec = validate_advanced_ai(spec, living_world=living_world)
+    def __init__(self, spec, *, living_world=None, content=None):
+        self.spec = validate_advanced_ai(
+            spec, living_world=living_world, content=content)
         self.agents = {row["id"]: row for row in self.spec["agents"]}
         self.blackboards = {ident: new_blackboard(ident) for ident in self.agents}
         self.history = []
