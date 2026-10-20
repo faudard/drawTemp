@@ -24,6 +24,28 @@ def authored_screen(controller, kind, width):
     )
     if len(matches) != 1 or controller.session is None or controller.show_title:
         return {"available": False, "error": ""}
+    layout = catalog["layouts"][matches[0]]
+
+    def nodes(root):
+        yield root
+        for child in root.get("children", []):
+            yield from nodes(child)
+
+    authored = tuple(nodes(layout["root"]))
+    actions = {row["action"] for row in authored if row["type"] == "button"}
+    permitted = ({"dialogue.advance"} if kind == "DIALOGUE"
+                 else {"inventory.close"})
+    # Without a visible narrative text and advance action the designer could
+    # hide a canonical story and soft-lock the player. Prefer the legacy UI.
+    required_bindings = ({"dialogue.text"} if kind == "DIALOGUE"
+                         else set())
+    bindings = {row["binding"]["path"] for row in authored
+                if "binding" in row}
+    if not permitted <= actions or not actions <= permitted or not (
+            required_bindings <= bindings):
+        return {"available": False, "error":
+                "R51: authored screen lacks mandatory text/action or has "
+                "unsupported intents; classic Player retained"}
     state = controller.state()
     expected = "dialogue" if kind == "DIALOGUE" else "battle"
     if state["screen"] != expected:
