@@ -50,9 +50,10 @@ def _overlap(a, b):
 
 def validate_platform_scene(scene):
     """Fail closed on unexpected keys, out-of-bounds shapes and budgets."""
-    _require(type(scene) is dict and set(scene) == {
-        "id", "width", "height", "gravity", "hero", "colliders"
-    }, "Invalid physics scene schema")
+    required = {"id", "width", "height", "gravity", "hero", "colliders"}
+    _require(type(scene) is dict and
+             required <= set(scene) <= required | {"boss"},
+             "Invalid physics scene schema")
     _require(_id(scene["id"]), "Invalid scene identity")
     width, height = scene["width"], scene["height"]
     _require(_integer(width, SCALE * 3, SCALE * 128)
@@ -115,6 +116,9 @@ def validate_platform_scene(scene):
                      "Invalid moving-platform travel")
         if not row["trigger"] and not row["one_way"] and _overlap(actor, rect):
             _require(False, "Hero overlaps a solid at spawn")
+    if "boss" in scene:
+        from .platform_boss import validate_platform_boss
+        validate_platform_boss(scene["boss"], width, height)
     for row in rows:
         if "opens" in row:
             _require(_id(row["opens"]) and row["opens"] != row["id"]
@@ -172,6 +176,10 @@ class PlatformPhysics:
             self.actor["ground_id"] = ground
             self.actor["coyote_left"] = hero["coyote"]
         self.inside_triggers = self._triggers()
+        self.boss = None
+        if "boss" in self.scene:
+            from .platform_boss import PlatformBoss
+            self.boss = PlatformBoss(self.scene["boss"])
 
     def _rect(self):
         h = self.scene["hero"]
@@ -273,6 +281,8 @@ class PlatformPhysics:
         }
         if self.max_air_jumps:
             result["air_jumps_left"] = self.air_jumps_left
+        if self.boss is not None:
+            result["boss"] = self.boss.snapshot()
         return deepcopy(result)
 
     def digest(self):
@@ -280,20 +290,24 @@ class PlatformPhysics:
 
     def step(self, command):
         _require(self.tick < MAX_TICKS, "Physics tick budget exhausted")
-        _require(type(command) is dict and set(command) <= {"tick", "move", "jump", "interact"}
+        _require(type(command) is dict and set(command) <= {"tick", "move", "jump", "interact", "attack"}
                  and type(command.get("tick")) is int
                  and command["tick"] == self.tick + 1, "Expected next logical tick")
         move, jump = command.get("move", 0), command.get("jump", False)
         interact = command.get("interact", False)
+        attack = command.get("attack", False)
         _require(type(move) is int and move in (-1, 0, 1)
-                 and type(jump) is bool and type(interact) is bool,
+                 and type(jump) is bool and type(interact) is bool
+                 and type(attack) is bool and (self.boss is not None or not attack),
                  "Invalid platform input")
         frame = {"tick": self.tick + 1, "move": move, "jump": jump,
                  "interact": interact}
+        if self.boss is not None:
+            frame["attack"] = attack
         # No arbitrary callbacks or external systems during this deterministic step.
         previous = deepcopy((self.tick, self.actor, self.movers,
                              self.inside_triggers, self.disabled_colliders,
-                             self.air_jumps_left))
+                             self.air_jumps_left, self.boss))
         events = []
         try:
             self.tick += 1
@@ -358,13 +372,16 @@ class PlatformPhysics:
                         self.disabled_colliders.add(target)
                         events.append({"kind": "door_open", "collider": target,
                                        "switch": row["id"], "tick": self.tick})
+            if self.boss is not None:
+                events.extend(self.boss.advance(
+                    self._rect(), attack=attack, tick=self.tick))
             self.commands.append(frame)
             self.last_events = deepcopy(events)
             return deepcopy(events)
         except Exception:
             (self.tick, self.actor, self.movers,
              self.inside_triggers, self.disabled_colliders,
-             self.air_jumps_left) = previous
+             self.air_jumps_left, self.boss) = previous
             raise
 
     def recording(self):
