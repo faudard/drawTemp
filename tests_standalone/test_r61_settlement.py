@@ -69,6 +69,8 @@ class R61SettlementTests(unittest.TestCase):
                 lambda s: s["buildings"].append(deepcopy(s["buildings"][0])),
                 lambda s: s["buildings"][0].update(workers=True),
                 lambda s: s["buildings"][0].update(producer="unknown"),
+                lambda s: s["buildings"][0].update(zone=[]),
+                lambda s: s["needs"][0].update(resource=[]),
                 lambda s: s["zones"][0].update(capacity=0),
                 lambda s: s["buildings"][1].update(built=True, zone="missing"),
                 lambda s: s["residents"].append({"id": "ada"}),
