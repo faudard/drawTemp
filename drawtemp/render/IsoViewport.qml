@@ -53,11 +53,29 @@ Item {
     Rectangle {
         anchors.fill: parent
         // Must be below chunk textures (z=-1) and all dynamic scene layers.
-        z: -100000
+        z: -300000
         color: "#1d2831"
         gradient: Gradient {
             GradientStop { position: 0; color: "#263c45" }
             GradientStop { position: 1; color: "#151e29" }
+        }
+    }
+
+    // R52.A optical-only depth pass: behind tiles, actors and UI overlays.
+    // No pointer handler or world/picking offsets; untrusted image URLs are rejected.
+    Repeater {
+        model: renderer.depthLayers
+        delegate: Rectangle {
+            required property var modelData
+            readonly property var layer: modelData
+            readonly property real zoom: root.camera.zoom
+            width: layer.width * zoom
+            height: layer.height * zoom
+            x: root.width / 2 + (root.camera.panX + layer.sx * zoom) * layer.parallax - width / 2
+            y: root.height / 2 + (root.camera.panY + layer.sy * zoom) * layer.parallax - height / 2
+            z: -200000 + layer.depthIndex
+            color: layer.color
+            opacity: layer.opacity
         }
     }
 
