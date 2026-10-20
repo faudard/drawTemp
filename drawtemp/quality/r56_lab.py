@@ -5,10 +5,12 @@ authoritative AuthoringSession. All execution delegates to R56.A GameSession QA.
 """
 from __future__ import annotations
 
+import argparse
 from copy import deepcopy
 from hashlib import sha256
 import json
 from pathlib import Path
+import sys
 
 from drawtemp.quality.r56_scenarios import (
     SHA40, canonical, build_scenario, run_scenario, validate_scenario,
@@ -244,3 +246,35 @@ def save_json(path, value, *, forbidden=()):
     path.write_bytes(json.dumps(value, ensure_ascii=False, indent=2,
                                 sort_keys=True, allow_nan=False).encode("utf-8") + b"\n")
     return path
+
+
+def main(argv=None):
+    """CLI uses exactly the same batch runner and evidence as the Qt Lab."""
+    parser = argparse.ArgumentParser(description="R56.B QA Lab batch replay")
+    parser.add_argument("--suite", type=Path, required=True)
+    parser.add_argument("--revision", required=True)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--checkpoint-every", type=int, default=1)
+    args = parser.parse_args(argv)
+    try:
+        suite = read_suite(args.suite)
+        from drawtemp.sdk.r40_starters import STARTER_KINDS, create_starter_pair
+        starters = {item["scenario"]["starter"] for item in suite["cases"]}
+        if len(starters) != 1 or next(iter(starters)) not in STARTER_KINDS:
+            raise ValueError("CLI requires one canonical R40 starter per suite")
+        content, project = create_starter_pair(next(iter(starters)))
+        batch = run_batch(
+            suite, content, project, revision=args.revision,
+            checkpoint_every=args.checkpoint_every)
+        if args.report is not None:
+            save_json(args.report, batch, forbidden=[args.suite])
+        else:
+            print(json.dumps(batch, ensure_ascii=False, sort_keys=True, indent=2))
+        return 0 if batch["status"] == "headless-passed" else 2
+    except (OSError, ValueError, TypeError, UnicodeError) as exc:
+        print("R56.B blocked: " + str(exc), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
