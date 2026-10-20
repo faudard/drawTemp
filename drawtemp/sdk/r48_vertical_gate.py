@@ -180,6 +180,9 @@ def run_gate(*, run_gameplay=True):
                      text="", kind="resolve", thread=initial["sequence"])
         _assert(notes.threads(node_id=bob.node_id)[0]["resolved"],
                 "Reviewed scene discussion was not resolved")
+        reopened_notes = ReviewNoteStore(folder / "review.jsonl")
+        _assert(reopened_notes.threads(node_id=bob.node_id)[0]["resolved"],
+                "Review comments did not survive reopening their sidecar")
 
         audit = LocalAuditLog(folder / "authoring.audit.jsonl")
         event = audit.append(expected_head=None, actor="alice", operation="merge",
@@ -191,6 +194,8 @@ def run_gate(*, run_gameplay=True):
             expected_head=event["digest"])
         _assert(report.state == "aligned" and report.anchored,
                 "Merged archive and advisory audit did not reconcile")
+        _assert(LocalAuditLog(folder / "authoring.audit.jsonl").inspect()["head"] ==
+                event["digest"], "Audit head did not survive reopening")
         gameplay = (_gameplay_gate(merged["content"], merged["project"], folder)
                     if run_gameplay else {"result": "not_run"})
     return {
