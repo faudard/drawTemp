@@ -4,9 +4,11 @@ on:
     paths:
       - 'drawtemp/studio/r74_assisted_dungeons.py'
       - 'drawtemp/studio/r74_assist_qt.py'
+      - 'drawtemp/studio/r74_physical_dungeons.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r74_assisted_dungeons.py'
       - 'tests_standalone/test_drawtemp_r74_assist_qt.py'
+      - 'tests_standalone/test_drawtemp_r74_physical_dungeons.py'
       - 'docs/R74_ASSISTED_DUNGEONS.md'
       - '.github/workflows/drawtemp-r74-assist.yml'
   workflow_dispatch:
@@ -38,12 +40,17 @@ jobs:
           python -m compileall -q
           drawtemp/studio/r74_assisted_dungeons.py
           drawtemp/studio/r74_assist_qt.py
+          drawtemp/studio/r74_physical_dungeons.py
           tests_standalone/test_drawtemp_r74_assisted_dungeons.py
           tests_standalone/test_drawtemp_r74_assist_qt.py
+          tests_standalone/test_drawtemp_r74_physical_dungeons.py
       - name: R74 headless and R34 regression
         run: >-
           python -m unittest
           tests_standalone.test_drawtemp_r74_assisted_dungeons
+          tests_standalone.test_drawtemp_r74_physical_dungeons
+          tests_standalone.test_drawtemp5_r27_dungeon
+          tests_standalone.test_drawtemp5_r27d_journey
           tests_standalone.test_procgen_r34
           tests_standalone.test_procgen_prefabs_r34b
           tests_standalone.test_roguelite_r34c
