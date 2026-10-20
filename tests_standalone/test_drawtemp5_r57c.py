@@ -211,6 +211,32 @@ class R57CQtTests(unittest.TestCase):
                 QTest.keyClicks(dialog.text, "E")
                 self.assertTrue(dialog.text.toPlainText().endswith("E"))
                 self.assertTrue(dialog.context.toPlainText())
+                # R57 keyboard commands change the focused control only.
+                dialog.search_shortcut.activated.emit()
+                self.app.processEvents()
+                self.assertTrue(dialog.search.hasFocus())
+                dialog.list_shortcut.activated.emit()
+                self.app.processEvents()
+                self.assertTrue(dialog.keys.hasFocus())
+                dialog.edit_shortcut.activated.emit()
+                self.app.processEvents()
+                self.assertTrue(dialog.text.hasFocus())
+
+                # Reject stale authored source while preserving the persisted
+                # sidecar even if an editor changes after this dialog opened.
+                from types import SimpleNamespace
+                from unittest.mock import patch as mocked
+                catalog_path = dialog.path
+                before = catalog_path.read_bytes() if catalog_path.exists() else None
+                dialog.text.setPlainText("Unpublished")
+                changed = SimpleNamespace(
+                    dirty=False, revision=dialog.source_revision + 1)
+                with mocked.object(session, "snapshot", return_value=changed), \
+                        mocked("drawtemp.studio.r57_translation_qt.QMessageBox.warning") as warning:
+                    dialog.save()
+                    warning.assert_called_once()
+                after = catalog_path.read_bytes() if catalog_path.exists() else None
+                self.assertEqual(before, after)
             finally:
                 dialog.close()
 
