@@ -140,6 +140,41 @@ class R57CatalogTests(unittest.TestCase):
         self.assertEqual(translated["scene"]["text"], "Texte modifié")
         self.assertEqual(translated["dialogue_line"]["text"], "Texte modifié")
 
+    def test_real_r42_checkpoint_line_translation_survives_resume(self):
+        from drawtemp.player.controller import PlayerController
+        from drawtemp.sdk.reference import reference_project
+        from sporebound.narrative_r42 import migrate_story_v1, set_dialogue_lines
+
+        content, legacy = reference_project()
+        v2 = migrate_story_v1(legacy, content)
+        project = set_dialogue_lines(v2, content, "arrival", [
+            {"id": "intro", "speaker": "Jeanne", "text": "Bonjour capitaine."},
+            {"id": "reply", "speaker": "Capitaine", "text": "Bonjour Jeanne."},
+        ])
+        cat, drift = seeded_for_project(project.to_dict())
+        self.assertEqual(drift, ())
+        cat = cat.with_translation(
+            "story.arrival.line.reply.text", "en", "Hello, Joan.")
+        cat = cat.with_translation(
+            "story.arrival.line.reply.speaker", "en", "Captain")
+        with TemporaryDirectory() as folder:
+            controller = PlayerController(content, project, "main", folder)
+            controller.new_game()
+            state = controller.next_dialogue_line()
+            self.assertEqual(state["dialogue_line"]["id"], "reply")
+            original = controller.session.recording()
+            localized = localize_view(state, cat, "en")
+            self.assertEqual(localized["scene"]["text"], "Hello, Joan.")
+            self.assertEqual(localized["scene"]["speaker"], "Captain")
+            self.assertEqual(controller.session.recording(), original)
+            controller.save(1)
+            resumed = PlayerController(content, project, "main", folder)
+            restored = resumed.load(1)
+            self.assertEqual(restored["dialogue_line"]["id"], "reply")
+            self.assertEqual(
+                localize_view(restored, cat, "en")["scene"]["text"],
+                "Hello, Joan.")
+
     def test_pluralization_format_and_missing_fallback(self):
         data = Catalog.empty().data
         data["entries"]["inventory.items"] = {
