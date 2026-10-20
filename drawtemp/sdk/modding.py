@@ -156,8 +156,8 @@ def read_mod_manifest(path):
                          parse_constant=lambda value: _fail("invalid_manifest", "Invalid number"))
     except ModError:
         raise
-    except (UnicodeError, OSError, ValueError, TypeError) as exc:
-        raise ModError("invalid_manifest", "Cannot read manifest") from exc
+    except (UnicodeError, OSError, ValueError, TypeError, RecursionError) as exc:
+        raise ModError("invalid_manifest", "Cannot read bounded manifest") from exc
     return validate_mod_manifest(doc)
 
 
