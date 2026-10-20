@@ -7,6 +7,11 @@ on:
       - 'sporebound/game_project.py'
       - 'sporebound/game_session.py'
       - 'tests_standalone/test_r54_world_streaming.py'
+      - 'drawtemp/studio/world_streaming_authoring.py'
+      - 'drawtemp/studio/world_streaming_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r54_streaming_inspector.py'
+      - 'tests_standalone/test_r54_streaming_inspector_qt.py'
       - '.github/workflows/r54-world-streaming.yml'
   push:
     branches: [master]
@@ -15,6 +20,11 @@ on:
       - 'sporebound/game_project.py'
       - 'sporebound/game_session.py'
       - 'tests_standalone/test_r54_world_streaming.py'
+      - 'drawtemp/studio/world_streaming_authoring.py'
+      - 'drawtemp/studio/world_streaming_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r54_streaming_inspector.py'
+      - 'tests_standalone/test_r54_streaming_inspector_qt.py'
   workflow_dispatch:
 
 permissions:
@@ -40,7 +50,24 @@ jobs:
       - run: python -m pip install -e .
       - name: R54.A world-state and cancellation regression
         run: python -m unittest tests_standalone.test_r54_world_streaming -v
+      - name: R54.B generated authoring, inspector LOD and prefetch
+        run: python -m unittest tests_standalone.test_r54_streaming_inspector -v
       - name: R25 save and routing backwards compatibility
         run: python -m unittest tests_standalone.test_r25_scene_router -v
       - name: Legacy tactical and campaign regression
         run: python -m unittest tests_standalone.test_game_session -v
+
+  r54b-studio-qt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Qt Studio
+        run: python -m pip install -e ".[qt6]"
+      - name: R54.B Qt offscreen no-JSON and Undo smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest tests_standalone.test_r54_streaming_inspector_qt -v
