@@ -87,6 +87,17 @@ de nouvelle installation dépendante et le retour à l'archive originale.
 Un test Qt offscreen vérifie l'affichage du succès et du refus.
 Tout cela reste à faire exécuter réellement par les runners Actions.
 
+## R47.F — Préflight moddé avant le Player
+
+Le couple `Content/GameProject` existant peut être inspecté en lecture seule
+avec `inspect_modded_project`, l'inventaire de SHA-256 d'un hôte de confiance
+et la liste explicite des namespaces gérés. Cela détecte les données de mod
+orphelines, les contributions non épinglées et les archives R30 altérées,
+sans confondre ces données avec les extensions natives du jeu. Le contrôleur
+Player dispose d'un gate **optionnel**, strict lorsqu'il est activé ; il ne
+change pas les sauvegardes ni le Player standard. Détails :
+[`R47F_PLAYER_MOD_PREFLIGHT.md`](R47F_PLAYER_MOD_PREFLIGHT.md).
+
 ## Commandes et matrice de couverture
 
 Sur Python 3.12 :
