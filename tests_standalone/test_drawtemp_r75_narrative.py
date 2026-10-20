@@ -144,6 +144,16 @@ class R75NarrativeTests(unittest.TestCase):
             self.controller.apply(review, approved=True)
         self.assertEqual(err.exception.code, "stale_revision")
 
+    def test_tampered_review_does_not_approve_other_rights(self):
+        review = self.controller.preview(self.proposal)
+        review.source["attribution"] = "Other author"
+        with self.assertRaises(NarrativeAssistError) as err:
+            self.controller.apply(review, approved=True)
+        self.assertEqual(err.exception.code, "tampered_review")
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        with self.assertRaises(NarrativeAssistError):
+            self.controller.apply(review, approved=True)
+
     def test_save_is_explicit_and_reopen_canonical_project(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "r75.json"
