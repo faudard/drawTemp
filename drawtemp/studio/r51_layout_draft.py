@@ -33,6 +33,17 @@ def new_layout(kind="HUD_CT"):
     if kind == "INVENTORY":
         buttons = [{"id": "main_action", "type": "button",
                     "text": "Fermer le sac", "action": "inventory.close"}]
+    if kind == "HUD_ACTION":
+        buttons = [
+            {"id": "step_left", "type": "button", "text": "← Pas gauche",
+             "action": "action.step_left"},
+            {"id": "step_right", "type": "button", "text": "Pas droit →",
+             "action": "action.step_right"},
+            {"id": "jump", "type": "button", "text": "Saut",
+             "action": "action.jump"},
+            {"id": "attack", "type": "button", "text": "Attaquer",
+             "action": "action.attack"},
+        ]
     extra = []
     if kind == "DIALOGUE":
         extra = [
@@ -48,6 +59,9 @@ def new_layout(kind="HUD_CT"):
     if kind == "INVENTORY":
         extra = [{"id": "inventory_count", "type": "text",
                   "binding": {"path": "inventory.item_count", "type": "int"}}]
+    if kind == "HUD_ACTION":
+        extra = [{"id": "action_scene", "type": "text",
+                  "binding": {"path": "action.scene_title", "type": "str"}}]
     return {
         "kind": kind,
         "root": {
@@ -233,6 +247,7 @@ def editor_sample(layout, width):
         "dialogue.text": "Un dialogue de démonstration.",
         "dialogue.progress": "Réplique 1 / 2",
         "inventory.item_count": 3,
+        "action.scene_title": "Château — plateforme",
     }
 
     def resolve(node):
