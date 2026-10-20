@@ -102,6 +102,19 @@ class PackageManagerTests(unittest.TestCase):
         self.assertTrue(any(x.startswith("reference:project") for x in report["used_by"]))
         self.assert_blocked("package_in_use")
 
+    def test_shared_asset_path_blocks_removal_without_dropping_provenance(self):
+        self.install()
+        def alias(project):
+            project["assets"]["entries"].append({
+                "id": "outside-pack-alias", "kind": "sprite",
+                "path": "assets/packs/forest-pack/1.0.0/terrain/forest.png",
+            })
+            return project
+        self.editor.apply(self.editor.preview_project(alias, kind="fixture-alias"))
+        report = self.reports()[0]
+        self.assertIn("shared-path:outside-pack-alias", report["used_by"])
+        self.assert_blocked("package_in_use")
+
     def test_other_packages_block_unprovable_dependency_removal(self):
         self.install("forest-pack")
         self.install("second-pack")
