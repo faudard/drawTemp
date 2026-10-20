@@ -7,8 +7,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from .iso_scene import (Camera, IsoProjection, TopDownProjection, pick,
-                        render_items, scene_from_mission)
+from .iso_scene import (Camera, IsoProjection, TopDownProjection, SideProjection,
+                        pick, render_items, scene_from_mission, validate_side_scene)
 from .event_overlay import project_event_markers
 from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
@@ -32,8 +32,10 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                     character_pack=None, character_variant=None,
                     character_packs=None, projection_mode="isometric", depth_profile=None):
     """Shared R3 renderer with optional R7 character pack, no gameplay changes."""
-    if projection_mode not in ("isometric", "top_down"):
-        raise ValueError("Unsupported R3 projection mode")
+    if projection_mode not in ("isometric", "top_down", "side"):
+        raise ValueError("Unsupported shared projection mode")
+    if projection_mode == "side":
+        validate_side_scene(scene)
     from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QElapsedTimer
     from drawtemp.assets.character_runtime import CharacterPack
     from drawtemp.assets.characters import ACTIONS
@@ -50,6 +52,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self.scene = scene
             self.camera = Camera()
             self.projection = (TopDownProjection() if projection_mode == "top_down"
+                               else SideProjection() if projection_mode == "side"
                                else IsoProjection())
             self.projection_mode = projection_mode
             self._depth_profile = normalize_depth_profile(
@@ -606,6 +609,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             Follow and scene updates share one refresh, preventing a redundant
             full terrain pass on each action tick.
             """
+            if self.projection_mode == "side":
+                validate_side_scene(new_scene)  # reject before mutating live controller
             changed = (self.scene["mission"] != new_scene["mission"] or
                        self.scene["width"] != new_scene["width"] or
                        self.scene["height"] != new_scene["height"])
@@ -640,7 +645,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
 
 def create_view(scene, parent=None, *, assets=None,
                 character_pack=None, character_variant=None,
-                character_packs=None, depth_profile=None):
+                character_packs=None, depth_profile=None, projection_mode="isometric"):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -652,12 +657,15 @@ def create_view(scene, parent=None, *, assets=None,
                                  character_pack=character_pack,
                                  character_variant=character_variant,
                                  character_packs=character_packs,
-                                 depth_profile=depth_profile)
+                                 depth_profile=depth_profile,
+                                 projection_mode=projection_mode)
     view = QQuickView(parent)
     controller.attach_engine(view.engine())
     view.rootContext().setContextProperty("renderer", controller)
     view.setResizeMode(QQuickView.SizeRootObjectToView)
-    view.setSource(QUrl.fromLocalFile(str(Path(__file__).with_name("IsoViewport.qml").resolve())))
+    qml_name = ("IsoViewport.qml" if projection_mode == "isometric"
+                else "TopDownViewport.qml")
+    view.setSource(QUrl.fromLocalFile(str(Path(__file__).with_name(qml_name).resolve())))
     if view.status() == QQuickView.Error:
         raise RuntimeError("QML renderer: " + "; ".join(str(e) for e in view.errors()))
     return view, controller

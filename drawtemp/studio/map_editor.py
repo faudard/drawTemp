@@ -233,6 +233,11 @@ class MapWindow(QMainWindow):
         action = toolbar.addAction("Aspect 2.5D")
         action.triggered.connect(lambda _checked=False: self.render_look_dock.show())
         self.toolbar_actions["Aspect 2.5D"] = action
+        self._r52_side_view = None
+        self._r52_side_renderer = None
+        side_preview = toolbar.addAction("Aperçu latéral 2.5D")
+        side_preview.triggered.connect(self.show_side_preview)
+        self.toolbar_actions["Aperçu latéral 2.5D"] = side_preview
 
         from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
@@ -252,6 +257,28 @@ class MapWindow(QMainWindow):
         self.construction.cutaway_changed.connect(self._construction_view)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
         self.refresh_maps()
+
+    def show_side_preview(self, *_):
+        """Open a read-only side camera on the current detached Studio scene.
+
+        Uses the same R3 controller and Qt Quick flat scene, never a second
+        gameplay engine. Building-rich missions fail closed until R6 side art.
+        """
+        from drawtemp.render.qt_viewport import create_view
+        from drawtemp.render.iso_scene import validate_side_scene
+        try:
+            scene = self._render_scene()
+            validate_side_scene(scene)
+            view, controller = create_view(scene, projection_mode="side")
+        except (ValueError, RuntimeError) as exc:
+            QMessageBox.warning(self, "Aperçu latéral indisponible", str(exc))
+            return
+        if self._r52_side_view is not None:
+            self._r52_side_view.close()
+        self._r52_side_view, self._r52_side_renderer = view, controller
+        view.setTitle("DrawTemp R52.B2 — Side 2.5D (aperçu non persistant)")
+        view.resize(960, 540)
+        view.show()
 
     def creator(self):
         # Import lazily: headless MapStudio and Player do not depend on Qt UI.
@@ -1123,6 +1150,8 @@ class MapWindow(QMainWindow):
             if response != QMessageBox.Yes:
                 event.ignore()
                 return
+        if self._r52_side_view is not None:
+            self._r52_side_view.close()
         event.accept()
 
 

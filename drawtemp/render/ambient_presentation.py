@@ -17,8 +17,10 @@ _PRESETS = (
     {"id": "iso-close", "title": "Isométrique — proche", "mode": "isometric", "zoom": 1.35},
     {"id": "top-wide", "title": "Top-down — large", "mode": "top_down", "zoom": 0.8},
     {"id": "top-close", "title": "Top-down — proche", "mode": "top_down", "zoom": 1.5},
-    {"id": "side-preview", "title": "Side — gate picking requis",
+    {"id": "side-preview", "title": "Side — bandes 2.5D",
      "mode": "side", "zoom": 1.0},
+    {"id": "side-close", "title": "Side — proche",
+     "mode": "side", "zoom": 1.5},
 )
 
 _DEFAULT = {
@@ -58,7 +60,7 @@ def normalize_lighting_profile(value=None):
 
 def camera_presets(mode):
     """Describe side preview but never mark it as supported for actual picking."""
-    if mode not in ("isometric", "top_down"):
+    if mode not in ("isometric", "top_down", "side"):
         raise ValueError("Unsupported active camera")
     return [dict(item, enabled=(item["mode"] == mode),
                  reason=("" if item["mode"] == mode

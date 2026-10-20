@@ -63,6 +63,49 @@ class TopDownProjection:
         return (cx, cy) if 0 <= cx < width and 0 <= cy < height else None
 
 
+
+@dataclass(frozen=True)
+class SideProjection:
+    """R52.B2 side-on 2.5D lanes over canonical x/y cells.
+
+    Nonzero Y lane spacing preserves a unique ground-cell inverse; elevation
+    raises geometry visually without modifying tactical coordinates.
+    """
+
+    width: float = 64
+    height: float = 24
+    height_step: float = 12
+
+    def project(self, x, y, elevation=0):
+        return x * self.width, y * self.height - elevation * self.height_step
+
+    def unproject(self, sx, sy, elevation=0):
+        return sx / self.width, (sy + elevation * self.height_step) / self.height
+
+    def pick(self, sx, sy, width, height, elevations=None):
+        elevations = elevations or {}
+        hits = []
+        for z in {0, *elevations.values()}:
+            x, y = self.unproject(sx, sy, z)
+            cx, cy = floor(x + .5), floor(y + .5)
+            if not (0 <= cx < width and 0 <= cy < height):
+                continue
+            if elevations.get((cx, cy), 0) != z:
+                continue
+            px, py = self.project(cx, cy, z)
+            if (abs(sx - px) <= self.width / 2 + 1e-9 and
+                    abs(sy - py) <= self.height / 2 + 1e-9):
+                # Topmost platform wins if a higher ledge obscures a lane.
+                hits.append((z, cy, cx))
+        return (max(hits)[2], max(hits)[1]) if hits else None
+
+
+def validate_side_scene(scene):
+    """Fail closed on R6 buildings: ISO polygons have no side semantics."""
+    if scene.get("structures") or scene.get("interior_floors"):
+        raise ValueError("R52 side viewport cannot project authored R6 buildings")
+
+
 @dataclass
 class Camera:
     width: float = 960
@@ -305,8 +348,12 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
     """
     from .tile_chunks import TileChunkIndex
 
+    if isinstance(projection, SideProjection):
+        validate_side_scene(scene)
     index = tile_index if tile_index is not None else TileChunkIndex(scene)
     top_down = isinstance(projection, TopDownProjection)
+    side_view = isinstance(projection, SideProjection)
+    flat_view = top_down or side_view
     elev = index.elevations
     lo_x, hi_x, lo_y, hi_y = index.visible_bounds(camera, projection)
     overlay_by_cell = {}
@@ -341,7 +388,8 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                      "feature": t.get("feature", ""),
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
-                     "zOrder": -100000 if top_down else (x + y) * 100})
+                     "zOrder": -100000 if top_down else (y * 100 if side_view
+                                                  else (x + y) * 100)})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:
@@ -351,7 +399,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          **({"used": o["used"]} if "used" in o else {}),
                          **({"gate": o["gate"]} if "gate" in o else {}),
                          "sx": sx, "sy": sy,
-                         "zOrder": int(y * 100) + 30 if top_down
+                         "zOrder": int(y * 100) + 30 if flat_view
                          else (x + y) * 100 + 30})
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
@@ -362,7 +410,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                          "alive": a["alive"], "sx": sx, "sy": sy,
                          "direction": a.get("direction", "south"),
                          "hp": a.get("hp"), "combatState": a.get("combat_state", ""),
-                         "zOrder": int(y * 100) + 60 if top_down
+                         "zOrder": int(y * 100) + 60 if flat_view
                          else (x + y) * 100 + 60})
     from .building_geometry import building_surfaces
     from .visual_compositor import automatic_cutaway
@@ -384,27 +432,38 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
 
 def pick(scene, camera, sx, sy, projection=IsoProjection(), *,
          selected=None, active_level=0, actor_positions=None):
+    if isinstance(projection, SideProjection):
+        validate_side_scene(scene)
     wx, wy = camera.world(sx, sy)
     elevations = {(t["x"], t["y"]): t["height"] for t in scene["tiles"] if t["height"]}
     hits = []
+    if isinstance(projection, SideProjection):
+        # Side lanes can visually overdraw a character behind a higher/front
+        # platform. Make a ground hit compete on the SAME visual z-order.
+        # For all older projections, preserve the R3 actor-first selection.
+        front_cell = projection.pick(wx, wy, scene["width"], scene["height"],
+                                     elevations)
+        if front_cell is not None:
+            hits.append((front_cell[1] * 100,
+                         {"kind": "tile", "cell": list(front_cell)}))
     for a in scene["actors"]:
         x, y = a["x"], a["y"]
         px, py = projection.project(x, y, elevations.get((int(x), int(y)), 0) + a["level"] * 4)
         if ((abs(wx - px) <= projection.width * .4 and
              abs(wy - py) <= projection.height * .4)
-                if isinstance(projection, TopDownProjection) else
+                if isinstance(projection, (TopDownProjection, SideProjection)) else
                 (abs(wx - px) < projection.width * .25 and
                  py - projection.height * 1.2 < wy < py)):
-            depth = int(y * 100) + 60 if isinstance(projection, TopDownProjection) else (x + y) * 100 + 60
+            depth = int(y * 100) + 60 if isinstance(projection, (TopDownProjection, SideProjection)) else (x + y) * 100 + 60
             hits.append((depth, {"kind": "actor", "id": a["id"]}))
     for o in scene["objects"]:
         px, py = projection.project(o["x"], o["y"], elevations.get((o["x"], o["y"]), 0))
         if ((abs(wx - px) <= projection.width * .35 and
              abs(wy - py) <= projection.height * .35)
-                if isinstance(projection, TopDownProjection) else
+                if isinstance(projection, (TopDownProjection, SideProjection)) else
                 (abs(wx - px) < projection.width * .2 and
                  py - projection.height < wy < py)):
-            depth = (o["y"] * 100 + 30 if isinstance(projection, TopDownProjection)
+            depth = (o["y"] * 100 + 30 if isinstance(projection, (TopDownProjection, SideProjection))
                      else (o["x"] + o["y"]) * 100 + 30)
             hits.append((depth, {"kind": "object", "id": o["id"]}))
     if hits:
