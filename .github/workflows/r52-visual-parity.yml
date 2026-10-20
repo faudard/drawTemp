@@ -1,0 +1,74 @@
+name: DrawTemp R52.B3 2.5D Visual Parity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r52-visual-parity.yml'
+      - 'drawtemp/render/**'
+      - 'drawtemp/quality/r52_goldens.py'
+      - 'drawtemp/quality/visual.py'
+      - 'drawtemp/studio/**'
+      - 'drawtemp/player/**'
+      - 'scripts/r52_visual_goldens.py'
+      - 'tests_standalone/test_r52b3_visual_goldens.py'
+      - 'tests_standalone/goldens/r52/**'
+  workflow_dispatch:
+    inputs:
+      require_approved:
+        description: 'Reject missing/unreviewed R52 screenshot baselines'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r52-visual-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  r52-visual:
+    name: R52.B3 / ${{ matrix.os }} / Qt 6.8.3 software
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Linux Qt native loader
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - name: Install pinned Qt6 software-capable tools
+        run: python -m pip install ".[qt6]"
+      - name: R52 projection, DPI and unreviewed-golden regression gates
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          python -m unittest tests_standalone.test_r52b3_visual_goldens tests_standalone.test_r52b2_side_projection.SideProjectionTests tests_standalone.test_r52b_ambient_presentation.AmbientPresetTests tests_standalone.test_r52a_depth_pipeline.DepthPipelineTests -v
+      - name: Capture 36 actual Qt Quick frames with Studio/Player parity
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python scripts/r52_visual_goldens.py capture --output r52-visual-report
+      - name: Strict reviewed-golden verification when explicitly requested
+        if: github.event_name == 'workflow_dispatch' && inputs.require_approved
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python scripts/r52_visual_goldens.py capture --output r52-visual-strict --require-approved
+      - name: Publish real captures, metadata, parity diffs and errors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r52b3-${{ matrix.os }}
+          path: |
+            r52-visual-report/
+            r52-visual-strict/
+          if-no-files-found: warn
+          retention-days: 30
