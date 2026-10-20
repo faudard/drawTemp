@@ -473,6 +473,8 @@ class StudioWindow(QMainWindow):
                      self.open_prefab_variants)
         self._action("r38_refactor", "R38 • Renommer les références typées…",
                      self.open_refactor)
+        self._action("r38_preflight", "R38 • Preflight du projet…",
+                     self.open_preflight)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
@@ -563,6 +565,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["global_search"])
         tools_menu.addAction(self.commands["r38_prefabs"])
         tools_menu.addAction(self.commands["r38_refactor"])
+        tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
         tools_menu.addAction(self.commands["r54_stream"])
@@ -681,6 +684,11 @@ class StudioWindow(QMainWindow):
         RefactorDialog(self, initial=identity).exec()
         if self.session.revision != prior:
             self.refresh()
+
+    def open_preflight(self):
+        """R38.4 read-only preflight on the current canonical editor revision."""
+        from drawtemp.studio.r38_preflight_qt import PreflightDialog
+        PreflightDialog(self).exec()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
