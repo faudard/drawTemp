@@ -130,18 +130,25 @@ def _copy_verified(source: Path, destination: Path, expected: dict):
     if (source_sha, source_size) != (expected["sha256"], expected["bytes"]):
         raise OptimizerError("Input changed before copy: " + expected["path"])
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with source.open("rb") as reader, destination.open("xb") as writer:
-        digest = sha256()
-        size = 0
-        while True:
-            data = reader.read(1024 * 1024)
-            if not data:
-                break
-            digest.update(data)
-            size += len(data)
-            writer.write(data)
-        writer.flush()
-        os.fsync(writer.fileno())
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(source, flags)
+    try:
+        with os.fdopen(descriptor, "rb") as reader, destination.open("xb") as writer:
+            descriptor = -1
+            digest = sha256()
+            size = 0
+            while True:
+                data = reader.read(1024 * 1024)
+                if not data:
+                    break
+                digest.update(data)
+                size += len(data)
+                writer.write(data)
+            writer.flush()
+            os.fsync(writer.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     source_check, source_now, _ = _file_fingerprint(source)
     if (digest.hexdigest(), size) != (source_sha, source_size) or (
             source_check, source_now) != (source_sha, source_size):
