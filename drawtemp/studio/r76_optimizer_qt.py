@@ -174,7 +174,16 @@ class OptimizerDialog(QDialog):
         # Both paths have the same byte hash in the frozen audit. Re-validate
         # that assertion before the UI claims equivalence.
         try:
-            from drawtemp.assets.optimization_audit import _file_fingerprint
+            from drawtemp.assets.optimization_audit import (
+                _check_physical_file, _file_fingerprint,
+            )
+            owners = {row["path"]: row["id"]
+                      for row in self.registry.to_dict()["entries"]
+                      if row["kind"] != "animation"}
+            before_path = _check_physical_file(
+                self.registry, self.root, item["source_path"], owners[item["source_path"]])
+            after_path = _check_physical_file(
+                self.registry, self.root, item["canonical_path"], owners[item["canonical_path"]])
             before_hash, before_size, _ = _file_fingerprint(before_path)
             after_hash, after_size, _ = _file_fingerprint(after_path)
             if (before_hash, before_size) != (after_hash, after_size) or (
