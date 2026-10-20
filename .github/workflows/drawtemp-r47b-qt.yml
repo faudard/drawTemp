@@ -11,6 +11,7 @@ on:
       - 'drawtemp/sdk/mod_preflight.py'
       - 'drawtemp/player/qt_app.py'
       - 'docs/drawtemp5/R47B_QT_MOD_INSPECTOR.md'
+      - 'docs/drawtemp5/R47F_PLAYER_MOD_PREFLIGHT.md'
       - '.github/workflows/drawtemp-r47b-qt.yml'
   push:
     branches: [master]
