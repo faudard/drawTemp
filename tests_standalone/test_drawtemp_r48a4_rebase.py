@@ -46,8 +46,10 @@ class SquashedRebaseTests(unittest.TestCase):
         session.redo()
         with self.assertRaises(CollaborationError):
             controller.register(author="alice")  # ABA revision was incremented.
-        controller.preview(topic_id=topic.node_id, onto_id=upstream.node_id)
         # Local live state is no longer the upstream; comparison must fail.
+        with self.assertRaises(CollaborationError) as caught:
+            controller.preview(topic_id=topic.node_id, onto_id=upstream.node_id)
+        self.assertEqual(caught.exception.code, "stale_local")
         self.assertEqual(len(self.graph), 3)
 
     def test_rebase_register_roundtrip_and_undo(self):
