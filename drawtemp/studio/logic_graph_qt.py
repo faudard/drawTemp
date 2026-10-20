@@ -159,6 +159,12 @@ class LogicGraphDialog(QDialog):
         self.graphs.currentIndexChanged.connect(self.load_selected_graph)
         header.addWidget(QLabel("Graphe"))
         header.addWidget(self.graphs)
+        self.slice_demo = QPushButton("Créer la démo R31.H")
+        self.slice_demo.setObjectName("r31h-create-reference-quest")
+        self.slice_demo.setToolTip(
+            "Crée une mission complète sur la référence R0 uniquement (un Undo)")
+        self.slice_demo.clicked.connect(self.create_reference_quest)
+        header.addWidget(self.slice_demo)
         root.addLayout(header)
 
         toolbar = QHBoxLayout()
@@ -296,6 +302,40 @@ class LogicGraphDialog(QDialog):
         self.selected_node = ""
         self._reset_debug()
         self._render()
+
+    def create_reference_quest(self):
+        """Atomic reference-only recipe, offered explicitly via the UI."""
+        if not self._can_discard_draft():
+            return False
+        from drawtemp.studio.logic_vertical_slice import preview_reference_quest
+        from drawtemp.studio.logic_vertical_slice import GRAPH
+        from drawtemp.sdk.reference import MISSION
+        if self.mission.currentData() != MISSION:
+            self.diagnostics.setPlainText(
+                "La démo R31.H nécessite la mission de référence R0 Jeanne.")
+            return False
+        answer = QMessageBox.question(
+            self, "Créer une démo R31.H",
+            "Installer PNJ, porte, combat, coffre et quête dans le projet "
+            "de référence R0 ? Une seule action Annuler restaurera les "
+            "deux documents.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return False
+        try:
+            preview = preview_reference_quest(self.session)
+            self.session.apply(preview)
+            self.reload_graph_choices(GRAPH)
+            self.load_selected_graph()
+            self.updated.emit()
+            self.diagnostics.setPlainText(
+                "Démo R31.H créée : PNJ → levier → combat → coffre "
+                "→ extraction → récompense. Sauvegardez le projet, "
+                "puis ouvrez-le dans le Player.")
+            return True
+        except (AuthoringError, LogicGraphError, ValueError) as exc:
+            self._problem(exc)
+            return False
 
     def new_graph(self):
         if not self._can_discard_draft():
