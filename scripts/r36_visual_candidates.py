@@ -50,12 +50,12 @@ def make_reference_session(root):
         image.fill(QColor(color))
         if not image.save(str(art / (asset + ".png")), "PNG"):
             raise RuntimeError("Could not create reference R28 PNG")
-        editor.apply(editor.preview_sprite("r36_" + asset, "art/" + asset + ".png"))
+        editor.apply(editor.preview_sprite("r36_s_" + asset, "art/" + asset + ".png"))
     editor.apply(editor.preview_animation(
-        "r36_idle", [{"sprite": "r36_idle", "duration_ms": 120}], loop=True))
+        "r36_idle", [{"sprite": "r36_s_idle", "duration_ms": 120}], loop=True))
     editor.apply(editor.preview_animation(
-        "r36_attack", [{"sprite": "r36_attack", "duration_ms": 90},
-                       {"sprite": "r36_hit", "duration_ms": 90}], loop=False))
+        "r36_attack", [{"sprite": "r36_s_attack", "duration_ms": 90},
+                       {"sprite": "r36_s_hit", "duration_ms": 90}], loop=False))
     graph = {
         "schema_version": 1, "id": "r36_demo", "initial": "idle",
         "states": [{"id": "idle", "animation": "r36_idle"},
@@ -105,7 +105,7 @@ def render_frame(args):
             widget.at_ms.setValue(40)
             widget.marker_id.setText("impact_glow")
             widget.sample()
-            widget.resize(1024, 680)
+            widget.resize(round(1024 * args.zoom), round(680 * args.zoom))
             widget.setWindowTitle("R36 Studio Animation Timeline")
             widget.show()
             QTest.qWait(350)
@@ -130,8 +130,7 @@ def render_frame(args):
                 scene_from_action(controller.runtime),
                 atlas_url="", projection_mode="top_down",
                 assets=R36PresentationAssets.for_project(
-                    session.snapshot_project() if hasattr(session, "snapshot_project")
-                    else _project_object(project, session), project_file))
+                    _project_object(project), project_file))
             renderer.camera.zoom = args.zoom
             bridge = create_bridge(controller, renderer)
             engine = QQmlApplicationEngine()
@@ -181,11 +180,10 @@ def render_frame(args):
     return 0
 
 
-def _project_object(data, session):
+def _project_object(data):
     from sporebound.game_project import GameProject
-    from sporebound.model import Content
-    snap = session.snapshot().to_dict()
-    return GameProject.from_dict(data, Content.from_dict(snap["content"]))
+    # AuthoringSession already validated both canonical documents.
+    return GameProject(**data)
 
 
 def capture_suite(args):
