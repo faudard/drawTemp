@@ -64,6 +64,13 @@ def _topology_digest(layout):
     ).hexdigest()
 
 
+def _proposal_digest(suggestion):
+    return sha256(json.dumps(
+        suggestion.to_dict(), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True, allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class DungeonSuggestion:
     revision: int
@@ -101,9 +108,11 @@ class AssistedDungeonController:
         self.session = session
         self.library = deepcopy(demo_library() if library is None else library)
         self._suggestions = ()
+        self._signatures = ()
 
     def invalidate(self):
         self._suggestions = ()
+        self._signatures = ()
 
     def reject(self):
         """Discard all proposals; never change canonical documents/history."""
@@ -192,6 +201,7 @@ class AssistedDungeonController:
             ))
             if len(results) == count:
                 self._suggestions = tuple(results)
+                self._signatures = tuple(_proposal_digest(item) for item in results)
                 return self._suggestions
         raise DungeonAssistError(
             "insufficient_variants",
@@ -201,8 +211,12 @@ class AssistedDungeonController:
 
     def prepare_selection(self, suggestion: DungeonSuggestion):
         """Produce an unapplied canonical R34 plan; caller chooses whether to apply."""
-        if not any(row is suggestion for row in self._suggestions):
+        index = next((i for i, row in enumerate(self._suggestions)
+                      if row is suggestion), None)
+        if index is None:
             raise DungeonAssistError("stale_suggestion", "Preview again before selecting")
+        if _proposal_digest(suggestion) != self._signatures[index]:
+            raise DungeonAssistError("modified_suggestion", "Proposal was modified")
         if self.session.revision != suggestion.revision:
             self.invalidate()
             raise AuthoringError(
