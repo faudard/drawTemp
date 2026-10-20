@@ -205,8 +205,8 @@ Tests :
 python -m unittest tests_standalone.test_drawtemp_r48a3_history_audit -v
 ```
 
-**R48.B** : interface Qt qui exploite cet historique, sélectionne les
-bases et décisions manuelles, et examine la provenance et l'audit.
+**R48.B** : l'interface Qt exploite désormais l'historique et les
+commentaires ; les gates onscreen/lecteurs d'écran restent ouverts.
 **R48.C** : test réel 2 auteurs/2 branches, journaux crash/recovery,
 références, sauvegardes/replay et Player/export sur plusieurs OS.
 
@@ -247,10 +247,11 @@ python -m unittest tests_standalone.test_drawtemp_r48b_history_qt -v
 # pip install ".[qt6]"
 ```
 
-**Portée volontairement limitée à R48.B1 :** historique en mémoire, import
-manuel des branches et revue des conflits. Fermer la boîte de dialogue perd
-l'index historique local non sauvegardé ; les documents Content/GameProject du
-Studio restent inchangés tant que l'on n'a pas explicitement appliqué la revue.
+**Portée initiale de R48.B1 :** historique en mémoire, import manuel des
+branches et revue des conflits. R48.A4 a depuis ajouté un archivage explicite
+de l'index : fermer la fenêtre sans enregistrer les nouvelles révisions ne
+persiste pas ces changements. Les fichiers Content/GameProject du Studio
+restent inchangés tant que l'on n'a pas explicitement appliqué la revue.
 Les commentaires/reviews persistants attachés aux IDs, les invitations,
 la collaboration en temps réel et les tests GUI *onscreen* sont hors lot.
 La suite R48.B2 doit traiter ces fonctions et les gates d'accessibilité.
@@ -310,17 +311,97 @@ entry = store.append(graph.node(revision_id), expected_head=observed,
 python -m unittest tests_standalone.test_drawtemp_r48b2_review_notes -v
 ```
 
-**Limites :** la persistance des commentaires ne rend **pas** le DAG lui-même
-persistant (R48.A4). Après fermeture, il faut reconstruire/importer la même
-identité de nœud pour rattacher exactement les notes ; les données n'ont pas
-disparu du JSONL. La revue collaborative distante, l'authentification des
+**Limites du seul lot B2 :** les commentaires sont enregistrés dans
+un journal séparé ; depuis R48.A4, le DAG peut être explicitement sauvegardé
+et rechargé en préservant les mêmes identifiants de nœuds. Les commentaires
+restent séparés de cette archive et les deux supports ne sont pas atomiques. La revue collaborative distante, l'authentification des
 auteurs, les commentaires sur ressources non reconnues et les gates
 QTest/onscreen certifiés restent hors R48.B2.
 
+## R48.A4 — archive persistante, rebase documentaire revu et récupération
+
+L'index de versions R48 n'est plus limité à la durée d'ouverture du Studio :
+`drawtemp/sdk/project_history_store.py::LocalHistoryStore` sérialise les
+snapshots validés du DAG dans un **fichier JSON facultatif** distinct de
+Content/GameProject. Le format est versionné, canonique, borné à **64 Mio
+et 2 048 nœuds**, avec SHA-256 de l'ensemble du payload, digest indépendant
+de chaque document, vérification des `node_id` (auteur, libellé,
+parenté) et reconstruction complète par le validateur canonique.
+
+L'écriture est **explicite** et optimiste : `save(graph,
+expected_digest=None)` crée un fichier inexistant seulement.
+Pour remplacer une archive déjà ouverte, il faut fournir le SHA-256 exact
+précédemment constaté par `inspect()` / `load()`. Une sauvegarde refusée
+ne doit jamais effacer la version précédente. Le protocole emploie le verrou
+exclusif déjà utilisé par le Studio, un fichier temporaire dans le même
+répertoire, `fsync`, puis `os.replace` et synchronisation du répertoire
+sur POSIX quand celle-ci est disponible. L'interface Qt présente désormais
+**« Enregistrer l'historique… »** et **« Ouvrir un historique… »** :
+aucune écriture sans action explicite, aucun overwrite d'un fichier externe
+modifié depuis l'ouverture. Le chargement doit contenir au moins un snapshot
+correspondant au contenu actuel de la session Studio ; sinon il est
+refusé sans remplacer l'index précédent.
+
+Les historiques dont les **nœuds** ont des identifiants différents mais dont
+le **contenu** a le même SHA peuvent conserver deux parents distincts.
+Cette prise en charge corrige la limitation du contrat `make_revision`
+précédent, sans confondre les parentés ; le DAG contrôle toujours l'unicité
+des identifiants de nœuds.
+
+`drawtemp/sdk/project_rebase.py::SquashRebaseController` permet un rebase
+documentaire **condensé** : ouvrir en Studio la version amont (onto),
+prévisualiser `preview(topic_id=..., onto_id=...)` avec le plus récent
+ancêtre commun maximal, puis prendre explicitement toutes les décisions
+local/entrant. `apply(review, decisions)` utilise le merge R30 typé,
+la validation Content/GameProject et un seul Undo dans la session R1.
+`register(author=..., label=...)` crée ensuite **une nouvelle révision
+enfant de la version amont**, uniquement si la session n'a pas bougé.
+La publication du fichier JSON est **une troisième action explicite**.
+Le rebase ne modifie pas l'historique d'origine, ne réécrit aucun commit Git
+et ne rejoue pas chaque commit du topic : c'est un **squash rebase de
+snapshots**, pas un `git rebase`.
+
+```python
+from drawtemp.sdk.project_rebase import SquashRebaseController
+from drawtemp.sdk.project_history_store import LocalHistoryStore
+
+rebase = SquashRebaseController(session_on_upstream, graph)
+review = rebase.preview(topic_id=topic.node_id, onto_id=upstream.node_id)
+transition = rebase.apply(review, decisions)  # Tous les conflits résolus explicitement
+rebased_node = rebase.register(author="alice", label="topic on upstream")
+store = LocalHistoryStore("project-history.r48.json")
+current_head = store.inspect()  # None = créer un nouveau fichier seulement
+store.save(graph, expected_digest=current_head)
+```
+
+### Reprise et sûreté
+
+- Archive tronquée, checksum invalide, parents absents/non ordonnés,
+  identifiants usurpés, JSON à clés dupliquées ou un projet différent
+  provoquent un **refus de chargement**, sans modification du Studio.
+- Lors d'une exception pendant le staging avant `os.replace`, l'ancienne
+  archive valide reste intacte ; les tests simulent l'échec de publication.
+  Après un arrêt brutal, un fichier `.stage-*` ou `.lock` peut subsister :
+  **pas de suppression ni de reconstruction automatique**. L'utilisateur
+  doit contrôler ces éléments avant reprise.
+- L'archive ne certifie pas l'auteur, n'est pas un service de partage distant
+  et ne garantit pas une écriture atomique entre sauvegarde du jeu, archive
+  de versions, notes et audit. Une défaillance après l'application R1
+  mais avant `register` reste résoluble manuellement (Undo ou capture
+  contrôlée).
+- Sur Windows, la garantie de durabilité du renommage dépend du système
+  de fichiers ; aucun gate réel d'extinction/coupure matérielle n'est
+  revendiqué. La CI tri-OS et les tests Qt offscreen restent à exécuter.
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48a4_history_store -v
+python -m unittest tests_standalone.test_drawtemp_r48a4_rebase -v
+```
+
 ## Tranches restantes
 
-- **R48.A4** : rebase documentaire automatique contrôlé, publication durable
-  des nœuds et crash/recovery, cas de parents aux digests identiques.
+- **R48.A5** : rejeu contrôlé commit-par-commit si requis, recovery réel
+  multi-processus et coupure matérielle, garanties transactionnelles renforcées.
 - **R48.B3** : validations NVDA/VoiceOver, commentaires avec identité
   attestée et UX onscreen ; éventuelles vues d'ensemble multi-révisions.
 - **R48.C** : fixture deux auteurs (carte + dialogue/quête), tests perturbations,
