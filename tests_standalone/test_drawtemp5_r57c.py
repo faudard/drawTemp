@@ -188,6 +188,7 @@ class R57CQtTests(unittest.TestCase):
 
     def test_translation_studio_plural_forms_are_structured_after_save(self):
         from drawtemp.localization import Catalog, seeded_for_project, sidecar_path
+        from PySide6.QtCore import Qt
         from drawtemp.sdk.authoring import AuthoringSession
         from drawtemp.sdk.reference import reference_project
         from drawtemp.sdk.simulation import thaw
@@ -211,7 +212,7 @@ class R57CQtTests(unittest.TestCase):
             dialog.show()
             try:
                 items = dialog.keys.findItems(
-                    "inventory.items", 0)  # Qt.MatchExactly
+                    "inventory.items", Qt.MatchExactly)
                 self.assertEqual(len(items), 1)
                 dialog.keys.setCurrentItem(items[0])
                 self.assertTrue(dialog.plural_form.isVisible())
