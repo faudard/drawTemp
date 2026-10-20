@@ -241,7 +241,8 @@ class GameSession:
             phase = "TACTICAL_CT"
         else:
             live = {}
-            phase = "EXPLORATION"
+            phase = ("EXPLORATION" if self.route_scene in self.project.exploration
+                     else "ROUTE_TRANSIT")
         rows = []
         for uid, slot in zip(authored["active"], authored["formation"]):
             actor = live.get(uid)

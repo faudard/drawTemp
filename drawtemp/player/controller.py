@@ -204,6 +204,15 @@ class PlayerController:
         self.session.party_set_active(selected, expected_revision=state.revision)
         return self._changed()
 
+    def switch_party_leader(self, hero_id):
+        """R53 campaign-only leader switch with R1 revision and autosave."""
+        state = self._current()
+        if state.mode != "campaign" or state.scene:
+            raise ValueError("Leader changes require idle exploration")
+        self.session.party_switch_leader(hero_id,
+                                         expected_revision=state.revision)
+        return self._changed()
+
     def recruit_party_member(self, hero_id):
         """Add a recruitable hero through GameSession, never a UI-only roster."""
         state = self._current()

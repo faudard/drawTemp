@@ -1635,7 +1635,9 @@ class StudioWindow(QMainWindow):
     def new_project_template(self):
         from drawtemp.export.templates import TEMPLATES
         labels = [("R41 • RPG classique — Le relais du village"
-                   if key == "classic_rpg" else key) for key in TEMPLATES]
+                   if key == "classic_rpg" else
+                   "R53 • Hybride RPG / tactique CT — Le relais"
+                   if key == "hybrid_r53" else key) for key in TEMPLATES]
         selected, accepted = QInputDialog.getItem(
             self, "Nouveau projet", "Modèle", labels, 0, False)
         if not accepted:
