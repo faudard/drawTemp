@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from drawtemp.localization import (
-    Catalog, LocalizationError, file_revision, seeded_for_project, sidecar_path,
+    Catalog, LocalizationError, file_revision, localize_view, seeded_for_project, sidecar_path,
 )
 
 
@@ -30,6 +30,8 @@ class R57CatalogTests(unittest.TestCase):
         self.assertFalse(drift)
         self.assertIn("project.title", catalog.data["entries"])
         self.assertIn("campaign.acte_1.name", catalog.data["entries"])
+        self.assertIn("story.intro.text", catalog.data["entries"])
+        self.assertIn("story.intro.choice.go.label", catalog.data["entries"])
         self.assertEqual(catalog.render("project.title", "en"), PROJECT["title"])
         translated = catalog.with_translation("project.title", "en", "Joan's voices")
         self.assertEqual(translated.render("project.title", "en"), "Joan's voices")
@@ -39,6 +41,25 @@ class R57CatalogTests(unittest.TestCase):
         reread, drift = seeded_for_project(changed, translated)
         self.assertIsNotNone(reread)
         self.assertEqual(drift, ("project.title",))
+
+    def test_player_projection_preserves_runtime_and_translates_dialogue(self):
+        cat, _ = seeded_for_project(PROJECT)
+        cat = cat.with_translation("project.title", "en", "Joan's voices")
+        cat = cat.with_translation("story.intro.text", "en", "Welcome!")
+        cat = cat.with_translation("story.intro.choice.go.label", "en", "Enter")
+        view = {"campaign": "acte_1", "title": PROJECT["title"],
+                "subtitle": PROJECT["subtitle"], "scene": {
+                    "id": "intro", "text": "Bienvenue !", "speaker": "Jeanne",
+                    "title": "Une rencontre"},
+                "choices": [{"id": "go", "label": "Entrer"}],
+                "revision": 11}
+        projected = localize_view(view, cat, "en")
+        self.assertEqual(projected["title"], "Joan's voices")
+        self.assertEqual(projected["scene"]["text"], "Welcome!")
+        self.assertEqual(projected["choices"][0]["label"], "Enter")
+        self.assertEqual(view["scene"]["text"], "Bienvenue !")
+        self.assertEqual(view["choices"][0]["label"], "Entrer")
+        self.assertEqual(projected["revision"], 11)
 
     def test_pluralization_format_and_missing_fallback(self):
         data = Catalog.empty().data
@@ -53,8 +74,7 @@ class R57CatalogTests(unittest.TestCase):
         self.assertEqual(cat.render("inventory.items", "en", count=0), "0 items")
         self.assertEqual(cat.render("inventory.items", "fr", count=0), "0 objet")
         self.assertEqual(cat.render("inventory.items", "fr", count=2), "2 objets")
-        self.assertIn("count", cat.render("inventory.items", "qps-ploc", count=3)
-                      if False else "count")
+        self.assertIn("3", cat.render("inventory.items", "qps-ploc", count=3))
 
     def test_reject_placeholder_injection_and_bad_plural(self):
         data = Catalog.empty().data
