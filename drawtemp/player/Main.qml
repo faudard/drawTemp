@@ -672,6 +672,102 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ColumnLayout {
+                            // R55 opt-in canonical economy; never display journals
+                            // or run simulation on a render frame.
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.systems !== null &&
+                                     root.playerData.systems !== undefined
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "SYSTEM DESIGNER · TICK " +
+                                      (root.playerData.systems ?
+                                       root.playerData.systems.tick : 0)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Avancer l'économie d'un tick"
+                                Layout.fillWidth: true
+                                enabled: !root.inputLocked
+                                onClicked: player.systemWait(1)
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       Object.keys(root.playerData.systems.stocks || {}).sort() : []
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: root.ivory
+                                    text: modelData + " · " +
+                                          root.playerData.systems.stocks[modelData]
+                                }
+                            }
+                            Label {
+                                text: "MARCHANDS"
+                                font.bold: true
+                                color: root.gold
+                                visible: root.playerData.systems &&
+                                         root.playerData.systems.merchants.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       (root.playerData.systems.merchants || []) : []
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.resource +
+                                              " · achat " + modelData.buy_price +
+                                              " / vente " + modelData.sell_price
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Button {
+                                            text: "Acheter 1"
+                                            enabled: !root.inputLocked
+                                            onClicked: player.systemTrade(modelData.id, "buy", 1)
+                                        }
+                                        Button {
+                                            text: "Vendre 1"
+                                            enabled: !root.inputLocked
+                                            onClicked: player.systemTrade(modelData.id, "sell", 1)
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "LIVRAISONS"
+                                font.bold: true
+                                color: root.gold
+                                visible: root.playerData.systems &&
+                                         root.playerData.systems.quests.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.systems ?
+                                       (root.playerData.systems.quests || []) : []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.quantity +
+                                              " " + modelData.resource +
+                                              (modelData.fulfilled ? " · terminée" : "")
+                                        color: root.ivory
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                    Button {
+                                        text: "Livrer"
+                                        enabled: !root.inputLocked && !modelData.fulfilled
+                                        onClicked: player.systemFulfill(modelData.id)
+                                    }
+                                }
+                            }
+                        }
                         Label {
                             visible: root.playerData.screen !== "exploration"
                             text: "CT · tour " + (root.playerData.battle.tick || 0) +
