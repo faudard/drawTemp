@@ -51,7 +51,18 @@ def make_captain_slice():
     extra['id'] = QUEST_MISSION
     extra['name'] = 'Quête conditionnelle — La lettre du capitaine'
     extra['next_missions'] = []
-    extra['triggers'] = []
+    # A genuine one-shot R9 event initiates the in-battle dialogue. Survive
+    # turns, not invented victory flags, complete the playable CT encounter.
+    extra['objective'] = 'survive'
+    extra['target_ticks'] = 50
+    extra['triggers'] = [{
+        'id': 'captain_orders',
+        'condition': 'tick', 'value': 0,
+        'actions': [{
+            'kind': 'message',
+            'text': 'Capitaine : Tenez les lignes jusqu’à l’arrivée de la lettre.'
+        }],
+    }]
     content_data['missions'].append(extra)
     content = Content.from_dict(content_data)
     project = GameProject.default(content)
@@ -63,6 +74,12 @@ def make_captain_slice():
         {'id': 'evidence', 'kind': 'bool', 'scope': 'campaign',
          'owner': CAMPAIGN, 'initial': False},
         {'id': 'quest_ready', 'kind': 'bool', 'scope': 'campaign',
+         'owner': CAMPAIGN, 'initial': False},
+        {'id': 'battle_orders', 'kind': 'bool', 'scope': 'campaign',
+         'owner': CAMPAIGN, 'initial': False},
+        {'id': 'quest_won', 'kind': 'bool', 'scope': 'campaign',
+         'owner': CAMPAIGN, 'initial': False},
+        {'id': 'captain_report', 'kind': 'bool', 'scope': 'campaign',
          'owner': CAMPAIGN, 'initial': False},
         {'id': 'ending', 'kind': 'text', 'scope': 'campaign',
          'owner': CAMPAIGN, 'initial': 'none'},
@@ -87,7 +104,10 @@ def make_captain_slice():
     project.story = {
         'schema_version': 2,
         'entry_scenes': {'main': 'oath'},
-        'after_mission': {},
+        'after_mission': {QUEST_MISSION: 'quest_return'},
+        'during_tactical_event': {
+            QUEST_MISSION + '/captain_orders': 'orders',
+        },
         'subgraphs': [
             {'id': 'shared_council', 'entry_scene': 'council'},
             {'id': 'shared_camp', 'entry_scene': 'camp'},
@@ -153,12 +173,28 @@ def make_captain_slice():
             _scene('ending_exile', 'Fin — Exil', 'Jeanne',
                    'Le capitaine est exilé.',
                    [_choice('finish', 'Terminer')]),
+            _scene('orders', 'Ordres au combat', 'Capitaine',
+                   'Tenez les lignes, je protégerai la missive.',
+                   [_choice('acknowledge', 'Accepter les ordres',
+                            effects=[setvar('battle_orders', True)])],
+                   'Jeanne', 'Nous tiendrons jusqu’à la relève.'),
+            _scene('quest_return', 'Le capitaine revient', 'Capitaine',
+                   'La lettre est sauvée. Le conseil attend mon rapport.',
+                   [_choice('report', 'Archiver le rapport de mission',
+                            effects=[setvar('captain_report', True)])],
+                   'Jeanne', 'La confiance survit à cette épreuve.'),
         ],
     }
     # Existing R5 flow owns gates/endings; no R42 quest engine is created.
     project.campaign_flow = {
         'gates': {QUEST_MISSION: quest},
         'endings': {name: cond('ending', 'eq', name) for name in ENDINGS},
+        # R5 settlement ledger records this victory exactly once, including
+        # after a verified GameSession checkpoint/replay.
+        'outcomes': {QUEST_MISSION: {
+            'victory': [setvar('quest_won', True),
+                        {'kind': 'gold', 'amount': 13}],
+        }},
     }
     project.validate(content)
     return content, project
