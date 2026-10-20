@@ -8,6 +8,8 @@ on:
       - 'drawtemp/sdk/project_refactor.py'
       - 'drawtemp/sdk/project_audit.py'
       - 'drawtemp/sdk/project_history.py'
+      - 'drawtemp/sdk/project_history_store.py'
+      - 'drawtemp/sdk/project_rebase.py'
       - 'drawtemp/sdk/audit_reconciliation.py'
       - 'drawtemp/sdk/review_notes.py'
       - 'drawtemp/studio/r48_history_review.py'
@@ -16,6 +18,8 @@ on:
       - 'tests_standalone/test_drawtemp_r48a_collaboration.py'
       - 'tests_standalone/test_drawtemp_r48a2_refactor_audit.py'
       - 'tests_standalone/test_drawtemp_r48a3_history_audit.py'
+      - 'tests_standalone/test_drawtemp_r48a4_history_store.py'
+      - 'tests_standalone/test_drawtemp_r48a4_rebase.py'
       - 'tests_standalone/test_drawtemp_r48b_history_qt.py'
       - 'tests_standalone/test_drawtemp_r48b2_review_notes.py'
       - 'docs/R48A_COLLABORATION_CORE.md'
@@ -48,6 +52,8 @@ jobs:
           tests_standalone.test_drawtemp_r48a_collaboration
           tests_standalone.test_drawtemp_r48a2_refactor_audit
           tests_standalone.test_drawtemp_r48a3_history_audit
+          tests_standalone.test_drawtemp_r48a4_history_store
+          tests_standalone.test_drawtemp_r48a4_rebase
           tests_standalone.test_drawtemp_r48b_history_qt
           tests_standalone.test_drawtemp_r48b2_review_notes
           tests_standalone.test_drawtemp_r30_creator
