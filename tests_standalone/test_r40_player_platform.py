@@ -145,6 +145,29 @@ class MainPlayerPlatformTests(unittest.TestCase):
             self.assertFalse(checkpoint["platform"]["state"]["boss"]["player_defeated"])
             self.assertEqual(checkpoint["platform"]["state"]["boss"]["hero_hp"], 6)
 
+    def test_revision_checked_platform_commands_and_physical_route(self):
+        from drawtemp.sdk.simulation import SimulationError
+        with TemporaryDirectory() as folder:
+            _, player = _new_player(folder)
+            player.new_game()
+            revision = player.session.snapshot().revision
+            original = player.session.recording()
+            with self.assertRaises(SimulationError) as bad:
+                player.session.platform_step(1, False, False,
+                                             expected_revision=revision + 1)
+            self.assertEqual(bad.exception.code, "stale_revision")
+            self.assertEqual(player.session.recording(), original)
+            with self.assertRaises(SimulationError):
+                player.session.route_transition("to_ruins",
+                                                 expected_revision=revision)
+            self.assertEqual(player.session.recording(), original)
+            player.platform_step(move=1)
+            with self.assertRaises(SimulationError) as stale:
+                player.session.platform_travel("to_ruins",
+                                                expected_revision=revision)
+            self.assertEqual(stale.exception.code, "stale_revision")
+            self.assertEqual(player.state()["platform"]["state"]["tick"], 1)
+
     def test_fixed_tick_game_state_is_independent_of_render_polling(self):
         with TemporaryDirectory() as folder:
             _, player = _new_player(folder)
