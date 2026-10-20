@@ -101,7 +101,7 @@ class ReferenceJourneyTests(unittest.TestCase):
         mission = next(x for x in after["content"]["missions"]
                        if x["id"] == MISSION)
         self.assertEqual(mission["objective"], OBJECTIVE)
-        self.assertEqual(mission["goal"], [[6, 4]])
+        self.assertEqual([tuple(cell) for cell in mission["goal"]], [(6, 4)])
         chest = next(x for x in mission["objects"] if x["id"] == CHEST)
         self.assertEqual(chest["amount"], CHEST_LOOT)
         self.assertEqual(len([g for g in graphs_from_project(after["project"])
