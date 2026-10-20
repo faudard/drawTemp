@@ -65,9 +65,10 @@ class BossDirectorDesigner:
             "cue": "",
             "trigger": None if num == initial else authored[num]["trigger"],
         } for num in numbers]
+        import re
+        safe_id = re.sub(r"[^a-z0-9_]", "_", boss_id.lower())
         suggestion = {
-            "id": "boss_" + boss_id if len(boss_id) <= 59 else
-                  "boss_" + boss_id[:59],
+            "id": ("boss_" + safe_id)[:64],
             "mission": mission_id, "boss": boss_id, "phases": rows}
         validate_boss_directors([suggestion], content=content)
         return suggestion
