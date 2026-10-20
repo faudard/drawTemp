@@ -177,8 +177,9 @@ def capture_matrix(args):
         "hardware_gpu_certified": False,
         "errors": report["errors"],
     }, indent=2))
-    if not report["capture_complete"] or not report.get("parity_pass"):
-        return 1
+    if (not report["capture_complete"] or not report.get("parity_pass") or
+            report.get("comparison") == "fail"):
+        return 1  # An existing, approved baseline regression is always fatal.
     if args.require_approved and report["comparison"] != "pass":
         return 2
     return 0
