@@ -406,6 +406,9 @@ class AbilityDesignerDialog(QDialog):
         """No GameSession writes; only a detached R43 native Battle projection."""
         if self.draft is None:
             return False
+        # _gather invalidates any existing authoring preview; avoid leaving
+        # an enabled Apply button pointing to a discarded plan.
+        self.apply_button.setEnabled(False)
         try:
             self._gather()
             from drawtemp.sdk.ability_contracts import compile_ct_skill
