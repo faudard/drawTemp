@@ -198,6 +198,12 @@ drawtemp-player-r50b --content ./project/game.json
   représentation jouable du moteur tactique : R l'abandonne sans gain
   tactique puis retourne à la clairière en **un seul commit de slot** via
   `route_abandon_ct`.
+- Depuis le catalogue Studio R50.B, l'action **« Jouer dans Player Qt
+  (R50.B) »** n'est activée que pour le prototype `action_combat_prototype`
+  créé : le lancement ouvre un processus Player séparé. Le premier lancement
+  crée un slot uniquement en l'absence de fichier **et** de backup ; les
+  suivants reprennent le slot existant. Un slot corrompu ou seulement
+  récupérable depuis un backup n'est jamais écrasé automatiquement.
 - La sauvegarde est isolée par chemin de projet sous le profil utilisateur,
   ou par `--profile`. `--new` refuse d'écraser un slot existant.
   `--smoke` utilise un profil temporaire. Un respawn implicite après mort
