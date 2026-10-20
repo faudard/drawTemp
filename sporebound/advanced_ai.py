@@ -28,12 +28,13 @@ def validate_advanced_ai(spec, *, living_world=None):
             and 1 <= len(spec["agents"]) <= MAX_AGENTS,
             "Invalid R37 advanced AI project document")
     seen = set()
+    squads = {}
     for agent in spec["agents"]:
         require(type(agent) is dict
-                and set(agent) in ({"id", "mode", "policies"},
-                                   {"id", "mode", "tree"},
-                                   {"id", "mode", "policies", "sensor"},
-                                   {"id", "mode", "tree", "sensor"})
+                and {"id", "mode"} <= set(agent)
+                and {"policies", "tree"} & set(agent)
+                and not {"policies", "tree"} <= set(agent)
+                and set(agent) <= {"id", "mode", "policies", "tree", "sensor", "squad"}
                 and agent["mode"] in ("ct", "realtime"),
                 "Invalid R37 AI agent contract")
         # Delegate identity and policy grammar to one R37.A authority.
@@ -53,6 +54,15 @@ def validate_advanced_ai(spec, *, living_world=None):
             validate_sensor(agent["sensor"])
             require(agent["mode"] == "realtime",
                     "R37.D sensors currently require a realtime R35 NPC")
+        if "squad" in agent:
+            from .ai_squad import MAX_SQUAD_MEMBERS, validate_squad
+            binding = validate_squad(agent["squad"])
+            require(agent["mode"] == "realtime" and "sensor" in agent,
+                    "R37 squad members must have an R35 realtime sensor")
+            squad_id = binding["id"]
+            squads[squad_id] = squads.get(squad_id, 0) + 1
+            require(squads[squad_id] <= MAX_SQUAD_MEMBERS,
+                    "R37 squad must contain 1..8 authored agents")
         if agent["mode"] == "realtime":
             require(type(living_world) is dict
                     and type(living_world.get("npcs")) is list
@@ -130,6 +140,28 @@ class AdvancedAI:
         self.blackboards[actor_id] = updated
         self.history.append(event)
         return deepcopy(updated)
+
+    def remember_batch(self, writes, *, tick):
+        """Atomic multi-actor write, staged through exactly the normal ledger.
+
+        No recipient is changed if any update is invalid or exceeds a budget.
+        The saved format remains R37.B v1: a sorted series of ordinary writes.
+        """
+        require(type(writes) is list and 1 <= len(writes) <= MAX_AGENTS,
+                "Invalid R37 squad memory batch")
+        require(all(type(row) is dict and set(row) ==
+                    {"actor_id", "changes"} for row in writes),
+                "Invalid R37 squad memory event")
+        identifiers = [row["actor_id"] for row in writes]
+        require(identifiers == sorted(set(identifiers)),
+                "R37 memory batch must have distinct ascending actor IDs")
+        trial = deepcopy(self)
+        results = []
+        for row in writes:
+            results.append(trial.remember(row["actor_id"], row["changes"], tick=tick))
+        self.blackboards = trial.blackboards
+        self.history = trial.history
+        return results
 
     def recording(self):
         return {"version": VERSION, "blackboards": self.state(),
