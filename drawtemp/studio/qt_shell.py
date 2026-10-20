@@ -491,6 +491,8 @@ class StudioWindow(QMainWindow):
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
+        self._action("r76_optimizer", "R76 • Optimizer Studio (assets)…",
+                     self.open_r76_optimizer)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -572,6 +574,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
+        tools_menu.addAction(self.commands["r76_optimizer"])
         tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -719,6 +722,20 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if before != self.session.revision:
             self.refresh()
+
+    def open_r76_optimizer(self):
+        """Derived asset previews only; canonical Studio history is untouched."""
+        if self.content_path is None or self.session.snapshot().dirty:
+            QMessageBox.warning(
+                self, "R76 Optimizer Studio",
+                "Enregistrez d'abord le projet canonique avant d'auditer ses assets.")
+            return
+        from drawtemp.assets.optimizer import OptimizerError
+        from drawtemp.studio.r76_optimizer_qt import OptimizerDialog
+        try:
+            OptimizerDialog(self.session, self.content_path, self).exec()
+        except (OptimizerError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "R76 Optimizer Studio", str(exc))
 
     def open_world_streaming(self):
         """R54.B inspect canonical R25 region links and R54 cell metadata."""
