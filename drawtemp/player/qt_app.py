@@ -174,6 +174,26 @@ def create_bridge(controller, renderer):
             from drawtemp.player.r51_hud import perform_menu_intent
             self.invoke(perform_menu_intent, self.controller, intent)
 
+        @Slot(str, int, result="QVariantMap")
+        def authoredScreen(self, kind, width):
+            """Typed real-screen projection (dialogue or tactical inventory)."""
+            from drawtemp.player.r51_screens import authored_screen
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return authored_screen(self.controller, kind, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot()
+        def authoredDialogueAdvance(self):
+            from drawtemp.player.r51_screens import perform_dialogue_advance
+            self.invoke(perform_dialogue_advance, self.controller)
+
+        @Slot(str)
+        def authoredInventoryUse(self, item_id):
+            from drawtemp.player.r51_screens import perform_inventory_use
+            self.invoke(perform_inventory_use, self.controller, item_id)
+
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
             return self.animator.snapshot()
