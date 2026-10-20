@@ -828,6 +828,30 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         ColumnLayout {
+                            objectName: "r41-canonical-portals"
+                            visible: root.playerData.screen === "exploration" &&
+                                     (root.playerData.route_links || []).length > 0
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Label {
+                                text: "VOYAGER · ROUTES ACCESSIBLES"
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: root.playerData.route_links || []
+                                Button {
+                                    objectName: "r41-route-" + modelData.id
+                                    text: "Aller à " + modelData.title
+                                    Layout.fillWidth: true
+                                    enabled: !root.inputLocked
+                                    Accessible.name: "Voyager vers " + modelData.title
+                                    onClicked: player.travelRoute(modelData.id)
+                                }
+                            }
+                        }
+                        ColumnLayout {
                             objectName: "r41-routed-encounters"
                             visible: root.playerData.screen === "exploration" &&
                                      (root.playerData.rpg_available || []).length > 0
