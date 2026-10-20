@@ -139,6 +139,31 @@ class R62RelationshipTests(unittest.TestCase):
             with self.subTest(forged=forged["relationships"]), self.assertRaises(RuleError):
                 GameSession.from_recording(forged, content, project)
 
+    def test_farm_harvest_can_fund_social_gift_without_duplicate_rewards(self):
+        # R62.A crop output is the same Campaign item later gifted to R62.B.2.
+        from tests_standalone.test_r62_farming_life import fixture as farm_fixture
+        content, project = farm_fixture()
+        project.extensions[EXTENSION] = {
+            "schema_version": 1, "data": social_spec(), "references": []}
+        project.validate(content)
+        session = GameSession.new(content, project, "main", seed=62)
+        session.progress.inventory["epee_de_jacques"] = 1
+        self.assertTrue(session.farming_plant("field", "herb_crop", "plant-social"))
+        next_day(session)
+        self.assertTrue(session.farming_harvest("field", "harvest-social"))
+        self.assertEqual(session.progress.inventory["cape_de_route"], 2)
+        self.assertTrue(session.relationship_gift(
+            "merchant", "cape_de_route", "gift-harvest"))
+        self.assertEqual(session.progress.inventory["cape_de_route"], 1)
+        self.assertEqual(session.relationship_state("merchant")
+                         ["relationships"]["merchant"]["score"], 1)
+        checkpoint = session.recording()
+        restored = GameSession.from_recording(checkpoint, content, project)
+        self.assertFalse(restored.farming_harvest("field", "harvest-social"))
+        self.assertFalse(restored.relationship_gift(
+            "merchant", "cape_de_route", "gift-harvest"))
+        self.assertEqual(restored.recording(), checkpoint)
+
     def test_core_replay_is_seed_independent_and_saturated(self):
         content, _project = fixture()
         data = social_spec()
