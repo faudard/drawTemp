@@ -35,8 +35,6 @@ Item {
     }
     onSuspendedChanged: resetClock()
     onPlatformChanged: worldCanvas.requestPaint()
-    onWidthChanged: worldCanvas.requestPaint()
-    onHeightChanged: worldCanvas.requestPaint()
 
     Keys.onPressed: function(event) {
         if (root.suspended || root.smokeMode || root.lost || root.won)
@@ -102,6 +100,8 @@ Item {
         anchors.top: parent.top
         anchors.bottom: commands.top
         anchors.margins: 10
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
 
         onPaint: {
             var ctx = getContext("2d")
