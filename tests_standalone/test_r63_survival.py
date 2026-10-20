@@ -137,6 +137,22 @@ class R63SurvivalTests(unittest.TestCase):
         restored.restore(a.snapshot())
         self.assertEqual(restored.snapshot(), a.snapshot())
 
+    def test_cold_exposure_is_hazardous_and_frame_independent(self):
+        spec = survival_spec()
+        spec["needs"].update(
+            energy_drain=0, hunger_drain=0, cold_drain=10)
+        fast = SurvivalRuntime(spec, {"arrival"})
+        frames = SurvivalRuntime(spec, {"arrival"})
+        fast.advance(12)
+        for _ in range(12):
+            frames.advance(1)
+        self.assertEqual(fast.snapshot(), frames.snapshot())
+        self.assertEqual(fast.needs["temperature"], 0)
+        self.assertEqual(fast.needs["energy"], 73)
+        restored = SurvivalRuntime(spec, {"arrival"})
+        restored.restore(fast.snapshot())
+        self.assertEqual(restored.snapshot(), fast.snapshot())
+
     def test_crafting_cycles_are_rejected(self):
         spec = survival_spec()
         spec["recipes"].append({
