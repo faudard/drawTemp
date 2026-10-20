@@ -297,6 +297,9 @@ def _signed(candidate):
         "gameplay": candidate.gameplay,
         "export_preflight": candidate.export_preflight,
         "spatial_digest": candidate.spatial.evidence_digest,
+        "spatial_report_digest": _digest(candidate.spatial.to_dict()),
+        "canonical_content_digest": _digest(thaw(candidate.plan.content)),
+        "canonical_project_digest": _digest(thaw(candidate.plan.project)),
     })
 
 
