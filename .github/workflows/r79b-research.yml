@@ -1,0 +1,31 @@
+name: R79.B isolated RHI research (headless contracts)
+
+on:
+  pull_request:
+    paths:
+      - 'tools/r79_rhi_spike.py'
+      - 'tests_standalone/test_r79_rhi_spike.py'
+      - 'docs/R79B_ISOLATED_RHI_SPIKE.md'
+      - '.github/workflows/r79b-research.yml'
+  push:
+    paths:
+      - 'tools/r79_rhi_spike.py'
+      - 'tests_standalone/test_r79_rhi_spike.py'
+      - '.github/workflows/r79b-research.yml'
+
+jobs:
+  contract-only:
+    name: Contract only / ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: R79.B pure-stdlib tests (NOT a GPU certification)
+        run: python -m unittest discover -s tests_standalone -p test_r79_rhi_spike.py -v

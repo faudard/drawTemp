@@ -1,0 +1,92 @@
+# Consolidation R51–R80 — suivi d'intégration
+
+> **Statut : 33/33 PR sources intégrées dans la branche de consolidation.** Cette intégration n'est pas un GO produit ni un accord de fusion vers `master`.
+
+## Destination
+
+- PR unique : [#446](https://github.com/faudard/drawTemp/pull/446) — **draft** vers `master`.
+- Branche : `integration/consolidation-r51-r80-20261020`.
+- Les PR sources ont été fusionnées **dans la branche d'intégration**, sans modifier `master`.
+
+## Sources intégrées
+
+- [x] [#413](https://github.com/faudard/drawTemp/pull/413)
+- [x] [#414](https://github.com/faudard/drawTemp/pull/414)
+- [x] [#415](https://github.com/faudard/drawTemp/pull/415)
+- [x] [#416](https://github.com/faudard/drawTemp/pull/416)
+- [x] [#417](https://github.com/faudard/drawTemp/pull/417)
+- [x] [#418](https://github.com/faudard/drawTemp/pull/418)
+- [x] [#419](https://github.com/faudard/drawTemp/pull/419)
+- [x] [#420](https://github.com/faudard/drawTemp/pull/420)
+- [x] [#421](https://github.com/faudard/drawTemp/pull/421)
+- [x] [#422](https://github.com/faudard/drawTemp/pull/422)
+- [x] [#423](https://github.com/faudard/drawTemp/pull/423)
+- [x] [#424](https://github.com/faudard/drawTemp/pull/424)
+- [x] [#425](https://github.com/faudard/drawTemp/pull/425)
+- [x] [#426](https://github.com/faudard/drawTemp/pull/426)
+- [x] [#427](https://github.com/faudard/drawTemp/pull/427)
+- [x] [#428](https://github.com/faudard/drawTemp/pull/428)
+- [x] [#429](https://github.com/faudard/drawTemp/pull/429)
+- [x] [#430](https://github.com/faudard/drawTemp/pull/430)
+- [x] [#431](https://github.com/faudard/drawTemp/pull/431)
+- [x] [#432](https://github.com/faudard/drawTemp/pull/432)
+- [x] [#433](https://github.com/faudard/drawTemp/pull/433)
+- [x] [#434](https://github.com/faudard/drawTemp/pull/434)
+- [x] [#435](https://github.com/faudard/drawTemp/pull/435)
+- [x] [#436](https://github.com/faudard/drawTemp/pull/436)
+- [x] [#437](https://github.com/faudard/drawTemp/pull/437)
+- [x] [#438](https://github.com/faudard/drawTemp/pull/438)
+- [x] [#439](https://github.com/faudard/drawTemp/pull/439)
+- [x] [#440](https://github.com/faudard/drawTemp/pull/440)
+- [x] [#441](https://github.com/faudard/drawTemp/pull/441)
+- [x] [#442](https://github.com/faudard/drawTemp/pull/442)
+- [x] [#443](https://github.com/faudard/drawTemp/pull/443)
+- [x] [#444](https://github.com/faudard/drawTemp/pull/444)
+- [x] [#445](https://github.com/faudard/drawTemp/pull/445)
+
+## Dépendances résolues
+
+- R62 : #423 (farming headless) est ancêtre de #444 (Farm Studio). L'intégration de #444 a inclus les deux.
+- R65 : #430 (combat déterministe) puis #442 (Combat Composer).
+- R78 : #436 → #439 → #440 (rôles, revues, vertical deux auteurs).
+- R79 : #438 → #443 (ADR, RHI spike).
+
+## Résolution des conflits
+
+GitHub a fusionné les branches compatibles directement dans l'agrégat. Les PR conflictuelles ont été réunies par des commits de fusion à deux parents conservant l'ascendance et en combinant les ajouts sur les fichiers communs :
+
+- #431 (R76) — commit `40f88a2` : entrée Optimizer Studio dans `drawtemp/studio/qt_shell.py` et fichiers propres.
+- #435 (R75) — commit `155aebe` : entrée Narrative Assist dans le même shell et fichiers propres.
+- #442 (R65.B) — commit `ff60452` : shell Qt et validation `GameProject` sans écraser les autres fonctionnalités.
+- #423/#444 (R62) — commit `ac22176` : simulation, farming, catalogue Studio, extension projet, horloge unique et checkpoints.
+- #427 (R63) — commit `9df255b` : Player QML, contrôleur, adaptateur Qt, simulation, Studio, validation projet, session et sauvegardes.
+
+Les fusions conflictuelles combinent les changements textuels ; elles **ne prouvent pas** leur correction à l'exécution. Un audit métier de tous les écrans, commandes, sauvegardes et contrats R1 est requis.
+
+## Renforcement R78 après consolidation
+
+- Le journal R78.B vérifie désormais les nœuds, digests de documents et ancres des **deux sidecars** contre le graphe R48 courant, à la lecture et avant l'ajout de commentaires ; le sélecteur Qt refuse l'ouverture d'un journal de notes d'un autre projet.
+- Tests de régression ajoutés : journal de commentaires valide mais étranger, refus d'append, aucune modification de Content/GameProject et aucun fichier de tâches créé par l'UI refusée.
+- **CI non validée** : sur la branche d'intégration, des workflows GitHub Actions échouent sans jobs consultables (`total_count=0` sur plusieurs runs), ce qui ne permet pas de conclure à un succès ou un échec de test. Exemple : [Run R10](https://github.com/faudard/drawTemp/actions/runs/39413840198). Exécuter les suites sur une machine de build / rétablir l'exécution des jobs avant tout GO.
+
+## R58.B2 — évolutions du Package Manager après consolidation
+
+- Nouvelle voie d'upgrade **isolée** dans `drawtemp/studio/package_upgrades.py` : archive R24.C et SHA-256 indépendant requis, même ID/kind d'assets, aucune dépendance implicite, diff de ressources et révision Studio vérifiés.
+- Le dialogue `Packages de ressources R58` propose maintenant **Mettre à jour / Restaurer…** ; rétrogradation avec archive de la version antérieure et double confirmation explicite.
+- Écriture sous un répertoire de version **distinct** sans écrasement ; anciennes ressources conservées ; une transaction AuthoringSession Undo/Redo, sauvegarde manuelle. Pas de migration automatique des références physiques, ni de gestion d'upgrade multi-packs.
+- Limite majeure : un arrêt brutal pendant la copie peut laisser un répertoire de version incomplet, mais pas de remplacement de l'ancien pack enregistré. **Le rollback durable crash-safe multi-fichiers n'est pas certifié.**
+- Tests : `tests_standalone/test_drawtemp_r58b_upgrades.py` et parcours Qt offscreen, workflow R58 étendu. Résultat Actions [run 39418211683](https://github.com/faudard/drawTemp/actions/runs/39418211683) : échec avec **0 job**, aucune suite exécutée et aucune preuve de validation.
+- Détails et limites : [R58.B2](drawtemp5/R58B2_PACKAGE_UPGRADES.md). R58.B3 dépendances versionnées/transactions durables et R58.C cross-project restent ouverts.
+
+## Gates avant fusion vers master
+
+- [ ] CI complète sur le SHA final de #446 et matrice Linux/Windows/macOS.
+- [ ] Tests unitaires et d'intégration `tests_standalone`, dont R62/R63/R65/R75/R76/R78/R79/R80.
+- [ ] Vérifier la cohérence et le lancement de `drawtemp/studio/qt_shell.py`, `drawtemp/player/Main.qml`, `drawtemp/player/qt_app.py`, `drawtemp/player/controller.py`.
+- [ ] Valider l'absence de doublon GameSession, la conservation du tick canonique, l'Undo/Redo et les commandes révisionnées.
+- [ ] Éprouver sauvegarde/chargement/replay/migrations et isolation des extensions opt-in, y compris les combinaisons R61+R62+R63+R65.
+- [ ] QA humaine Qt (Player et Studio), scénarios end-to-end et prévention des softlocks.
+- [ ] Revoir les limites NO-GO propres aux recherches, plateformes futures et fonctionnalités expérimentales.
+- [ ] Relecture des diffs, statuts de tests, licences et approbation de la fusion par une personne responsable.
+
+**Ne pas fusionner la PR #446 vers `master` tant que ces cases ne sont pas traitées.** Les PR sources ne sont plus ouvertes, mais leurs clauses de non-certification restent applicables.

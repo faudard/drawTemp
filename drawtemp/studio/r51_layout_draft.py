@@ -26,13 +26,49 @@ def new_layout(kind="HUD_CT"):
             {"id": "continue_action", "type": "button", "text": "Continuer",
              "action": "menu.continue"},
         ]
+    if kind == "DIALOGUE":
+        buttons = [{"id": "main_action", "type": "button",
+                    "text": "Suite de la conversation",
+                    "action": "dialogue.advance"}]
+    if kind == "INVENTORY":
+        buttons = [{"id": "main_action", "type": "button",
+                    "text": "Fermer le sac", "action": "inventory.close"}]
+    if kind == "HUD_ACTION":
+        buttons = [
+            {"id": "step_left", "type": "button", "text": "← Pas gauche",
+             "action": "action.step_left"},
+            {"id": "step_right", "type": "button", "text": "Pas droit →",
+             "action": "action.step_right"},
+            {"id": "jump", "type": "button", "text": "Saut",
+             "action": "action.jump"},
+            {"id": "attack", "type": "button", "text": "Attaquer",
+             "action": "action.attack"},
+        ]
+    extra = []
+    if kind == "DIALOGUE":
+        extra = [
+            {"id": "dialogue_title", "type": "text",
+             "binding": {"path": "dialogue.title", "type": "str"}},
+            {"id": "dialogue_speaker", "type": "text",
+             "binding": {"path": "dialogue.speaker", "type": "str"}},
+            {"id": "dialogue_text", "type": "text",
+             "binding": {"path": "dialogue.text", "type": "str"}},
+            {"id": "dialogue_progress", "type": "text",
+             "binding": {"path": "dialogue.progress", "type": "str"}},
+        ]
+    if kind == "INVENTORY":
+        extra = [{"id": "inventory_count", "type": "text",
+                  "binding": {"path": "inventory.item_count", "type": "int"}}]
+    if kind == "HUD_ACTION":
+        extra = [{"id": "action_scene", "type": "text",
+                  "binding": {"path": "action.scene_title", "type": "str"}}]
     return {
         "kind": kind,
         "root": {
             "id": "root", "type": "column",
             "children": [
                 {"id": "welcome", "type": "text", "text": "Interface personnalisable"},
-                *buttons,
+                *extra, *buttons,
             ],
         },
         "breakpoints": [{"min_width": 0, "columns": 1},
@@ -206,6 +242,12 @@ def editor_sample(layout, width):
         "combat.selection": "Case 2,3",
         "combat.active_hp": 24,
         "combat.active_max_hp": 30,
+        "dialogue.title": "La rencontre",
+        "dialogue.speaker": "Narrateur",
+        "dialogue.text": "Un dialogue de démonstration.",
+        "dialogue.progress": "Réplique 1 / 2",
+        "inventory.item_count": 3,
+        "action.scene_title": "Château — plateforme",
     }
 
     def resolve(node):

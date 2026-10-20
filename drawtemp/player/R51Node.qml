@@ -10,6 +10,8 @@ Item {
     property int responsiveColumns: 1
     property bool allowActions: false
     property var permittedActions: []
+    property bool highContrast: false
+    property real textScale: 1.0
     signal intent(string action)
     signal focusMove(int direction)
     signal widgetFocused(string widgetId)
@@ -38,6 +40,8 @@ Item {
                     responsiveColumns: 1
                     allowActions: nodeItem.allowActions
                     permittedActions: nodeItem.permittedActions
+                    highContrast: nodeItem.highContrast
+                    textScale: nodeItem.textScale
                     onIntent: function(action) { nodeItem.intent(action) }
                     onFocusMove: function(direction) { nodeItem.focusMove(direction) }
                     onWidgetFocused: function(widgetId) { nodeItem.widgetFocused(widgetId) }
@@ -58,6 +62,8 @@ Item {
                     responsiveColumns: 1
                     allowActions: nodeItem.allowActions
                     permittedActions: nodeItem.permittedActions
+                    highContrast: nodeItem.highContrast
+                    textScale: nodeItem.textScale
                     onIntent: function(action) { nodeItem.intent(action) }
                     onFocusMove: function(direction) { nodeItem.focusMove(direction) }
                     onWidgetFocused: function(widgetId) { nodeItem.widgetFocused(widgetId) }
@@ -69,12 +75,12 @@ Item {
         id: textView
         Label {
             objectName: "r51-widget-" + nodeItem.spec.id
-            color: "#f2f2f2"
+            color: nodeItem.highContrast ? "#ffffff" : "#f2f2f2"
             textFormat: Text.PlainText
             text: nodeItem.spec.value === undefined ?
                   (nodeItem.spec.text || "") : String(nodeItem.spec.value)
             wrapMode: Text.Wrap
-            font.pixelSize: 15
+            font.pixelSize: Math.round(15 * Math.max(0.85, Math.min(1.35, nodeItem.textScale)))
             Accessible.name: text
         }
     }
@@ -86,7 +92,19 @@ Item {
             enabled: nodeItem.allowActions &&
                      nodeItem.permittedActions.indexOf(nodeItem.spec.action) !== -1
             activeFocusOnTab: true
+            implicitHeight: Math.max(44, contentItem.implicitHeight + topPadding + bottomPadding)
+            font.pixelSize: Math.round(15 * Math.max(0.85, Math.min(1.35, nodeItem.textScale)))
             Accessible.name: text
+            Accessible.description: enabled ?
+                ("Action : " + nodeItem.spec.action) :
+                ("Action indisponible : " + nodeItem.spec.action)
+            background: Rectangle {
+                radius: 6
+                color: nodeItem.highContrast ? "#000000" : "#32465d"
+                border.width: parent.activeFocus ? 3 : (nodeItem.highContrast ? 2 : 1)
+                border.color: nodeItem.highContrast ? "#ffffff" :
+                              (parent.activeFocus ? "#e7c78b" : "#9eacbe")
+            }
             onClicked: nodeItem.intent(nodeItem.spec.action)
             onActiveFocusChanged: {
                 if (activeFocus) nodeItem.widgetFocused(nodeItem.spec.id)
@@ -110,7 +128,7 @@ Item {
         ColumnLayout {
             spacing: 4
             Label {
-                color: "#f2f2f2"
+                color: nodeItem.highContrast ? "#ffffff" : "#f2f2f2"
                 textFormat: Text.PlainText
                 text: String(nodeItem.spec.value || 0) + " / " +
                       String(nodeItem.spec.max_value || 0)

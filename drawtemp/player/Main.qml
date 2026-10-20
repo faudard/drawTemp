@@ -19,11 +19,35 @@ ApplicationWindow {
     property var playerData: player.view
     property int currentSlot: 1
     property real textScale: playerData.settings.display.text_scale
+    property real subtitleScale: playerData.accessibility.subtitle_scale
+    property bool reduceMotion: playerData.accessibility.reduce_motion
+    property bool reduceFlashes: playerData.accessibility.reduce_flashes
     property bool highContrast: playerData.settings.display.high_contrast
+    property bool authoredInventoryOpen: false
+    property bool authoredActionHudVisible: true
+    property var authoredActionHudPayload: {
+        var revision = playerData.revision
+        if (playerData.screen !== "platform") return ({ "available": false })
+        return player.authoredActionHud(Math.max(1, Math.round(width * 0.31)))
+    }
+    property var authoredDialoguePayload: {
+        var screen = playerData.screen
+        var revision = playerData.revision
+        if (screen !== "dialogue") return ({ "available": false })
+        return player.authoredScreen("DIALOGUE", Math.max(1, Math.round(width * 0.55)))
+    }
+    property var authoredInventoryPayload: {
+        var screen = playerData.screen
+        var revision = playerData.revision
+        if (screen !== "battle" && screen !== "campaign") return ({ "available": false })
+        return player.authoredScreen("INVENTORY", Math.max(1, Math.round(width * 0.65)))
+    }
     property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
-                               recoveryPopup.opened || recoveryErrorPopup.opened
+                               recoveryPopup.opened || recoveryErrorPopup.opened || authoredInventoryOpen
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
+        if (playerData.screen !== "battle" && playerData.screen !== "campaign")
+            authoredInventoryOpen = false
         if (smokeMode) return
         if (playerData.settings.display.fullscreen && visibility !== Window.FullScreen)
             showFullScreen()
@@ -83,6 +107,13 @@ ApplicationWindow {
 
     // Window-level shortcuts remain active when buttons have keyboard focus.
     // Popups disable gameplay actions; QML never mutates tactical rules.
+    Shortcut {
+        objectName: "r57-keyboard-options"
+        sequence: "F10"
+        enabled: !optionsPopup.opened && !recoveryPopup.opened &&
+                 !recoveryErrorPopup.opened && !Boolean(root.playerData.cinematic.id)
+        onActivated: optionsPopup.open()
+    }
     Shortcut {
         sequence: root.binding("explore_up")
         enabled: root.playerData.screen === "exploration" && !root.inputLocked
@@ -202,6 +233,12 @@ ApplicationWindow {
         onActivated: pausePopup.open()
     }
 
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.authoredInventoryOpen
+        onActivated: root.authoredInventoryOpen = false
+    }
+
     // R51.B2 authored title menu: declared widgets, same Qt Quick renderer,
     // canonical R12 new/continue commands. Never hide the legacy fallback.
     R51Layout {
@@ -265,7 +302,169 @@ ApplicationWindow {
         allowActions: !root.inputLocked
         permittedActions: authoredPayload.permitted_actions || []
         onIntent: function(action) {
-            if (!root.inputLocked) player.authoredUiIntent(action)
+            if (root.inputLocked) return
+            if (action === "combat.open_inventory") {
+                if (root.authoredInventoryPayload.available === true)
+                    root.authoredInventoryOpen = true
+            } else {
+                player.authoredUiIntent(action)
+            }
+        }
+    }
+
+    // R51.C3 — authored buttons emit exactly one revisioned R32 frame.
+    // The native PlatformViewport keeps the 60 Hz continuous physics clock.
+    R51Layout {
+        id: authoredActionHud
+        objectName: "r51-player-action-hud"
+        z: 22
+        width: Math.min(420, root.width * 0.32)
+        height: Math.min(230, root.height * 0.27)
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        visible: root.playerData.screen === "platform" &&
+                 root.authoredActionHudPayload.available === true &&
+                 root.authoredActionHudVisible
+        projection: root.authoredActionHudPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: root.authoredActionHudPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (!root.inputLocked &&
+                (root.authoredActionHudPayload.permitted_actions || []).indexOf(action) !== -1)
+                player.authoredActionIntent(action)
+        }
+    }
+    Button {
+        objectName: "r51-action-hud-toggle"
+        z: 23
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 16
+        visible: root.playerData.screen === "platform" &&
+                 root.authoredActionHudPayload.available === true
+        text: root.authoredActionHudVisible ? "Masquer HUD action" : "Afficher HUD action"
+        enabled: !root.inputLocked
+        onClicked: root.authoredActionHudVisible = !root.authoredActionHudVisible
+    }
+
+    // R51.C2: real tactical inventory items, delegated to the canonical
+    // PlayerController.use_item; the author controls the surrounding UI.
+    Button {
+        objectName: "r51-open-inventory"
+        z: 21
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 15
+        visible: (root.playerData.screen === "battle" ||
+                  root.playerData.screen === "campaign") &&
+                 root.authoredInventoryPayload.available === true &&
+                 !root.authoredInventoryOpen
+        text: root.playerData.screen === "campaign" ?
+              "Équipement personnalisé" : "Sac personnalisé"
+        enabled: !root.inputLocked
+        onClicked: root.authoredInventoryOpen = true
+    }
+    Rectangle {
+        id: authoredInventoryOverlay
+        objectName: "r51-inventory-overlay"
+        z: 60
+        anchors.fill: parent
+        color: "#de10151e"
+        visible: root.authoredInventoryOpen &&
+                 root.authoredInventoryPayload.available === true
+        Rectangle {
+            width: Math.min(720, parent.width - 48)
+            height: Math.min(650, parent.height - 48)
+            anchors.centerIn: parent
+            radius: 12
+            color: root.highContrast ? "#000000" : "#202d3b"
+            border.color: root.highContrast ? "#ffffff" : "#73818d"
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 14
+                R51Layout {
+                    id: authoredInventoryDesign
+                    objectName: "r51-inventory-author-layout"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 210
+                    projection: root.authoredInventoryPayload.projection || ({})
+                    highContrast: root.highContrast
+                    textScale: root.textScale
+                    allowActions: true
+                    permittedActions: root.authoredInventoryPayload.permitted_actions || []
+                    onIntent: function(action) {
+                        if (action === "inventory.close")
+                            root.authoredInventoryOpen = false
+                    }
+                }
+                Label {
+                    text: root.authoredInventoryPayload.context === "campaign" ?
+                          "Équipement de campagne · Jeanne" : "Objets réellement disponibles"
+                    color: root.highContrast ? "#ffffff" : root.ivory
+                    Accessible.name: text
+                }
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    ColumnLayout {
+                        width: parent.width
+                        Repeater {
+                            model: root.authoredInventoryPayload.items || []
+                            Button {
+                                objectName: "r51-item-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Utiliser " + modelData.id + " ×" + modelData.count
+                                enabled: root.authoredInventoryPayload.can_use &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: {
+                                    player.authoredInventoryUse(modelData.id)
+                                    root.authoredInventoryOpen = false
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: root.authoredInventoryPayload.context === "campaign" ?
+                                   (root.authoredInventoryPayload.items || []) : []
+                            Button {
+                                objectName: "r51-equip-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Équiper " + modelData.name +
+                                      " (" + modelData.slot + " ×" + modelData.count + ")"
+                                enabled: root.authoredInventoryPayload.can_equip &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: player.authoredCampaignEquip(modelData.id)
+                            }
+                        }
+                        Repeater {
+                            model: root.authoredInventoryPayload.context === "campaign" ?
+                                   ["weapon", "armor", "accessory"] : []
+                            Button {
+                                objectName: "r51-unequip-" + modelData
+                                Layout.fillWidth: true
+                                property string equippedId:
+                                    (root.authoredInventoryPayload.equipped || {})[modelData] || ""
+                                text: "Retirer " + modelData + " : " + equippedId
+                                enabled: equippedId.length > 0 &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: player.authoredCampaignUnequip(modelData)
+                            }
+                        }
+                    }
+                }
+                Button {
+                    objectName: "r51-inventory-escape"
+                    text: "Fermer le sac  (Échap)"
+                    Accessible.name: "Fermer l'inventaire personnalisé"
+                    Layout.alignment: Qt.AlignRight
+                    onClicked: root.authoredInventoryOpen = false
+                }
+            }
         }
     }
 
@@ -297,7 +496,10 @@ ApplicationWindow {
                 color: root.muted
             }
             Button {
+                id: playerOptionsButton
+                objectName: "r57-open-options"
                 text: "Options"
+                Accessible.name: "Ouvrir les options et réglages d’accessibilité"
                 onClicked: optionsPopup.open()
             }
             Button {
@@ -437,7 +639,23 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 30
+            R51Layout {
+                objectName: "r51-player-dialogue"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.authoredDialoguePayload.available === true
+                projection: root.authoredDialoguePayload.projection || ({})
+                highContrast: root.highContrast
+                textScale: root.textScale
+                allowActions: !root.inputLocked
+                permittedActions: root.authoredDialoguePayload.permitted_actions || []
+                onIntent: function(action) {
+                    if (action === "dialogue.advance" && !root.inputLocked)
+                        player.authoredDialogueAdvance()
+                }
+            }
             Rectangle {
+                visible: root.authoredDialoguePayload.available !== true
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 12
@@ -457,14 +675,17 @@ ApplicationWindow {
                     }
                     Label {
                         text: root.playerData.scene.speaker || "Narrateur"
+                        textFormat: Text.PlainText
                         color: root.gold
                         font.bold: true
                         font.pixelSize: 15 * root.textScale
                     }
                     Label {
                         text: root.playerData.scene.text || ""
+                        textFormat: Text.PlainText
                         color: root.ivory
-                        font.pixelSize: 19 * root.textScale
+                        font.pixelSize: 19 * root.textScale * root.subtitleScale
+                        Accessible.name: text
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -1398,6 +1619,159 @@ ApplicationWindow {
                             }
                         }
                         ColumnLayout {
+                            id: survivalHud
+                            objectName: "r63-survival-hud"
+                            // The authoritative values come from the one GameSession.
+                            // QML is projection-only; buttons dispatch revisioned commands.
+                            visible: (root.playerData.screen === "exploration" ||
+                                      root.playerData.screen === "platform") &&
+                                     root.playerData.survival !== null &&
+                                     root.playerData.survival !== undefined
+                            property var stats: root.playerData.survival || ({})
+                            property bool mayAct: root.playerData.screen === "exploration" &&
+                                                  !root.inputLocked
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "SURVIE & ARTISANAT · TICK " +
+                                      (survivalHud.stats.tick || 0)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Repeater {
+                                model: [
+                                    {"key": "energy", "name": "Énergie"},
+                                    {"key": "hunger", "name": "Satiété"},
+                                    {"key": "temperature", "name": "Chaleur"}
+                                ]
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    property int meter: survivalHud.stats.needs ?
+                                        survivalHud.stats.needs[modelData.key] : 0
+                                    Label {
+                                        text: modelData.name + " · " + parent.meter + " / 100"
+                                        color: parent.meter <= 20 ? "#f9a99c" : root.ivory
+                                        Layout.fillWidth: true
+                                    }
+                                    ProgressBar {
+                                        Layout.fillWidth: true
+                                        from: 0
+                                        to: 100
+                                        value: parent.meter
+                                        Accessible.name: modelData.name + " : " + value + " sur 100"
+                                    }
+                                }
+                            }
+                            Label {
+                                objectName: "r63-condition-feedback"
+                                visible: survivalHud.stats.condition &&
+                                         survivalHud.stats.condition.phase !== "stable"
+                                text: {
+                                    var c = survivalHud.stats.condition || ({})
+                                    if (c.phase === "incapacitated")
+                                        return "Survie compromise : fabrication et récolte bloquées. " +
+                                               "Rejoignez un refuge et utilisez vos provisions pour récupérer."
+                                    if (survivalHud.stats.needs &&
+                                            survivalHud.stats.needs.temperature <= 20)
+                                        return "Froid dangereux : la fatigue augmente à chaque tick."
+                                    return "Besoins faibles : préparez nourriture ou refuge."
+                                }
+                                Accessible.name: text
+                                color: "#f9a99c"
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                text: "Attendre 1 tick"
+                                visible: root.playerData.screen === "exploration"
+                                Layout.fillWidth: true
+                                enabled: survivalHud.mayAct
+                                onClicked: player.survivalWait(1)
+                            }
+                            Label {
+                                text: "RESSOURCES"
+                                color: root.gold
+                                font.bold: true
+                                visible: (survivalHud.stats.nodes || []).length > 0
+                            }
+                            Repeater {
+                                model: survivalHud.stats.nodes || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · " + modelData.item +
+                                              " (" + modelData.remaining + ")" +
+                                              (modelData.cold ? " · froid -" + modelData.cold : "")
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Collecter"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalGather(modelData.id)
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "RECETTES"
+                                color: root.gold
+                                font.bold: true
+                                visible: (survivalHud.stats.recipes || []).length > 0
+                            }
+                            Repeater {
+                                model: survivalHud.stats.recipes || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Fabriquer"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalCraft(modelData.id)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: survivalHud.stats.shelters || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "Refuge : " + modelData.id
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Se reposer"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalRest(modelData.id)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: survivalHud.stats.foods || []
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.item + " · +" +
+                                              modelData.nutrition + " satiété"
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                    }
+                                    Button {
+                                        text: "Manger"
+                                        enabled: survivalHud.mayAct && modelData.available
+                                        onClicked: player.survivalEat(modelData.item)
+                                    }
+                                }
+                            }
+                        }
+                        ColumnLayout {
                             // R55 opt-in canonical economy; never display journals
                             // or run simulation on a render frame.
                             visible: root.playerData.screen === "exploration" &&
@@ -2167,7 +2541,7 @@ ApplicationWindow {
             anchors.bottom: cinematicControls.top
             anchors.leftMargin: 36; anchors.rightMargin: 36
             anchors.bottomMargin: 16
-            height: 132
+            height: Math.min(205, Math.round(132 * root.subtitleScale))
             color: "#121d2c"
             border.color: "#c1a878"
             border.width: 1
@@ -2177,14 +2551,17 @@ ApplicationWindow {
                 anchors.margins: 17
                 Label {
                     text: cinematicOverlay.frameData.speaker || cinematicOverlay.clip.title
+                    textFormat: Text.PlainText
                     font.bold: true
                     color: "#f5ca91"
                     font.pixelSize: 17 * root.textScale
                 }
                 Label {
                     text: cinematicOverlay.frameData.dialogue || "..."
+                    textFormat: Text.PlainText
                     color: "#f5ead5"
-                    font.pixelSize: 18 * root.textScale
+                    font.pixelSize: 18 * root.textScale * root.subtitleScale
+                    Accessible.name: text
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -2195,8 +2572,9 @@ ApplicationWindow {
         Rectangle {
             anchors.fill: parent
             color: cinematicOverlay.frameData.transition === "dissolve" ? "#101a2b" : "#000000"
-            opacity: Math.max(cinematicOverlay.frameData.transitionOpacity || 0,
-                              cinematicOverlay.frameData.fadeOpacity || 0)
+            opacity: root.reduceFlashes ? 0 : Math.max(
+                cinematicOverlay.frameData.transitionOpacity || 0,
+                cinematicOverlay.frameData.fadeOpacity || 0)
             visible: opacity > 0
         }
 
@@ -2267,8 +2645,20 @@ ApplicationWindow {
 
     Popup {
         id: optionsPopup
+        objectName: "r57-a11y-options"
         modal: true
         focus: true
+        property var returnFocus: null
+        // Restore the former keyboard target instead of losing focus after Esc.
+        onAboutToShow: returnFocus = root.activeFocusItem
+        onOpened: languageSelect.forceActiveFocus()
+        onClosed: {
+            if (returnFocus && returnFocus.forceActiveFocus)
+                returnFocus.forceActiveFocus()
+            else
+                playerOptionsButton.forceActiveFocus()
+            returnFocus = null
+        }
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 36, 570)
         height: Math.min(root.height - 40, 690)
@@ -2294,6 +2684,12 @@ ApplicationWindow {
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
+            Label {
+                text: "F10 : ouvrir les options · Tab / Maj+Tab : parcourir · Échap : fermer"
+                color: root.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -2308,9 +2704,69 @@ ApplicationWindow {
                         font.bold: true
                         font.letterSpacing: 1
                     }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Langue et pseudo-localisation"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        ComboBox {
+                            id: languageSelect
+                            objectName: "r57-player-language"
+                            Accessible.name: "Langue du Player"
+                            model: ["Français", "English", "Pseudo accents", "Pseudo RTL"]
+                            currentIndex: ["fr", "en", "qps-ploc", "qps-plocm"].indexOf(root.playerData.language)
+                            onActivated: player.selectLanguage(["fr", "en", "qps-ploc", "qps-plocm"][currentIndex])
+                        }
+                    }
                     Label { text: "Taille des textes"; color: root.ivory }
+                    Label {
+                        text: "Les sous-titres narratifs et cinématiques restent lisibles."
+                        color: root.muted
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Taille des sous-titres"
+                            color: root.ivory
+                            Layout.fillWidth: true
+                        }
+                        Slider {
+                            objectName: "r57-subtitle-scale"
+                            Accessible.name: "Agrandir les sous-titres"
+                            Layout.preferredWidth: 200
+                            from: 1.0; to: 2.0; stepSize: 0.1
+                            value: root.subtitleScale
+                            onPressedChanged: {
+                                if (!pressed)
+                                    player.setSubtitleScale(Math.round(value * 10) / 10)
+                            }
+                        }
+                        Label {
+                            text: Math.round(root.subtitleScale * 100) + " %"
+                            color: root.ivory
+                        }
+                    }
+                    CheckBox {
+                        objectName: "r57-reduce-motion"
+                        text: "Réduire les mouvements animés"
+                        Accessible.name: "Réduire les animations de combat et secousses"
+                        checked: root.reduceMotion
+                        onClicked: player.setAccessibilityBool("reduce_motion", checked)
+                    }
+                    CheckBox {
+                        objectName: "r57-reduce-flashes"
+                        text: "Réduire les flashs et fondus cinématiques"
+                        Accessible.name: "Réduire les effets lumineux et les fondus"
+                        checked: root.reduceFlashes
+                        onClicked: player.setAccessibilityBool("reduce_flashes", checked)
+                    }
                     Slider {
                         id: scaleSlider
+                        Accessible.name: "Taille du texte général"
                         Layout.fillWidth: true
                         from: 0.85; to: 1.35; stepSize: 0.05
                         value: root.playerData.settings.display.text_scale
@@ -2319,6 +2775,8 @@ ApplicationWindow {
                         }
                     }
                     CheckBox {
+                        objectName: "r57-high-contrast"
+                        Accessible.name: "Contraste élevé dans le Player"
                         text: "Contraste renforcé"
                         checked: root.highContrast
                         onClicked: player.setDisplayBool("high_contrast", checked)
@@ -2400,7 +2858,9 @@ ApplicationWindow {
                 visible: text.length > 0
             }
             Button {
+                objectName: "r57-options-close"
                 text: "Fermer"
+                Accessible.name: "Fermer les options du Player"
                 Layout.alignment: Qt.AlignRight
                 onClicked: optionsPopup.close()
             }

@@ -1,0 +1,39 @@
+name: R68.B1 touch lifecycle research (headless, no device certification)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/player/r68_touch.py'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/player/ActionPreview.qml'
+      - 'drawtemp/player/MobileTouchOverlay.qml'
+      - 'tests_standalone/test_r68_touch.py'
+      - 'docs/R68B_TOUCH_SPIKE.md'
+      - '.github/workflows/r68b-touch-spike.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/player/r68_touch.py'
+      - 'drawtemp/player/action_app.py'
+      - 'drawtemp/player/ActionPreview.qml'
+      - 'drawtemp/player/MobileTouchOverlay.qml'
+      - 'tests_standalone/test_r68_touch.py'
+      - 'docs/R68B_TOUCH_SPIKE.md'
+      - '.github/workflows/r68b-touch-spike.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  headless-input-and-save:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fixed step, touch lifecycle and R26 save/replay tests
+        run: python -m unittest tests_standalone.test_r68_touch tests_standalone.test_action_player_r26b -v

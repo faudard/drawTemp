@@ -116,6 +116,10 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R65.B: legacy projects bypass the optional combat validation entirely.
+        if "org.drawtemp.actioncombat" in self.extensions:
+            from .action_combat_catalog_r65 import catalog_from_project
+            catalog_from_project(self)
         # R36: reject invalid controllers and dangling R28 animation IDs on load.
         from .animation_graph import controllers_from_project
         controllers_from_project(self)
@@ -230,6 +234,50 @@ class GameProject:
             validate_systems(
                 self.extensions[SYSTEMS_EXTENSION]["data"],
                 set(self.exploration))
+        # R61.A: the settlement is an opt-in projection over R55 stocks.
+        # Do not allow a second autonomous resource graph in GameProject.
+        from .settlement_management import (
+            EXTENSION as SETTLEMENT_EXTENSION, validate_settlement)
+        if SETTLEMENT_EXTENSION in self.extensions:
+            require(SYSTEMS_EXTENSION in self.extensions,
+                    "R61 settlement requires the canonical R55 system graph")
+            validate_settlement(
+                self.extensions[SETTLEMENT_EXTENSION]["data"],
+                self.extensions[SYSTEMS_EXTENSION]["data"],
+                set(self.exploration) | set(content.missions))
+        # R62.A uses the single R35 clock and canonical Campaign item IDs.
+        from .farming_life import EXTENSION as FARM_EXTENSION, validate_farming
+        if FARM_EXTENSION in self.extensions:
+            require(EXTENSION in self.extensions,
+                    "R62 farming requires the R35 living-world clock")
+            known_items = set(content.equipment)
+            if SYSTEMS_EXTENSION in self.extensions:
+                known_items.update(row["id"] for row in
+                                   self.extensions[SYSTEMS_EXTENSION]["data"]["resources"])
+            validate_farming(self.extensions[FARM_EXTENSION]["data"],
+                             set(self.exploration), known_items)
+        # R62.B.2 social data references R35 NPC identities and native items.
+        from .relationship_life import (EXTENSION as SOCIAL_EXTENSION,
+                                        validate_relationships)
+        if SOCIAL_EXTENSION in self.extensions:
+            require(EXTENSION in self.extensions,
+                    "R62 relationships require the R35 living-world clock")
+            world = self.extensions[EXTENSION]["data"]
+            npcs = {row["id"] for row in world["npcs"]}
+            activities = {row["id"]: {stop["activity"] for stop in row["schedule"]}
+                          for row in world["npcs"]}
+            social_items = set(content.equipment)
+            if SYSTEMS_EXTENSION in self.extensions:
+                social_items.update(row["id"] for row in
+                                    self.extensions[SYSTEMS_EXTENSION]["data"]["resources"])
+            validate_relationships(self.extensions[SOCIAL_EXTENSION]["data"],
+                                   npcs, social_items, npc_activities=activities)
+        # R63: Survival is an optional typed GameProject extension.
+        from .survival import EXTENSION as SURVIVAL_EXTENSION, validate_survival
+        if SURVIVAL_EXTENSION in self.extensions:
+            validate_survival(
+                self.extensions[SURVIVAL_EXTENSION]["data"],
+                set(self.exploration), exploration=self.exploration)
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes

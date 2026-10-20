@@ -1,0 +1,36 @@
+name: DrawTemp R73.A Network Policy (NO-GO)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/network_session_policy.py'
+      - 'tests_standalone/test_r73a_network_session_policy.py'
+      - 'docs/drawtemp11/R73_A_NETWORK_SESSION_POLICY.md'
+      - '.github/workflows/r73a-network-policy.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/sdk/network_session_policy.py'
+      - 'tests_standalone/test_r73a_network_session_policy.py'
+      - 'docs/drawtemp11/R73_A_NETWORK_SESSION_POLICY.md'
+      - '.github/workflows/r73a-network-policy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  network-policy-headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: R73.A permissions, version and rejoin regression (NO-GO)
+        run: python -m unittest -v tests_standalone.test_r73a_network_session_policy
+      - name: Solo GameSession persistence regression
+        run: python -m unittest -v tests_standalone.test_game_session
