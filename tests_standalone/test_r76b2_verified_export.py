@@ -124,6 +124,20 @@ class R76B2StrictExportTests(unittest.TestCase):
             for x in self.source.rglob("*") if x.is_file()
         })
 
+    def test_native_bundle_cannot_pollute_optimized_project(self):
+        result = prepare_preview(self.content, self.plan, self.destination, approved=True)
+        runtime = self.root / "runtime"
+        runtime.mkdir()
+        binary = "DrawTempPlayer.exe" if os.name == "nt" else "DrawTempPlayer"
+        (runtime / binary).write_bytes(b"native fixture only")
+        with self.assertRaises(OptimizerError):
+            export_native_preview(
+                self.destination, result["receipt_sha256"],
+                runtime, self.destination / "bundle")
+        self.assertFalse((self.destination / "bundle").exists())
+        self.assertTrue(undo_preview(
+            self.destination, expected_receipt_sha256=result["receipt_sha256"]))
+
     def test_rights_mismatch_of_same_png_blocks_plan(self):
         rights_file = self.source / "asset-licenses.json"
         rights = json.loads(rights_file.read_text())
