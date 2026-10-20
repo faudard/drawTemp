@@ -48,6 +48,7 @@ Le boss est un ennemi avec comportement réel `phase_boss` ou `adaptive_boss` da
 game = GameSession.new(content, project, "main", rules=tactical_r6_rules())
 game.start_mission("throne")
 director = game.ai_boss_preview("throne_warden")
+audit = game.ai_boss_replay_audit("throne_warden")  # audit explicite
 ```
 
 `GameSession.ai_boss_preview` refuse toute mission non active. Le résultat JSON réutilise `boss_r6_telegraph` et expose :
@@ -57,6 +58,12 @@ director = game.ai_boss_preview("throne_warden")
 - renforts **possible** (scripts non déclenchés), **queued** (dans EncounterDirector) ou **observed** (acteurs déjà apparus).
 
 Une prévision de commande `conditional` lorsque le boss est **réellement actif** ne constitue pas une attaque déjà exécutée. Lorsqu'il ne joue pas, l'intention est **unknown** plutôt que devinée. Le rapport porte un SHA‑256 déterministe ; l'évaluation n'avance pas CT ni RNG et n'écrit aucune commande.
+
+## Audit de replay R37.E3
+
+`GameSession.ai_boss_replay_audit(director_id, command_budget=512)` reproduit **explicitement** les commandes de l'instance tactique active via `Battle.replay(Battle.recording(), rules=...)`. Il refuse plus de 512 commandes (plafond modifiable entre 1 et 512), vérifie le digest CT et compare le rapport complet de Boss Director à la projection rejouée. Le résultat inclut `verified: true`, les digests CT et preview, le nombre de commandes et les événements de phases constatés.
+
+Cette opération ne compte pas comme une nouvelle transition et ne crée aucune commande. **Il s'agit d'un audit de cohérence**, pas d'une preuve d'absence de bug commun aux deux exécutions ni d'une preuve de conformité du gameplay. Il n'écrit aucun état dans le checkpoint.
 
 ## Studio
 
