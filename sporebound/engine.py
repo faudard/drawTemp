@@ -18,10 +18,11 @@ class Battle:
         if rules is None:
             from .event_pages import has_pages
             from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
             from .tactical_rpg3 import authored_rules_for_document
             raw = content.to_dict()
             rules = (authored_rules_for_document(raw)
-                     if has_pages(raw) or has_logic_variables(raw)
+                     if has_pages(raw) or has_logic_variables(raw) or has_slice_objective(raw)
                      else default_rules())
         self.rules = rules
         for key in ('damage', 'hit_chance', 'mitigation'):
@@ -755,10 +756,11 @@ class Battle:
         if rules is None:
             from .event_pages import has_pages
             from .logic_variables import has_logic_variables
+            from .logic_vertical_objective import has_slice_objective
             from .tactical_rpg3 import authored_rules_for_document
             raw = recording["content"]
             rules = (authored_rules_for_document(raw)
-                     if has_pages(raw) or has_logic_variables(raw)
+                     if has_pages(raw) or has_logic_variables(raw) or has_slice_objective(raw)
                      else default_rules())
         if recording['version'] == 3:
             require(recording.get('rules') == rules.manifest(), 'Replay ruleset mismatch')
