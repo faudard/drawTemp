@@ -279,6 +279,22 @@ def seeded_for_project(project, catalog=None):
     return Catalog(data), tuple(drift)
 
 
+def rebase_project_sources(project, catalog):
+    """Explicit migration: changed source keys lose stale translations only.
+
+    Consumers must request confirmation before calling this. Unchanged keys
+    preserve all translations and no canonical game state is modified.
+    """
+    current, drift = seeded_for_project(project, catalog)
+    if not drift:
+        return current, ()
+    fresh, _ = seeded_for_project(project)
+    data = deepcopy(current.data)
+    for key in drift:
+        data["entries"][key] = deepcopy(fresh.data["entries"][key])
+    return Catalog(data), drift
+
+
 
 def localize_view(view, catalog, language):
     """R57 projection on an already calculated Player view; never mutates state."""
