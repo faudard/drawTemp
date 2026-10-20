@@ -1359,6 +1359,11 @@ class StudioWindow(QMainWindow):
             from drawtemp.studio.r28d_workflow_qt import R28DWorkspace
             child = R28DWorkspace(self.session)
             child.updated.connect(self.refresh)
+            # The guided R49.C2 path delegates to the existing supervised
+            # Player and native export controls. It never launches a second
+            # Qt process or creates a secondary GameProject.
+            child.first_scene.playtestRequested.connect(self.playtest)
+            child.first_scene.exportRequested.connect(self.export_player)
         elif identifier == "maps":
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
