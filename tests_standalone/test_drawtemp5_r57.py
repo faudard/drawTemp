@@ -82,6 +82,64 @@ class R57CatalogTests(unittest.TestCase):
         self.assertEqual(view["choices"][0]["label"], "Entrer")
         self.assertEqual(projected["revision"], 11)
 
+    def test_v2_line_id_localizes_active_dialogue_without_touching_cursor(self):
+        from copy import deepcopy
+        project = deepcopy(PROJECT)
+        project["story"]["schema_version"] = 2
+        project["story"]["scenes"][0]["lines"] = [
+            {"id": "opening", "speaker": "Jeanne", "text": "Bonjour."},
+            {"id": "reply", "speaker": "Capitaine", "text": "À la porte."},
+        ]
+        cat, drift = seeded_for_project(project)
+        self.assertFalse(drift)
+        self.assertIn("story.intro.line.reply.text", cat.data["entries"])
+        cat = cat.with_translation("story.intro.line.reply.text", "en", "At the gate.")
+        cat = cat.with_translation("story.intro.line.reply.speaker", "en", "Captain")
+        state = {
+            "campaign": "acte_1", "title": "Les voix de Jeanne",
+            "scene": {"id": "intro", "title": "Une rencontre",
+                      "speaker": "Capitaine", "text": "À la porte."},
+            "dialogue_line": {"scene_id": "intro", "id": "reply",
+                              "index": 1, "count": 2, "complete": True,
+                              "speaker": "Capitaine", "text": "À la porte."},
+            "choices": [{"id": "go", "label": "Entrer"}],
+            "revision": 31,
+        }
+        before = deepcopy(state)
+        translated = localize_view(state, cat, "en")
+        self.assertEqual(translated["scene"]["text"], "At the gate.")
+        self.assertEqual(translated["scene"]["speaker"], "Captain")
+        self.assertEqual(translated["dialogue_line"]["text"], "At the gate.")
+        self.assertEqual(translated["dialogue_line"]["id"], "reply")
+        self.assertEqual(translated["dialogue_line"]["index"], 1)
+        self.assertEqual(translated["revision"], 31)
+        self.assertEqual(state, before)
+        # A reordered line keeps its translation because its id is stable.
+        project["story"]["scenes"][0]["lines"].reverse()
+        _, drift = seeded_for_project(project, cat)
+        self.assertEqual(drift, ())
+
+    def test_v2_stale_line_text_does_not_show_older_translation(self):
+        from copy import deepcopy
+        project = deepcopy(PROJECT)
+        project["story"]["schema_version"] = 2
+        project["story"]["scenes"][0]["lines"] = [
+            {"id": "reply", "speaker": "Jeanne", "text": "Bonjour."},
+        ]
+        cat, _ = seeded_for_project(project)
+        cat = cat.with_translation("story.intro.line.reply.text", "en", "Hello.")
+        state = {
+            "campaign": "acte_1", "scene": {
+                "id": "intro", "speaker": "Jeanne", "text": "Texte modifié"},
+            "dialogue_line": {
+                "scene_id": "intro", "id": "reply", "speaker": "Jeanne",
+                "text": "Texte modifié", "index": 0, "count": 1, "complete": True},
+            "choices": [],
+        }
+        translated = localize_view(state, cat, "en")
+        self.assertEqual(translated["scene"]["text"], "Texte modifié")
+        self.assertEqual(translated["dialogue_line"]["text"], "Texte modifié")
+
     def test_pluralization_format_and_missing_fallback(self):
         data = Catalog.empty().data
         data["entries"]["inventory.items"] = {
