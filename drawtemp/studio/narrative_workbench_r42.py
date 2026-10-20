@@ -33,6 +33,15 @@ class NarrativeWorkbench:
         return self.session.preview_project(
             lambda project: operation(project).to_dict(), kind=kind)
 
+    def preview_captain_slice(self):
+        """Opt-in two-document VS-42 template, one undoable R1 transaction."""
+        from drawtemp.sdk.r42_captain_slice import make_captain_slice
+        content, project = make_captain_slice()
+        return self.session.preview_pair(
+            lambda _old_content, _old_project: (content.to_dict(),
+                                                project.to_dict()),
+            kind='r42-vs42-template')
+
     def preview_migrate(self):
         content = self._content()
         return self._edit(lambda project: migrate_story_v1(project, content),
