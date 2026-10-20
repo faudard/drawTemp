@@ -222,6 +222,18 @@ class MapWindow(QMainWindow):
         self._make_generator_dock()
         self._make_prefab_dock()
 
+        # R52.B: same Qt Quick viewport as the Player. Inspector changes
+        # are cosmetic previews, never direct authoring/Content writes.
+        from .r52_render_inspector import RenderLookInspector
+        self.render_look_inspector = RenderLookInspector(self.renderer, self)
+        self.render_look_dock = self._dock(
+            "R52 — Lumière / Caméra", self.render_look_inspector,
+            Qt.RightDockWidgetArea)
+        self.render_look_dock.hide()
+        action = toolbar.addAction("Aspect 2.5D")
+        action.triggered.connect(lambda _checked=False: self.render_look_dock.show())
+        self.toolbar_actions["Aspect 2.5D"] = action
+
         from .construction_dock import ConstructionDock
         # R6 runs on the EXACT MapStudio authoring session and viewport.
         # Its dock is contextual, not a second map editor or renderer.

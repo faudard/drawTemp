@@ -79,6 +79,23 @@ Item {
         }
     }
 
+    // R52.B1: ambient tint overlays the scene graph, never the picking model.
+    // This Rectangle has no pointer handlers or direct Gameplay bindings.
+    Rectangle {
+        anchors.fill: parent
+        z: 90000
+        readonly property var tint: renderer.lightingOverlay
+        color: tint.color
+        opacity: tint.opacity
+        visible: opacity > 0
+    }
+    Timer {
+        interval: 50
+        repeat: true
+        running: renderer.lightingAnimating
+        onTriggered: renderer.advanceLighting(interval)
+    }
+
     // Independent visual clock: no CT, tactical RNG or save state is changed.
     Timer {
         interval: 125
@@ -483,6 +500,7 @@ Item {
     }
 
     Rectangle {
+        z: 110000 // HUD remains legible above the ambient scene tint.
         visible: root.showLegend
         height: 34; width: legend.implicitWidth + 28
         anchors { left: parent.left; top: parent.top; margins: 14 }
