@@ -215,7 +215,7 @@ class GameProject:
         if SURVIVAL_EXTENSION in self.extensions:
             validate_survival(
                 self.extensions[SURVIVAL_EXTENSION]["data"],
-                set(self.exploration))
+                set(self.exploration), exploration=self.exploration)
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
