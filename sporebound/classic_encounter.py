@@ -270,7 +270,15 @@ class ClassicEncounter:
                             and 0 <= native.cost <= performer["mp"],
                             "R53 combo requires living heroes and supported native skills")
                 for uid in spec["members"]:
-                    self._apply_skill(self.actors[uid], target, spec["skills"][uid])
+                    performer = self.actors[uid]
+                    native_skill = spec["skills"][uid]
+                    if target["hp"] > 0:
+                        self._apply_skill(performer, target, native_skill)
+                    else:
+                        # A previous participant finished the target. The
+                        # remaining committed helpers still pay their MP cost;
+                        # never re-target or resurrect a defeated enemy.
+                        performer["mp"] -= self.skills[native_skill].cost
                 # Helpers contribute this activation and skip their next turn.
                 self._combo_skip.update(spec["members"][1:])
             elif kind == "item":
