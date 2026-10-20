@@ -99,6 +99,31 @@ def audit_r36_rights(project, asset_root, *, require_licenses=False):
             message = sprite_id + ": R4 annotation license remains unverified"
             (result["errors"] if require_licenses else result["warnings"]).append(message)
 
+    # R4 annotations are a cosmetic source claim; any approved R15 license
+    # for the same physical PNG must agree with that claim.
+    try:
+        index = root / "asset-licenses.json"
+        if index.exists() or index.is_symlink():
+            import json
+            rights = json.loads(
+                safe_asset_path(root, "asset-licenses.json").read_text("utf-8"))
+            attestations = rights.get("assets", {}) if type(rights) is dict else {}
+            if type(attestations) is dict:
+                for sprite_id in sorted(ids):
+                    metadata = annotation.get(sprite_id)
+                    if metadata is None:
+                        continue
+                    relative = registry.require_reference(sprite_id, "sprite")["path"]
+                    entry = attestations.get(relative)
+                    if (type(entry) is dict and entry.get("status") == "approved"
+                            and type(entry.get("license_id")) is str
+                            and metadata["license"] != entry["license_id"]):
+                        issue = sprite_id + ": R4 license differs from approved R15 attestation"
+                        (result["errors"] if require_licenses
+                         else result["warnings"]).append(issue)
+    except (ValueError, OSError, TypeError) as exc:
+        result["errors"].append("R36 rights index unavailable: " + str(exc))
+
     # Reuse R15's existing, evidence-backed attestation validator verbatim.
     from drawtemp.export.r15 import _check_asset_rights
     rights_report = {
