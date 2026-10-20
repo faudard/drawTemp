@@ -37,7 +37,10 @@ def read_regular_snapshot(path, *, limit: int) -> bytes:
         with os.fdopen(fd, "rb") as stream:
             opened = os.fstat(stream.fileno())
             if (not stat.S_ISREG(opened.st_mode) or opened.st_size > limit or
-                    (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)):
+                    (opened.st_dev, opened.st_ino, opened.st_size,
+                     opened.st_mtime_ns, opened.st_ctime_ns) !=
+                    (before.st_dev, before.st_ino, before.st_size,
+                     before.st_mtime_ns, before.st_ctime_ns)):
                 raise UnsafeSnapshotError("Input changed before read")
             result = stream.read(limit + 1)
             after = os.fstat(stream.fileno())
