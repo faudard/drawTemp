@@ -90,6 +90,14 @@ class AssistedDungeonTests(unittest.TestCase):
         self.assertEqual(rejected.exception.code, "modified_suggestion")
         self.assertEqual(self.session.snapshot().to_dict(), self.initial)
 
+    def test_provenance_and_reward_tamper_is_rejected(self):
+        proposal = self.variants()[0]
+        proposal.provenance["meta_reward"] = 777
+        with self.assertRaises(DungeonAssistError) as rejected:
+            self.assistant.apply(proposal)
+        self.assertEqual(rejected.exception.code, "modified_suggestion")
+        self.assertEqual(self.session.snapshot().to_dict(), self.initial)
+
     def test_project_revision_invalidates_preview(self):
         proposal = self.variants()[0]
         from drawtemp.sdk.roguelite_authoring import preview_roguelite_project
