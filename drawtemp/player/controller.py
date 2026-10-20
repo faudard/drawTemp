@@ -692,6 +692,9 @@ class PlayerController:
         base["missions"] = list(snapshot.missions)
         base["rpg_available"] = list(self.session.rpg_available(
             expected_revision=snapshot.revision))
+        hybrid = self.session.party_hybrid_state(
+            expected_revision=snapshot.revision)
+        base["r53_hybrid"] = thaw(hybrid) if hybrid is not None else {}
         base["route_links"] = list(thaw(self.session.route_destinations(
             expected_revision=snapshot.revision)))
         quest = self.session.rpg_quest_state(expected_revision=snapshot.revision)

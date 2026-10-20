@@ -219,6 +219,53 @@ class GameSession:
         state["pause_policy"] = self._party_orchestration.pause_policy
         return state
 
+    def party_hybrid_state(self):
+        """R53.C: read-only cross-mode projection from three canonical owners.
+
+        Campaign has no persistent per-hero HP/MP. Such values are reported
+        only during an actual RPG or CT encounter; never synthesize them on
+        exploration or pretend they survived a mode transition.
+        """
+        require(self._party_orchestration is not None and self.scene_router.enabled,
+                "R53 hybrid view needs routed party orchestration")
+        mode = self.mode
+        require(mode in ("campaign", "rpg", "battle"),
+                "R53 hybrid projection does not support multi-front battles")
+        authored = self._party_orchestration.snapshot()
+        if mode == "rpg":
+            live = {a["id"]: a for a in self._rpg_encounter.view()["actors"]
+                    if a["team"] == "party"}
+            phase = "RPG_TURN"
+        elif mode == "battle":
+            live = {u.id: u for u in self.battle.units if u.team == "player"}
+            phase = "TACTICAL_CT"
+        else:
+            live = {}
+            phase = "EXPLORATION"
+        rows = []
+        for uid, slot in zip(authored["active"], authored["formation"]):
+            actor = live.get(uid)
+            rows.append({
+                "id": uid, "leader": uid == authored["leader"],
+                "formation": slot,
+                "xp": self.progress.heroes[uid].xp,
+                "hp": actor["hp"] if mode == "rpg" and actor is not None
+                      else actor.hp if actor is not None else None,
+                "mp": actor["mp"] if mode == "rpg" and actor is not None
+                      else actor.mp if actor is not None else None,
+                "vitals_source": phase if actor is not None else "unavailable",
+            })
+        return {
+            "phase": phase, "scene": self.route_scene,
+            "history": list(self.route_history),
+            "members": rows,
+            "campaign_inventory": deepcopy(self.progress.inventory),
+            "campaign_gold": self.progress.gold,
+            "party_pause_policy": self._party_orchestration.pause_policy,
+            "active_combos": (self._rpg_encounter.available_combos()
+                              if mode == "rpg" else []),
+        }
+
     def party_switch_leader(self, hero_id):
         self._party_edit_allowed()
         require(self._party_orchestration is not None, "R53 orchestration disabled")
