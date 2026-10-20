@@ -26,8 +26,9 @@ Stable keys are initially seeded from the canonical project snapshot:
 - story.<scene_id>.choice.<choice_id>.label.
 
 Existing project text is never replaced or automatically migrated in-place;
-new keys are seeded only if missing, and source drift blocks Translation
-Studio saves until reconciled. Other authoring surfaces, including unrelated
+new keys are seeded only if missing. Source drift blocks Translation
+Studio saves until the user explicitly confirms reconciliation of stale keys;
+that operation clears only translations for changed sources. Other authoring surfaces, including unrelated
 legacy Qt/Tk widgets, are **not yet fully translated**.
 
 Studio: **Outils → Translation Studio R57**; search keys and sources, inspect
