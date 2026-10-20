@@ -180,6 +180,8 @@ class ReferenceJourneyTests(unittest.TestCase):
             game.command("move")
             defeat_mentor(game)
             self.assertFalse(game.state()["battle"]["result"])
+            # Movement was spent approaching the mentor: next CT turn first.
+            game.command("end")
             player_jeanne_turn(game)
             game.select_cell(4, 4)
             game.command("move")
