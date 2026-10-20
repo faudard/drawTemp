@@ -132,8 +132,9 @@ class VerifiedPackageDependencies(unittest.TestCase):
                             for msg in verify_installed_packs(self.root, source)))
         cycle = self.project()
         rows = cycle["extensions"][RECEIPT_NAMESPACE]["data"]["packs"]
-        rows[0]["dependencies"] = [self.pin("ui-pack",
-                                            type("PackRef", (), {"sha256": rows[1]["sha256"]})())]
+        rows[0]["dependencies"] = [{
+            "id": "ui-pack", "version": "1.0.0", "sha256": rows[1]["sha256"]
+        }]
         self.assertTrue(any("cycle" in msg.lower()
                             for msg in verify_installed_packs(self.root, cycle)))
         no_dep = self.project()
