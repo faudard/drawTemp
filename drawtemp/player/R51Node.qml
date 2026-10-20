@@ -9,6 +9,7 @@ Item {
     property var spec: ({})
     property int responsiveColumns: 1
     property bool allowActions: false
+    property var permittedActions: []
     signal intent(string action)
 
     implicitWidth: body.implicitWidth
@@ -34,6 +35,7 @@ Item {
                     spec: modelData
                     responsiveColumns: 1
                     allowActions: nodeItem.allowActions
+                    permittedActions: nodeItem.permittedActions
                     onIntent: function(action) { nodeItem.intent(action) }
                 }
             }
@@ -74,7 +76,8 @@ Item {
         Button {
             objectName: "r51-widget-" + nodeItem.spec.id
             text: nodeItem.spec.text || ""
-            enabled: nodeItem.allowActions
+            enabled: nodeItem.allowActions &&
+                     nodeItem.permittedActions.indexOf(nodeItem.spec.action) !== -1
             activeFocusOnTab: true
             Accessible.name: text
             onClicked: nodeItem.intent(nodeItem.spec.action)
