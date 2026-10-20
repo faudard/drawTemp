@@ -62,6 +62,8 @@ def _read(root: Path, name: str) -> tuple[bytes, dict]:
     try:
         raw = location.read_bytes()
         parsed = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+    except FreezeError:
+        raise
     except (UnicodeError, ValueError, OSError) as exc:
         raise FreezeError("invalid_json", "Unreadable fixture: " + name) from exc
     if not isinstance(parsed, dict):
