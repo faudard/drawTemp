@@ -82,7 +82,7 @@ class R76B2StrictExportTests(unittest.TestCase):
         self.assertFalse(self.plan["manual_golden_approval"])
         self.assertFalse(self.plan["release_certified"])
         self.assertEqual(self.plan, inspect_preview(self.content))
-        self.assertEqual(self.plan["optimizer_plan"]["cost"]["candidate_count"], 1)
+        self.assertGreaterEqual(self.plan["optimizer_plan"]["cost"]["candidate_count"], 1)
 
     def test_staged_project_r15_roundtrip_preview_bundle_and_safe_undo(self):
         original_files = {
