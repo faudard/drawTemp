@@ -7,6 +7,7 @@ is explicitly selected.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 import time
@@ -14,9 +15,10 @@ import time
 from drawtemp.player.action_clock import ActionStepClock
 from drawtemp.player.action_controller import ActionPlayerController, demo_scene
 from drawtemp.render.iso_scene import scene_from_action
+from drawtemp.render.r36_frame_budget import R36FrameBudget
 
 
-def create_bridge(controller, renderer):
+def create_bridge(controller, renderer, *, profiling=False):
     """A QObject adapter; imported lazily to preserve headless Python installs."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
 
@@ -27,6 +29,8 @@ def create_bridge(controller, renderer):
             super().__init__()
             self.controller = controller
             self.renderer = renderer
+            self.telemetry = R36FrameBudget() if profiling else None
+            self._last_profile_tick = -1
             self._clock = ActionStepClock()
             self._last_ns = time.monotonic_ns()
             self._pending_dodge = False
@@ -53,7 +57,23 @@ def create_bridge(controller, renderer):
             if lights:
                 scene["light_cells"] = project_cell_lighting(
                     self.controller.scene, lights)
+            submit_start_ns = time.perf_counter_ns() if self.telemetry else None
             self.renderer.replace_scene(scene, follow_world=target)
+            if self.telemetry is not None:
+                view = self.controller.state()
+                tick = self.controller.runtime.tick
+                if tick < self._last_profile_tick:
+                    self.telemetry.reset()
+                self._last_profile_tick = tick
+                items = self.renderer.items
+                self.telemetry.record(
+                    tick=tick, duration_ns=time.perf_counter_ns() - submit_start_ns,
+                    items=len(items),
+                    actors=sum(1 for row in items if row["kind"] == "actor"),
+                    particles=len(view["vfx"]["particles"]),
+                    lights=len(view["vfx"]["lights"]),
+                    fx=min(96, len(view["fx"]) + len(view["animation_cues"])),
+                )
             self.stateChanged.emit()
 
         def _resync(self):
@@ -149,6 +169,8 @@ def main(argv=None):
                         help="Canonical Content JSON for --animation-project")
     parser.add_argument("--animation-project", type=Path,
                         help="Validated GameProject JSON containing R28/R36 animation assets")
+    parser.add_argument("--profile-r36", type=Path,
+                        help="Write opt-in CPU render-submit telemetry at Player exit")
     parser.add_argument("--hero-controller",
                         help="Existing R36 Animation Controller bound to the action hero")
     args = parser.parse_args(argv)
@@ -200,7 +222,8 @@ def main(argv=None):
     renderer = make_controller(scene_from_action(controller.runtime),
                                atlas_url="", projection_mode="top_down",
                                assets=assets)
-    bridge = create_bridge(controller, renderer)
+    bridge = create_bridge(controller, renderer,
+                           profiling=args.profile_r36 is not None)
     engine = QQmlApplicationEngine()
     renderer.attach_engine(engine)
     engine.rootContext().setContextProperty("renderer", renderer)
@@ -213,7 +236,12 @@ def main(argv=None):
     window = engine.rootObjects()[0]
     if args.smoke:
         QTimer.singleShot(0, app.quit)
-    return app.exec()
+    code = app.exec()
+    if args.profile_r36 is not None and bridge.telemetry is not None:
+        args.profile_r36.write_text(
+            json.dumps(bridge.telemetry.report(), sort_keys=True, indent=2) + "\n",
+            encoding="utf-8")
+    return code
 
 
 if __name__ == "__main__":
