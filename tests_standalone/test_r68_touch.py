@@ -98,6 +98,8 @@ class TouchInputTests(unittest.TestCase):
             ([{"id": True, "x": 1, "y": 2}], W, H),
             ([{"id": 1, "x": float("nan"), "y": 2}], W, H),
             ([{"id": 1, "x": float("inf"), "y": 2}], W, H),
+            ([{"id": 1, "x": 10 ** 1000, "y": 2}], W, H),
+            ([], 100_000, H),
             ([{"id": 1, "x": 1, "y": 1, "extra": 3}], W, H),
             ([point(n, 1, 1) for n in range(11)], W, H),
         ]
