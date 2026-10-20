@@ -95,6 +95,32 @@ fixtures or fetch from the network during tests.
    corrupted primary; double corruption is rejected. Loading twice does not
    itself apply another gameplay command.
 
+### Two-runtime R16 → current verification (CI)
+
+A second gate, `drawtemp.quality.r80_cross_revision`, requires a real Git
+checkout at the full R16 merge SHA. It authenticates `git rev-parse HEAD`,
+rechecks the four historical Git blobs, and launches the **R16 Python runtime**
+in a separate process. That historical code creates a campaign v1 save, a
+tactical v1 save after Jeanne operates the lever, and a SessionStore v2
+checkpoint for the same tactical state. The **current** runtime then validates
+their recordings, mode, nested tactical replay, digest, v2 envelope and
+repeat-load stability; an unsupported v2 revision fails closed. Neither
+runtime is allowed to rewrite the historical save bytes during inspection.
+
+```sh
+git -C r16-pinned rev-parse HEAD
+# Must equal: 7829988c587b7761e2ec07944b343fef59a06943
+python -m drawtemp.quality.r80_cross_revision \
+  --historical-checkout r16-pinned \
+  --report r80a2-cross-revision.json
+```
+
+The CI job checks out that exact revision separately, not a floating branch.
+**This is a test to be run and reviewed**, not an assertion that it currently
+passes on GitHub Actions. If historical and current formats are incompatible,
+the R80.A2 job must fail; changing the pinned SHA just to silence a failure is
+not an acceptable fix.
+
 ### Reproduce
 
 ```sh
@@ -104,13 +130,14 @@ python -m drawtemp.quality.r80_historical --report r80a2-historical.json
 ```
 
 CI attempts these real validators on Ubuntu, Windows and macOS and uploads
-both R80.A1 and R80.A2 reports. **CI must be observed and reviewed; adding a
+R80.A1, R80.A2 local-runtime and R16 cross-runtime reports. **CI must be observed and reviewed; adding a
 workflow does not mean it ran successfully.** The regression runner reports
 `result: passed` *only for its enumerated checks*, and always reports
 `release_certified: false` and `tag_allowed: false`.
 
-**Unproven:** no real user-owned archived v0 saves, no archived GameSession
-v1/v2 save from a distinct historic runtime, no 5.x→11.x multi-version chain,
+**Unproven:** no real user-owned archived v0 saves, no independently retained
+user-generated save fixture (CI generates files through genuine R16 code),
+no 5.x→11.x multi-version chain,
 no completed battle reward-deduplication test, no long-session fault injection
 and no mixed-mode replay certification. The generated save checks the current
 runtime's handling of the *old envelope*, not binary equivalence with all
