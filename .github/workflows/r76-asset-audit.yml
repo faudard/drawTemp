@@ -1,10 +1,13 @@
-name: R76.A–B Asset Optimization
+name: R76.A–B2 Asset Optimization
 
 on:
   push:
     paths:
       - "drawtemp/assets/optimization_audit.py"
       - "drawtemp/assets/optimizer.py"
+      - "drawtemp/export/r76b2.py"
+      - "tests_standalone/test_r76b2_verified_export.py"
+      - "docs/R76B2_VERIFIED_EXPORT.md"
       - "drawtemp/studio/r76_optimizer_qt.py"
       - "drawtemp/studio/qt_shell.py"
       - "tests_standalone/test_r76b_optimizer.py"
@@ -17,6 +20,9 @@ on:
     paths:
       - "drawtemp/assets/optimization_audit.py"
       - "drawtemp/assets/optimizer.py"
+      - "drawtemp/export/r76b2.py"
+      - "tests_standalone/test_r76b2_verified_export.py"
+      - "docs/R76B2_VERIFIED_EXPORT.md"
       - "drawtemp/studio/r76_optimizer_qt.py"
       - "drawtemp/studio/qt_shell.py"
       - "tests_standalone/test_r76_asset_audit.py"
@@ -41,10 +47,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install project
-        run: python -m pip install -e .
-      - name: R76.A and R76.B1 — headless contracts
-        run: python -m unittest -v tests_standalone.test_r76_asset_audit tests_standalone.test_r76b_optimizer
+      - name: Install project and image decoder
+        run: python -m pip install -e ".[art]"
+      - name: R76.A–B2 — audit, reversible copy and strict export
+        run: python -m unittest -v tests_standalone.test_r76_asset_audit tests_standalone.test_r76b_optimizer tests_standalone.test_r76b2_verified_export
       - name: Regression — canonical assets
         run: python -m unittest -v tests_standalone.test_assets
 
@@ -59,7 +65,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install editor Qt dependencies
-        run: python -m pip install -e ".[qt6]"
+      - name: Install Qt editor and image decoder
+        run: python -m pip install -e ".[qt6,art]"
       - name: Qt optimizer dialogue smoke
         run: python -m unittest -v tests_standalone.test_r76b_optimizer_qt
