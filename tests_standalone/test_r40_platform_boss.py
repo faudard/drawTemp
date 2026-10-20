@@ -130,6 +130,18 @@ class R40PhysicalBossTests(unittest.TestCase):
             GameSession.from_recording(changed, content, project)
         self.assertEqual(game.recording(), original)
 
+    def test_boss_victory_flag_without_platform_journal_is_rejected(self):
+        content, project, game = _citadel_game()
+        _fight(game)
+        original = game.recording()
+        corrupt = deepcopy(original)
+        corrupt.pop("scene_platform")
+        corrupt["digest"] = digest({
+            key: val for key, val in corrupt.items() if key != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(corrupt, content, project)
+        self.assertEqual(game.recording(), original)
+
     def test_recomputed_outer_checksum_cannot_forge_boss_victory(self):
         content, project, game = _citadel_game()
         _fight(game)
