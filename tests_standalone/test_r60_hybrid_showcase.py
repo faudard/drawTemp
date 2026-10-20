@@ -49,6 +49,12 @@ class R60HybridShowcaseTests(unittest.TestCase):
         self.assertTrue(set(CONTENT_REGIONS) <= set(self.project.exploration))
         self.assertEqual(len(self.project.extensions[UI_EXTENSION]["data"]["layouts"]), 3)
         self.assertEqual(self.project.extensions[SYSTEMS_EXTENSION]["data"], systems_document())
+        for scene in CONTENT_REGIONS:
+            profile = self.project.game_modes["scenes"][scene]["profile"]
+            self.assertEqual(profile["movement"], "FREE_REALTIME")
+            self.assertEqual(profile["combat"], "RPG_TURN")
+        self.assertEqual(self.project.game_modes["scenes"][
+            "relais_ct_reference"], {"preset": "srpg"})
         self.assertEqual(self.content.to_dict()["version"], 1)
         self.assertEqual(self.project.to_dict()["version"], 1)
         self.assertEqual(
