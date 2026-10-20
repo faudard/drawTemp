@@ -182,6 +182,18 @@ class GameSession:
         self._farming = (FarmingLife(farm_spec["data"],
                                      set(self.project.exploration), known_items)
                          if farm_spec is not None else None)
+        # R62.B.2: the R35 clock and NPC schedules remain authoritative.
+        from .relationship_life import (EXTENSION as SOCIAL_EXTENSION,
+                                        RelationshipLife)
+        social_spec = self.project.extensions.get(SOCIAL_EXTENSION)
+        world_data = spec["data"] if spec is not None else None
+        social_npcs = {row["id"] for row in world_data["npcs"]} if world_data else set()
+        social_activities = ({row["id"]: {stop["activity"] for stop in row["schedule"]}
+                              for row in world_data["npcs"]} if world_data else {})
+        self._relationships = (
+            RelationshipLife(social_spec["data"], social_npcs, known_items,
+                             npc_activities=social_activities)
+            if social_spec is not None else None)
         # R63: GameSession owns the optional survival journal and needs.
         from .survival import EXTENSION as SURVIVAL_EXTENSION, SurvivalRuntime
         survival_spec = self.project.extensions.get(SURVIVAL_EXTENSION)
@@ -668,6 +680,55 @@ class GameSession:
     def farming_collect(self, animal_id, receipt_id):
         return self._farming_command("collect", animal_id, receipt_id)
 
+    def relationship_state(self, npc=None):
+        """Detached deterministic affinities and cooldowns for Player/Studio."""
+        require(self._relationships is not None, "R62 relationships not configured")
+        return self._relationships.view(npc)
+
+    def _relationship_command(self, kind, npc_id, receipt_id, *, item=None):
+        require(self._relationships is not None and self._living_world is not None
+                and self.mode == "campaign" and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R62 social action requires routed exploration without dialogue")
+        definition = self._relationships.definitions.get(npc_id)
+        require(definition is not None, "R62 social NPC is not authored")
+        pose = self._living_world.npc_pose(npc_id, self.progress.story_flags)
+        require(pose["scene"] == self.route_scene
+                and pose["activity"] != "unavailable",
+                "R62 social NPC is unavailable in the player's scene")
+        # R35 positioned NPCs require adjacency; legacy schedule-only NPCs
+        # have no position and keep their existing scene-level interaction.
+        if pose.get("pos") is not None:
+            player = self.route_state().get("position")
+            require(type(player) in (list, tuple) and len(player) == 2
+                    and sum(abs(player[i] - pose["pos"][i]) for i in range(2)) <= 1,
+                    "R62 social NPC is not within interaction reach")
+        activity = pose["activity"]
+        require(kind != "talk" or definition["talk_activity"] in ("any", activity),
+                "R62 social NPC is not available for conversation")
+        staged = deepcopy(self._relationships)
+        debit = staged.command(kind, npc_id, receipt_id, item=item)
+        if debit is None:
+            return False
+        resource, delta = debit
+        if delta:
+            from .farming_life import MAX_ITEM_QUANTITY
+            existing = self.progress.inventory.get(resource, 0)
+            require(type(existing) is int and 0 <= existing <= MAX_ITEM_QUANTITY
+                    and 0 <= existing + delta <= MAX_ITEM_QUANTITY,
+                    "R62 social gift needs a canonical owned inventory item")
+            self.progress.inventory[resource] = existing + delta
+        self._relationships = staged
+        return True
+
+    def relationship_talk(self, npc_id, receipt_id):
+        return self._relationship_command("talk", npc_id, receipt_id)
+
+    def relationship_gift(self, npc_id, item_id, receipt_id):
+        return self._relationship_command("gift", npc_id, receipt_id, item=item_id)
+
     def survival_state(self):
         """R63 detached survival projection; Campaign owns item balances."""
         require(self._survival is not None, "Survival is not configured")
@@ -740,6 +801,8 @@ class GameSession:
         result = self._living_world.advance(ticks)
         if self._farming is not None:
             self._farming.sync(self._living_world.day)
+        if self._relationships is not None:
+            self._relationships.sync(self._living_world.day)
         return result
 
     def living_world_reputation_event(self, faction, delta, event_id):
@@ -1298,6 +1361,8 @@ class GameSession:
             self._living_world.advance(1)
             if self._farming is not None:
                 self._farming.sync(self._living_world.day)
+            if self._relationships is not None:
+                self._relationships.sync(self._living_world.day)
         if staged_system is not None:
             self._systems = staged_system
         if staged_survival is not None:
@@ -1493,6 +1558,8 @@ class GameSession:
             self._living_world.advance(1)
             if self._farming is not None:
                 self._farming.sync(self._living_world.day)
+            if self._relationships is not None:
+                self._relationships.sync(self._living_world.day)
         self._platform = runtime
         if staged_system is not None:
             self._systems = staged_system
@@ -2236,6 +2303,8 @@ class GameSession:
             data["survival"] = self._survival.snapshot()
         if self._farming is not None:
             data["farming"] = self._farming.snapshot()
+        if self._relationships is not None:
+            data["relationships"] = self._relationships.snapshot()
         if self._stream_world is not None:
             data["world_stream"] = self._stream_world.recording()
         if self._cinematic_pro is not None:
@@ -2267,7 +2336,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "farming", "survival", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "farming", "relationships", "survival", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -2319,6 +2388,15 @@ class GameSession:
                     "R62 farm calendar diverges from R35 living-world clock")
         else:
             require("farming" not in data, "Unexpected R62 farm checkpoint")
+        if session._relationships is not None:
+            require("relationships" in data,
+                    "R62 configured relationship checkpoint is missing")
+            session._relationships.restore(data["relationships"])
+            require(session._relationships.day == session._living_world.day,
+                    "R62 social calendar diverges from R35 living world")
+        else:
+            require("relationships" not in data,
+                    "Unexpected relationship state in legacy checkpoint")
         if session._stream_world is not None:
             require("world_stream" in data, "R54 world checkpoint is missing")
             session._stream_world.restore(data["world_stream"])

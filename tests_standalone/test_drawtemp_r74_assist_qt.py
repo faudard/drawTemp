@@ -187,6 +187,46 @@ class AssistedDungeonQtTests(unittest.TestCase):
         self.assertFalse(self.dialog.physical_apply_button.isEnabled())
         self.assertIn("bloquée", self.dialog.status.text())
 
+    def test_multi_room_preview_has_topology_parity_without_project_write(self):
+        self.dialog.preview_generation()
+        prepared = self.dialog.prepare_spatial_generation()
+        self.assertIsNotNone(prepared)
+        self.assertEqual(len(prepared.proofs), 3)
+        self.assertTrue(all(p["graph_parity"] for p in prepared.proofs))
+        self.assertTrue(self.dialog.spatial_apply_button.isEnabled())
+        self.assertIn("Carte R74.C2",
+                      self.dialog.candidate_graph.accessibleDescription())
+        self.assertGreater(len(self.dialog.candidate_graph.scene().items()), 20)
+        self.assertIn('"graph_parity": true',
+                      self.dialog.diff_report.toPlainText().lower())
+        self.dialog.variant_table.selectRow(1)
+        self.assertIn('"seed": ' + str(prepared.proofs[1]["seed"]),
+                      self.dialog.diff_report.toPlainText())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        self.dialog.physical_prefix.setText("changed")
+        self.assertFalse(self.dialog.spatial_apply_button.isEnabled())
+        self.assertIsNone(self.dialog.apply_spatial_generation())
+
+    def test_multi_room_explicit_consent_undo_redo_and_no_disk_save(self):
+        self.dialog.preview_generation()
+        self.assertIsNotNone(self.dialog.prepare_spatial_generation())
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            self.assertIsNone(self.dialog.apply_spatial_generation())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            transition = self.dialog.apply_spatial_generation()
+        self.assertIsNotNone(transition)
+        after = transition.snapshot.to_dict()
+        self.assertEqual(len(after["content"]["missions"]),
+                         len(self.before["content"]["missions"]) + 3)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        self.assertEqual(self.dialog.undo_application().snapshot.to_dict()["content"],
+                         self.before["content"])
+        self.assertEqual(self.dialog.redo_application().snapshot.to_dict()["content"],
+                         after["content"])
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+
     def test_studio_command_palette_and_tools_action(self):
         from drawtemp.studio.qt_shell import StudioWindow
         settings = QSettings(str(self.root / "settings.ini"), QSettings.IniFormat)

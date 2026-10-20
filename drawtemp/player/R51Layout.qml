@@ -8,6 +8,8 @@ Item {
     property var projection: ({})
     property bool allowActions: false
     property var permittedActions: []
+    property bool highContrast: false
+    property real textScale: 1.0
     signal intent(string action)
     property string focusedWidgetId: ""
     // Traverse the actual Qt Quick item tree: Repeater delegates are not
@@ -46,8 +48,9 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 12
-        color: "#202d3b"
-        border.color: "#73818d"
+        color: canvas.highContrast ? "#000000" : "#202d3b"
+        border.color: canvas.highContrast ? "#ffffff" : "#73818d"
+        border.width: canvas.highContrast ? 2 : 1
     }
     ScrollView {
         anchors.fill: parent
@@ -62,6 +65,8 @@ Item {
             responsiveColumns: Math.max(1, Number(canvas.projection.columns || 1))
             allowActions: canvas.allowActions
             permittedActions: canvas.permittedActions
+            highContrast: canvas.highContrast
+            textScale: canvas.textScale
             onIntent: function(action) { canvas.intent(action) }
             onFocusMove: function(direction) { canvas.shiftFocus(direction) }
             onWidgetFocused: function(widgetId) { canvas.focusedWidgetId = widgetId }

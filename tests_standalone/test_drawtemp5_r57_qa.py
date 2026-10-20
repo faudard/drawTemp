@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from drawtemp.localization import seeded_for_project
+from drawtemp.localization import Catalog, seeded_for_project
 from drawtemp.localization.qa import audit_project, main
 from tests_standalone.test_drawtemp5_r57 import PROJECT
 
@@ -48,6 +48,64 @@ class R57CoverageGateTests(unittest.TestCase):
         self.assertIn("physical gamepad",
                       " ".join(report["manual_gates"]))
         self.assertEqual(report["target_language"], "en")
+
+    def test_extra_legacy_catalog_keys_do_not_inflate_project_coverage(self):
+        catalog = self.full_catalog()
+        raw = catalog.data
+        raw["entries"]["legacy.unused.button"] = {
+            "source": "Ancien bouton",
+            "context": "Historical UI label no longer in this GameProject",
+            "max_length": 100, "translations": {},
+        }
+        catalog = Catalog(raw)
+        report = audit_project(PROJECT, catalog)
+        required_count = len(self.full_catalog().data["entries"])
+        self.assertEqual(report["keys_total"], required_count)
+        self.assertEqual(report["keys_translated"], required_count)
+        self.assertEqual(
+            report["additional_catalog_keys"], ["legacy.unused.button"])
+        self.assertTrue(report["automated_pass"])
+
+    def test_pseudo_rtl_plural_forms_use_each_forms_placeholders(self):
+        from drawtemp.localization import Catalog
+        catalog = self.full_catalog()
+        raw = catalog.data
+        raw["entries"]["catalog.count"] = {
+            "source": {
+                "one": "{single} article",
+                "other": "{many} articles et {count} objets",
+            },
+            "translations": {"en": {
+                "one": "{single} item",
+                "other": "{many} items and {count} objects",
+            }},
+            "context": "Plural test", "max_length": 200,
+        }
+        catalog = Catalog(raw)
+        # Manually authored extra catalog entries are not in the canonical
+        # project's coverage denominator but remain valid runtime messages.
+        self.assertIn("\u2067", catalog.render(
+            "catalog.count", "qps-plocm", count=1, single="One"))
+        self.assertIn("\u2069", catalog.render(
+            "catalog.count", "qps-plocm", count=2, many="Many"))
+        report = audit_project(PROJECT, catalog)
+        self.assertEqual(report["rtl_pseudo_failures"], [])
+        self.assertEqual(report["additional_catalog_keys"], ["catalog.count"])
+        self.assertTrue(report["automated_pass"])
+
+    def test_required_language_coverage_does_not_depend_on_unused_extras(self):
+        from drawtemp.localization import Catalog
+        source, _ = seeded_for_project(PROJECT)
+        raw = source.data
+        raw["entries"]["legacy.unused"] = {
+            "source": "Ancien", "context": "Old",
+            "max_length": 120, "translations": {"en": "Old"},
+        }
+        result = audit_project(PROJECT, Catalog(raw))
+        self.assertEqual(result["keys_translated"], 0)
+        self.assertFalse(result["automated_pass"])
+        self.assertEqual(result["keys_total"],
+                         len(source.data["entries"]))
 
     def test_nested_v2_line_keys_are_audited(self):
         project = deepcopy(PROJECT)

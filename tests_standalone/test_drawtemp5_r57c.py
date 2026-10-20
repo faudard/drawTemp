@@ -186,6 +186,61 @@ class R57CQtTests(unittest.TestCase):
             self.assertEqual(reopened.state()["accessibility"]["language"], "en")
             bridge.deleteLater()
 
+    def test_translation_studio_plural_forms_are_structured_after_save(self):
+        from drawtemp.localization import Catalog, seeded_for_project, sidecar_path
+        from PySide6.QtCore import Qt
+        from drawtemp.sdk.authoring import AuthoringSession
+        from drawtemp.sdk.reference import reference_project
+        from drawtemp.sdk.simulation import thaw
+        from drawtemp.studio.r57_translation_qt import TranslationStudioDialog
+        from unittest.mock import patch as mock_patch
+
+        with TemporaryDirectory() as folder:
+            source = Path(folder) / "game.json"
+            session = AuthoringSession.new(*reference_project())
+            session.save_as(source)
+            catalog, _ = seeded_for_project(thaw(session.snapshot().project))
+            data = catalog.data
+            data["entries"]["inventory.items"] = {
+                "source": {
+                    "one": "{count} objet", "other": "{count} objets"},
+                "context": "Inventory subtitle with plural count",
+                "max_length": 80, "translations": {},
+            }
+            Catalog(data).save(sidecar_path(source))
+            dialog = TranslationStudioDialog(session, source)
+            dialog.show()
+            try:
+                self.assertEqual(dialog.preview.textFormat(), Qt.PlainText)
+                items = dialog.keys.findItems(
+                    "inventory.items", Qt.MatchExactly)
+                self.assertEqual(len(items), 1)
+                dialog.keys.setCurrentItem(items[0])
+                self.assertTrue(dialog.plural_form.isVisible())
+                self.assertEqual(dialog.plural_form.currentData(), "one")
+                dialog.text.setPlainText("{count} item")
+                self.assertEqual(dialog.drafts[("inventory.items", "en")],
+                                 {"one": "{count} item", "other": ""})
+                dialog.plural_form.setCurrentIndex(1)
+                self.assertEqual(dialog.text.toPlainText(), "")
+                dialog.text.setPlainText("{count} items")
+                dialog.plural_form.setCurrentIndex(0)
+                self.assertEqual(dialog.text.toPlainText(), "{count} item")
+                with mock_patch(
+                        "drawtemp.studio.r57_translation_qt.QMessageBox.warning") as warning:
+                    dialog.save()
+                    warning.assert_not_called()
+                result = Catalog.load(sidecar_path(source))
+                translation = result.data["entries"]["inventory.items"]["translations"]["en"]
+                self.assertEqual(translation, {
+                    "one": "{count} item", "other": "{count} items"})
+                self.assertEqual(result.render(
+                    "inventory.items", "en", count=1), "1 item")
+                self.assertEqual(result.render(
+                    "inventory.items", "en", count=3), "3 items")
+            finally:
+                dialog.close()
+
     def test_translation_studio_keyboard_search_and_context(self):
         from PySide6.QtCore import QSettings, Qt
         from PySide6.QtTest import QTest

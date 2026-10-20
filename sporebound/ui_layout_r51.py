@@ -19,6 +19,7 @@ INTENTS = frozenset({
     "menu.continue", "menu.new_game", "menu.options", "menu.quit",
     "combat.end_turn", "combat.open_inventory", "dialogue.advance",
     "inventory.close",
+    "action.step_left", "action.step_right", "action.jump", "action.attack",
 })
 # Explicit, typed, read-only GameSession/BattleFrame projection. No getattr
 # traversal, user expressions, QML/JS evaluation, or shadow player state.
@@ -39,6 +40,7 @@ FIELDS = {
     "dialogue.text": "str",
     "dialogue.progress": "str",
     "inventory.item_count": "int",
+    "action.scene_title": "str",
 }
 
 
@@ -170,7 +172,8 @@ def catalog_from_project(project):
     return validate_ui_catalog(spec["data"])
 
 
-def _values(session, battle_frame=None, *, dialogue_view=None, inventory_view=None):
+def _values(session, battle_frame=None, *, dialogue_view=None,
+            inventory_view=None, action_view=None):
     from .game_session import GameSession
     _require(isinstance(session, GameSession), "canonical GameSession required")
     values = {
@@ -210,11 +213,19 @@ def _values(session, battle_frame=None, *, dialogue_view=None, inventory_view=No
                  0 <= inventory_view["item_count"] <= 1000000,
                  "invalid inventory scalar")
         values["inventory.item_count"] = inventory_view["item_count"]
+    if action_view is not None:
+        _require(type(action_view) is dict and
+                 set(action_view) == {"scene_title"} and
+                 type(action_view["scene_title"]) is str and
+                 len(action_view["scene_title"]) <= 240,
+                 "invalid R32 action presentation scalar")
+        values["action.scene_title"] = action_view["scene_title"]
     return values
 
 
 def project_layout(layout_id, catalog, session, *, width, battle_frame=None,
-                   dialogue_view=None, inventory_view=None):
+                   dialogue_view=None, inventory_view=None,
+                   action_view=None):
     """Shared read-only Studio/Player projection; never submit commands.
 
     The output contains only declarative widgets, responsive columns, and
@@ -229,7 +240,7 @@ def project_layout(layout_id, catalog, session, *, width, battle_frame=None,
     point = next(p for p in reversed(layout["breakpoints"])
                  if width >= p["min_width"])
     values = _values(session, battle_frame, dialogue_view=dialogue_view,
-                     inventory_view=inventory_view)
+                     inventory_view=inventory_view, action_view=action_view)
 
     def resolve(node):
         result = deepcopy(node)

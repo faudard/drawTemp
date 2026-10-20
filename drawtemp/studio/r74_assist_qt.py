@@ -27,6 +27,9 @@ from .r74_assisted_dungeons import (
 from .r74_physical_dungeons import (
     prepare_physical_dungeons, apply_physical_dungeons,
 )
+from .r74_spatial_dungeons import (
+    prepare_spatial_dungeons, apply_spatial_dungeons,
+)
 
 
 def _spin(name, low, high, initial):
@@ -52,13 +55,15 @@ class R74DungeonAssistDialog(QDialog):
         self._applied_revision = None
         self._undone_revision = None
         self.physical_plan = None
+        self.spatial_plan = None
 
         root = QVBoxLayout(self)
         warning = QLabel(
             "Variantes locales et déterministes, sans IA distante ni écriture "
             "automatique. Les variantes ci-dessous sont des graphes R34, "
             "pas des cartes R5. Le bouton 'Préparer 3 cartes R27' ajoute "
-            "une preuve physique distincte, sans IA/combat ni export certifiés. "
+            "une preuve physique distincte ; R74.C2 transpose toutes les salles, " 
+            "sans certification IA/combat/ressources/export. "
             "Ajuster les paramètres régénère le donjon.")
         warning.setWordWrap(True)
         warning.setObjectName("r74-scope-warning")
@@ -153,6 +158,12 @@ class R74DungeonAssistDialog(QDialog):
         self.physical_apply_button = QPushButton("Créer les 3 cartes…")
         self.physical_apply_button.setObjectName("r74-physical-apply")
         self.physical_apply_button.setEnabled(False)
+        self.spatial_preview_button = QPushButton("Préparer R74.C2 multi-salles")
+        self.spatial_preview_button.setObjectName("r74-spatial-preview")
+        self.spatial_preview_button.setEnabled(False)
+        self.spatial_apply_button = QPushButton("Créer 3 donjons multi-salles…")
+        self.spatial_apply_button.setObjectName("r74-spatial-apply")
+        self.spatial_apply_button.setEnabled(False)
         self.undo_button = QPushButton("Annuler l'application")
         self.undo_button.setObjectName("r74-undo")
         self.undo_button.setEnabled(False)
@@ -162,7 +173,8 @@ class R74DungeonAssistDialog(QDialog):
         close_button = QPushButton("Fermer")
         for widget in (self.preview_button, self.pin_button, self.reject_button,
                        self.apply_button, self.physical_preview_button,
-                       self.physical_apply_button, self.undo_button, self.redo_button,
+                       self.physical_apply_button, self.spatial_preview_button,
+                       self.spatial_apply_button, self.undo_button, self.redo_button,
                        close_button):
             actions.addWidget(widget)
         root.addLayout(actions)
@@ -173,6 +185,8 @@ class R74DungeonAssistDialog(QDialog):
         self.apply_button.clicked.connect(self.apply_selected)
         self.physical_preview_button.clicked.connect(self.prepare_physical_generation)
         self.physical_apply_button.clicked.connect(self.apply_physical_generation)
+        self.spatial_preview_button.clicked.connect(self.prepare_spatial_generation)
+        self.spatial_apply_button.clicked.connect(self.apply_spatial_generation)
         self.physical_prefix.textChanged.connect(self._invalidate_physical)
         self.undo_button.clicked.connect(self.undo_application)
         self.redo_button.clicked.connect(self.redo_application)
@@ -191,14 +205,20 @@ class R74DungeonAssistDialog(QDialog):
         self.branches_spin.setMaximum(min(5, self.rooms_spin.value() - 3))
 
     def _invalidate_physical(self, *_):
+        had_spatial = self.spatial_plan is not None
         self.physical_plan = None
         self.physical_apply_button.setEnabled(False)
+        self.spatial_plan = None
+        self.spatial_apply_button.setEnabled(False)
+        if had_spatial and self.proposals:
+            self._selection_changed()
 
     def _clear(self):
         self.proposals = ()
         self.controller.invalidate()
         self._invalidate_physical()
         self.physical_preview_button.setEnabled(False)
+        self.spatial_preview_button.setEnabled(False)
         self.variant_table.setRowCount(0)
         self.pin_button.setEnabled(False)
         self.apply_button.setEnabled(False)
@@ -229,6 +249,7 @@ class R74DungeonAssistDialog(QDialog):
             return ()
         self.proposals = proposals
         self.physical_preview_button.setEnabled(len(proposals) == 3)
+        self.spatial_preview_button.setEnabled(len(proposals) == 3)
         self.variant_table.setRowCount(len(proposals))
         for i, proposal in enumerate(proposals):
             fields = (str(proposal.seed), str(len(proposal.layout["rooms"])),
@@ -255,11 +276,20 @@ class R74DungeonAssistDialog(QDialog):
         proposal = self._selected()
         self.apply_button.setEnabled(proposal is not None)
         self.pin_button.setEnabled(proposal is not None)
-        self._draw(self.candidate_graph, proposal)
+        if self.spatial_plan is not None and proposal is not None:
+            self._draw_spatial_preview(
+                self.spatial_plan.proofs[self.variant_table.currentRow()])
+            self.diff_report.setPlainText(json.dumps(
+                self.spatial_plan.proofs[self.variant_table.currentRow()],
+                ensure_ascii=False, indent=2))
+        else:
+            self._draw(self.candidate_graph, proposal)
         self._draw(self.reference_graph, self.pinned or (
             self.proposals[0] if self.proposals else None))
         if proposal is None:
             self.diff_report.clear()
+            return
+        if self.spatial_plan is not None:
             return
         reference = self.pinned or self.proposals[0]
         self.diff_report.setPlainText(json.dumps(
@@ -314,6 +344,64 @@ class R74DungeonAssistDialog(QDialog):
             label.setPos(x + 5, y + 15)
         scene.setSceneRect(scene.itemsBoundingRect())
 
+    def _draw_spatial_preview(self, proof):
+        """Read-only scaled R5 tiles: boxes = 5×5 floors, lines = corridors."""
+        view = self.candidate_graph
+        scene = view.scene()
+        scene.clear()
+        scale = 10
+        room_centers = {
+            int(rid): tuple(cell)
+            for rid, cell in proof["room_centers"].items()
+        }
+        for a, b in proof["physical_edges"]:
+            x, y = room_centers[a]
+            xx, yy = room_centers[b]
+            if x == xx:
+                top, bottom = sorted((y, yy))
+                scene.addRect(
+                    (x - 0.5) * scale, (top + 2.5) * scale,
+                    scale, (bottom - top - 5) * scale,
+                    QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
+            else:
+                left, right = sorted((x, xx))
+                scene.addRect(
+                    (left + 2.5) * scale, (y - 0.5) * scale,
+                    (right - left - 5) * scale, scale,
+                    QPen(QColor("#76959b")), QBrush(QColor("#adbcc0")))
+        for rid, (x, y) in sorted(room_centers.items()):
+            scene.addRect((x - 2.5) * scale, (y - 2.5) * scale,
+                          5 * scale, 5 * scale,
+                          QPen(QColor("#53646f")),
+                          QBrush(QColor("#d5d9d5")))
+            label = scene.addSimpleText(str(rid))
+            label.setBrush(QBrush(QColor("#191919")))
+            label.setPos((x - 0.5) * scale, (y - 0.9) * scale)
+        markers = (
+            (proof["entry"], "#2f987c", "E"),
+            (proof["goal"], "#d8a630", "G"),
+            (proof["exit"], "#568ed2", "S"),
+            (proof["key"], "#4aaa43", "K"),
+        )
+        markers += tuple((cell, "#ce4646", "D")
+                         for cell in proof["lock_cells"])
+        for cell, color, letter in markers:
+            if cell is None:
+                continue
+            x, y = cell
+            scene.addEllipse((x - 0.5) * scale, (y - 0.5) * scale,
+                             scale, scale,
+                             QPen(QColor("#222222")), QBrush(QColor(color)))
+            label = scene.addSimpleText(letter)
+            label.setBrush(QBrush(QColor("#ffffff")))
+            label.setPos((x - 0.35) * scale, (y - 0.5) * scale)
+        view.setAccessibleDescription(
+            "Carte R74.C2 " + str(proof["room_count"]) +
+            " salles ; E entrée, G objectif, S sortie, K clé, D porte. "
+            "Connexion et parcours physique certifiés par preuve R27.")
+        scene.setSceneRect(scene.itemsBoundingRect())
+        view.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+
     def prepare_physical_generation(self):
         """Dry-run three actual R27 missions; the live editor remains untouched."""
         self._invalidate_physical()
@@ -367,6 +455,61 @@ class R74DungeonAssistDialog(QDialog):
         self.status.setText(
             "Trois cartes R27 créées en une transaction. "
             "Save/reload Player et certification export restent à prouver.")
+        return transition
+
+    def prepare_spatial_generation(self):
+        """Read-only R34→R5 full graph embedding with R27 symbolic witnesses."""
+        self._invalidate_physical()
+        if not self.spatial_preview_button.isEnabled() or len(self.proposals) != 3:
+            return None
+        try:
+            # Separate namespace from the R74.C1 sample to avoid overwrites.
+            prefix = self.physical_prefix.text().strip()
+            plan = prepare_spatial_dungeons(
+                self.controller, self.proposals, prefix=prefix)
+        except (DungeonAssistError, ProcGenError, AuthoringError,
+                ValueError, OSError) as exc:
+            self.status.setText("R74.C2 refusé : " + str(exc))
+            return None
+        self.spatial_plan = plan
+        self.spatial_apply_button.setEnabled(True)
+        self._selection_changed()
+        self.status.setText(
+            "Parité exacte des salles/arêtes R34 dans 3 cartes R5 prouvée ; "
+            "témoin R27 objectif/sortie disponible. "
+            "Aucun Player, combat ou export certifié. Projet inchangé.")
+        return plan
+
+    def apply_spatial_generation(self):
+        """One opt-in transaction, with default-No consent and shared Undo."""
+        if self.spatial_plan is None or not self.spatial_apply_button.isEnabled():
+            return None
+        decision = QMessageBox.question(
+            self, "Confirmer les trois donjons R74.C2",
+            "Créer 3 missions multi-salles et une campagne R5/R27 ? "
+            "Parité des arêtes/portes vérifiée, mais ressources, combat et "
+            "export non certifiés. Un Undo est possible ; sauvegarde manuelle.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if decision != QMessageBox.Yes:
+            self.status.setText("Application R74.C2 annulée, aucun changement.")
+            return None
+        plan = self.spatial_plan
+        self._invalidate_physical()
+        try:
+            transition = apply_spatial_dungeons(self.controller, plan)
+        except (DungeonAssistError, ProcGenError, AuthoringError,
+                ValueError, OSError) as exc:
+            self._clear()
+            self.status.setText("Application R74.C2 bloquée : " + str(exc))
+            return None
+        self._applied_revision = transition.snapshot.revision
+        self._undone_revision = None
+        self._clear()
+        self.undo_button.setEnabled(transition.snapshot.can_undo)
+        self.redo_button.setEnabled(False)
+        self.status.setText(
+            "3 donjons multi-salles R5/R27 enregistrés dans la session "
+            "(pas sur disque). Undo/Redo et sauvegarde Studio disponibles.")
         return transition
 
     def apply_selected(self):

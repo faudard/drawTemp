@@ -1,4 +1,4 @@
-# R74.A–C1 — Assisted dungeon proposals, Qt review and bounded physical R27 sample
+# R74.A–C2 — Assisted dungeon proposals, Qt review and spatial R34/R5 parity
 
 **Status: R74.A–B plus an incremental R74.C1 implementation on the feature branch; CI, physical Player walkthrough and clean-machine export not yet certified.**
 
@@ -155,11 +155,79 @@ python -m unittest tests_standalone.test_drawtemp_r74_physical_dungeons -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r74_assist_qt -v
 ```
 
+## R74.C2 — Full R34 room/edge topology on canonical R5 maps
+
+**Outils → R74 • Assistant de donjons vérifiés… → Proposer des variantes →
+Préparer R74.C2 multi-salles → Créer 3 donjons multi-salles…**
+
+This new path is **separate from the simpler R74.C1 sample**. It materializes
+each R34 proposal in a real standalone R5 mission, including every room and
+every neighbor edge, instead of drawing a single key/door room.
+
+- Supports `room-graph-v1` with **3..12 rooms** (larger or more complex graphs
+  fail closed): straight spine, up/down leaf branches, third branch left of
+  entry when required by the source generator.
+- Every room has a **5×5 walkable footprint**, with one corridor per exact
+  undirected graph edge. All uncarved board cells are actual blocked R5 wall
+  tiles; corridors cannot cross, connect third rooms, or introduce shortcuts.
+- A **real R27 locked door** occupies the precise corridor identified by
+  the R34 lock, and a **real collectible key** appears at the key-room center.
+- Layout proof extracts corridor components *independently* after masking
+  rooms and compares the resulting adjacency graph to all R34 neighbors.
+  The blocked-gate flood fill proves the exit and goal cannot be reached
+  before the key but the key remains reachable.
+- The R27 bounded single-player puzzle analyzer supplies **separate**
+  key/door/walk witnesses to the R34 goal-room center and the exit-room
+  center. Both must be verified; no false fallback or partial proposal set.
+- The Studio uses the selected R74 variant row to display a **scaled
+  physical map preview** with room rectangles, actual corridor footprints and
+  markers **E** (entry), **K** (key), **D** (door), **G** (goal) and
+  **S** (exit). Switching variants selects its own R27 witness report.
+- A canonical `GameProject.campaigns` entry links the three missions using
+  existing `Mission.next_missions`, while `AuthoringSession` owns one
+  opt-in transaction and the same Undo/Redo history. No disk writes until
+  the user explicitly saves.
+- `SpatialDungeonPreview` reports source topology hashes, exact room
+  centers/edges, pixel dimensions, goal/exit witnesses, mission digests and
+  conservative certification flags. Its evidence hash detects alterations
+  before apply.
+
+The deterministic geometry intentionally has a **physical-size bound**.
+Loot is represented conservatively by one R27 chest in rooms with loot;
+R34 numerical encounter/loot allocation is **not certified to match**
+tactical unit/chest counts. The generated mission retains a default enemy;
+enemy AI, combat survival, Player export, GPU/UI ergonomics and performance
+under full content load are **not modeled by the symbolic proof**.
+`combat_and_resource_parity=false` and `player_export_certified=false`.
+R74.C3 must close those gaps, with full play, reload, packaging and licensing.
+
+Headless example (run before choosing Apply):
+
+```python
+from drawtemp.studio.r74_spatial_dungeons import (
+    prepare_spatial_dungeons, apply_spatial_dungeons,
+)
+
+preview = prepare_spatial_dungeons(assistant, suggestions, prefix="r74s")
+for proof in preview.to_dict()["proofs"]:
+    assert proof["physical_edges"] == proof["r34_edges"]
+    print(proof["mission"], proof["goal_witness"], proof["exit_witness"])
+# Explicit author approval is required before calling the following:
+transition = apply_spatial_dungeons(assistant, preview)
+```
+
+Focused tests:
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r74_spatial_dungeons -v
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_drawtemp_r74_assist_qt -v
+```
+
 ## Next R74 increments
 
 - **R74.B:** implemented in this branch, pending evidence and CI.
-- **R74.C2:** map each R34 room/edge graph to a real R5 spatial arrangement
-  with all physical connections and gates, not only one room per proposal.
+- **R74.C2:** implemented on the dedicated follow-up branch; awaits executed
+  cross-platform tests, real Player checks and integration review.
 - **R74.C3:** complete all three dungeons in a real Player session with
   authored combat/puzzle progression, save/reload and canonical export, then
   run on-screen, GPU, clean-machine and licensed-asset certification gates.

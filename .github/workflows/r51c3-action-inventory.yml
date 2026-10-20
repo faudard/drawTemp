@@ -1,0 +1,54 @@
+name: R51.C3 Action HUD and Campaign Inventory
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/player/Main.qml'
+      - 'drawtemp/player/R51*.qml'
+      - 'drawtemp/player/r51_action.py'
+      - 'drawtemp/player/r51_screens.py'
+      - 'drawtemp/player/qt_app.py'
+      - 'drawtemp/studio/r51_layout_draft.py'
+      - 'sporebound/ui_layout_r51.py'
+      - 'tests_standalone/test_r51c3_*.py'
+      - '.github/workflows/r51c3-action-inventory.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/player/r51_action.py'
+      - 'drawtemp/player/r51_screens.py'
+      - 'tests_standalone/test_r51c3_*.py'
+permissions:
+  contents: read
+jobs:
+  core-r1:
+    name: R1 real Player / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: R51 contract, narrative, inventory and real R32 action
+        run: python -m unittest -v tests_standalone.test_r51a_ui_layout tests_standalone.test_r51b_layout_designer tests_standalone.test_r51b2_ui_navigation tests_standalone.test_r51c2_player_screens tests_standalone.test_r51c3_action_inventory tests_standalone.test_r40_player_platform
+  qt-shared-renderer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      DRAWTEMP_R51_QT_GATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install '.[qt6]'
+      - name: Qt shared action/inventory and legacy Qt regressions
+        run: python -m unittest -v tests_standalone.test_r51b_qt tests_standalone.test_r51c2_qt tests_standalone.test_r51c3_qt

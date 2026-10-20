@@ -1,4 +1,4 @@
-# R71.A–B — Connected Games Architecture (isolated laboratory)
+# R71.A–C — Connected Games Architecture (isolated laboratory)
 
 **Status:** experimental, not player-facing; **R71 GO not certified**.
 The canonical R51–R80 roadmap makes R71 conditional on **R67=GO** and the
@@ -81,6 +81,58 @@ Local R71.A/R71.B isolated smoke tests (against an R25 journal shim) pass,
 but **full repository CI has not been verified**. Treat any GitHub workflow
 failure before job startup as a verification blocker, not a passed test.
 
+## R71.C — private cooperative certification probe (NO-GO)
+
+The opt-in `sporebound.connected_certification_r71` module adds a bounded,
+fully offline, two-player pressure-plate scene driven through R71.A's canonical
+FixedTickJournal and R71.B's simulated fault link. **Both participants must
+submit an authorized `hold` on the same authoritative tick**. The gate opens
+at most once; it does not create loot, inventory, achievements, game saves or
+a separate Player runtime.
+
+Evidence includes:
+
+- A clean 2-player run with authoritative replay and per-tick checksums.
+- Seeded packet loss, duplication, jitter, reordering and late-command
+  rejection. These failures are visible, not masked by client prediction.
+- Disconnect/rejoin with ticket rotation, refused commands while offline and
+  restored authoritative snapshots.
+- A 256-packet simulated queue saturation attempt, atomic overflow refusal,
+  anti-replay rejection, and deterministic replay after the flood.
+- Replay tamper checks (including forged outer and journal digests) and
+  explicit version-incompatibility refusal.
+- A reproducible JSON decision report whose **current decision is NO-GO**.
+
+Run:
+
+```sh
+python -m unittest tests_standalone.test_r71_connected_certification -v
+python scripts/r71c_certification.py --seed 71
+# Explicit automated release gate: nonzero (2) while not certified
+python scripts/r71c_certification.py --seed 71 --require-go
+```
+
+The ordinary evidence command returns 0 after producing an accurate NO-GO
+report; `--require-go` returns 2 to prevent interpreting a research artifact
+as a certified release. The report contains no credentials or gameplay/user
+identities. It deliberately marks R67=GO, R70 certification, real authenticated
+transport, sender-bound identities, two physical devices, CPU/memory/bandwidth
+measurements, security audit, and cross-platform CI as **unproven/false**.
+
+**Operational gap:** the R71.B in-memory service does not bind a command's
+claimed `player` to a verified network transport identity. Sequence numbers
+and rotated lab tickets do not replace transport authentication. No public
+connection, production anti-cheat or reliable resend is provided. A true LAN
+two-device demonstration, security/DoS review, real measured load, CI and a
+human signed GO decision remain prerequisites; R67.C currently says REDUCE.
+
+### R71.C certification result
+
+**NO-GO for a product release.** A successful in-memory replay is evidence
+of a narrow deterministic contract, **not** evidence for operational security,
+real multiplayer reliability, platform compatibility, transport availability,
+or completed R70 gates. Keep R71 optional and the solo Player entirely offline.
+
 ## Explicit gates before any public network capability
 
 1. **R67.C:** link an auditable GO decision and review threat model, transport
@@ -91,9 +143,10 @@ failure before job startup as a verification blocker, not a passed test.
 3. **R71.B:** the isolated in-process service/seeded fault lab and client
    version negotiation exist on this experimental branch; integrated CI,
    operational metrics and security certification remain unverified.
-4. **R71.C:** two-device private cooperative slice, CPU/network overload,
-   reconnect and concurrency fuzz, authoritative replay, security audit,
-   QA and **GO/NO-GO** on an exact commit SHA.
+4. **R71.C:** the *offline* two-client fixture, queue saturation/reconnect,
+   replay and fail-closed NO-GO report are available. A real **two-device**
+   transport test, CPU/memory and network instrumentation, fuzz/concurrency,
+   security audit, QA and human GO are **not** complete.
 
 **Non-goals:** real transport, NAT, P2P, WAN matchmaking, production security,
 rollback of published games, live migration, networked rewards, MMO or a
