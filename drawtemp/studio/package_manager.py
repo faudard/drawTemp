@@ -115,10 +115,16 @@ def installed_package_usage(editor, project_root):
                 if asset_id in own_ids:
                     blockers.append("binding:" + kind + "/" + slot)
         for entry in entries:
-            if entry["id"] not in own_ids and entry["kind"] == "animation":
+            if entry["id"] in own_ids:
+                continue
+            if entry["kind"] == "animation":
                 for frame in entry["frames"]:
                     if frame["sprite"] in own_ids:
                         blockers.append("animation:" + entry["id"])
+            elif entry["path"] in own_paths:
+                # Different IDs may share one physical atlas. A remaining
+                # entry would otherwise lose the original pack provenance.
+                blockers.append("shared-path:" + entry["id"])
         blockers.extend("reference:" + path for path in _walk_refs(
             snapshot["content"], own_ids | own_paths, prefix="content"))
         blockers.extend("reference:" + path for path in _walk_refs(
