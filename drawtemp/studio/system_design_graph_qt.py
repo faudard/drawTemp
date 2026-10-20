@@ -104,7 +104,7 @@ class InteractiveSystemGraph(QGraphicsView):
     """Selection, draggable nodes and two-click typed port connection."""
 
     def __init__(self, *, on_select=None, on_connect=None,
-                 on_move=None, on_status=None, parent=None):
+                 on_move=None, on_status=None, on_remove=None, parent=None):
         super().__init__(parent)
         self.canvas = QGraphicsScene(self)
         self.setScene(self.canvas)
@@ -116,6 +116,7 @@ class InteractiveSystemGraph(QGraphicsView):
         self.on_connect = on_connect
         self.on_move = on_move
         self.on_status = on_status
+        self.on_remove = on_remove
         self._building = False
         self.pending = None
         self.nodes = {}
@@ -210,6 +211,18 @@ class InteractiveSystemGraph(QGraphicsView):
             event.accept()
             return
         selected = self.canvas.selectedItems()
+        if (event.key() in (Qt.Key_Delete, Qt.Key_Backspace)
+                and len(selected) == 1
+                and isinstance(selected[0], GraphLink)):
+            edge = selected[0]
+            callback = self.on_remove
+            if callback is not None:
+                source, target = edge.source, edge.target
+                # The callback rebuilds the scene; never delete the edge
+                # synchronously while dispatching its keyboard event.
+                QTimer.singleShot(0, lambda: callback(source, target))
+            event.accept()
+            return
         if len(selected) == 1 and isinstance(selected[0], GraphNode):
             item = selected[0]
             steps = {Qt.Key_Left: (-12, 0), Qt.Key_Right: (12, 0),
