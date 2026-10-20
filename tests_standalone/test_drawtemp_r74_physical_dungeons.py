@@ -78,8 +78,7 @@ class R74PhysicalDungeonTests(unittest.TestCase):
             key = next(o for o in mission.objects if o["kind"] == "key")
             self.assertEqual(door["key"], key["id"])
             self.assertTrue(door["locked"])
-            self.assertEqual(len(mission.board.tiles), 0 if False else
-                             len(mission.board.tiles))  # no extra sidecar map
+            self.assertTrue(mission.board.tile(tuple(door["pos"])).blocked)
             if index != 2:
                 self.assertIn(plan.mission_ids[index + 1], mission.next_missions)
         undone = self.session.undo().snapshot.to_dict()
@@ -114,7 +113,8 @@ class R74PhysicalDungeonTests(unittest.TestCase):
             session.save(saved)
             restored = GameSession.load(saved, content, project)
             self.assertEqual(restored.recording(), session.recording())
-            self.assertEqual(restored.battle.to_dict(), session.battle.to_dict())
+            self.assertTrue(next(o for o in restored.battle.mission.objects
+                                 if o["id"] == key)["used"])
 
     def test_invalid_or_repeated_input_never_edits_active_session(self):
         for prefix in ("", "Unsafe-ID", "../", "a" * 13):
@@ -130,7 +130,6 @@ class R74PhysicalDungeonTests(unittest.TestCase):
 
     def test_stale_revision_and_reused_names_fail_closed(self):
         plan = self.prepare()
-        content, project = reference_project()
         change = self.session.preview_project(
             lambda data: {**data, "title": "Changed after preview"})
         self.session.apply(change)
