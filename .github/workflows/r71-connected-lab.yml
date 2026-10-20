@@ -19,7 +19,16 @@ on:
     branches: [master]
     paths:
       - "sporebound/connected_lab_r71.py"
+      - "sporebound/connected_service_r71.py"
+      - "sporebound/connected_certification_r71.py"
+      - "sporebound/connected_transport_r71.py"
+      - "scripts/r71_lab_report.py"
+      - "scripts/r71c_certification.py"
+      - "scripts/r71c_mtls_probe.py"
       - "tests_standalone/test_r71_connected_lab.py"
+      - "tests_standalone/test_r71_connected_service.py"
+      - "tests_standalone/test_r71_connected_certification.py"
+      - "tests_standalone/test_r71_connected_transport.py"
       - ".github/workflows/r71-connected-lab.yml"
 permissions:
   contents: read
@@ -42,6 +51,8 @@ jobs:
         run: python scripts/r71_lab_report.py --seed 71 --latency 2 --loss 25 --duplicate 10
       - name: R71.C offline two-client certification evidence
         run: python -m unittest tests_standalone.test_r71_connected_certification -v
+      - name: Verify OpenSSL CLI for temporary mutual TLS certificates
+        run: openssl version
       - name: R71.C pinned mTLS loopback contract and ephemeral certificates
         run: python -m unittest tests_standalone.test_r71_connected_transport -v
       - name: R71.C certification report requires NO-GO
