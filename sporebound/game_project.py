@@ -151,7 +151,8 @@ class GameProject:
             world = self.extensions.get(LIVING_WORLD_EXTENSION)
             validate_advanced_ai(
                 self.extensions[ADVANCED_AI_EXTENSION]["data"],
-                living_world=world["data"] if world is not None else None)
+                living_world=world["data"] if world is not None else None,
+                content=content)
         from .campaign_flow import validate_flow
         validate_flow(self.campaign_flow, content)
         from .siege_authoring import validate_all
