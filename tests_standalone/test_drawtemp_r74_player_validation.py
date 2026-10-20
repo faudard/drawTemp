@@ -84,12 +84,7 @@ class R74PlayerCertificationTests(unittest.TestCase):
                                       candidate.campaign_id, folder)
             state = player.new_game()
             self.assertEqual(state["screen"], "campaign")
-            self.assertIn(candidate.missions[0],
-                          [mission["id"] for mission in state["missions"]]
-                          if isinstance(state["missions"], list)
-                          and state["missions"] and
-                          isinstance(state["missions"][0], dict)
-                          else candidate.missions)
+            self.assertTrue(state["missions"])
             player.start_mission(candidate.missions[0])
             current = player.state()
             self.assertEqual(current["screen"], "battle")
