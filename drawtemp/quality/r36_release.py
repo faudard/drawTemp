@@ -126,11 +126,18 @@ def audit_r36_rights(project, asset_root, *, require_licenses=False):
 
     # Reuse R15's existing, evidence-backed attestation validator verbatim.
     from drawtemp.export.r15 import _check_asset_rights
+    # R15 verifies its complete global rights manifest. Passing a R36-only
+    # subset here would incorrectly flag unrelated, properly licensed files
+    # as "unregistered" when a project also contains audio or portraits.
+    all_registered_files = sorted({
+        item["path"] for item in registry.to_dict()["entries"]
+        if item["kind"] != "animation"
+    })
     rights_report = {
-        "errors": [], "warnings": [], "assets": sorted(file_hashes),
+        "errors": [], "warnings": [], "assets": all_registered_files,
         "rights_evidence": [], "rights_attestations_checked": False,
     }
-    if file_hashes:
+    if all_registered_files:
         _check_asset_rights(root, rights_report, require_licenses)
     else:
         rights_report["rights_attestations_checked"] = True
