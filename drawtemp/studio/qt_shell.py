@@ -479,6 +479,7 @@ class StudioWindow(QMainWindow):
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -553,6 +554,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r43_ability"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r51_hud"])
         tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -663,6 +665,16 @@ class StudioWindow(QMainWindow):
         dialog = ProjectHistoryDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
+            self.refresh()
+
+    def open_r51_hud(self):
+        """Edit only the canonical R1 project; Qt preview is non-interactive."""
+        from drawtemp.studio.r51_designer_qt import R51DesignerDialog
+        before = self.session.revision
+        dialog = R51DesignerDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if before != self.session.revision:
             self.refresh()
 
     def open_living_world(self):

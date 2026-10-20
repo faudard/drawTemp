@@ -133,6 +133,21 @@ def create_bridge(controller, renderer):
         def view(self):
             return self.controller.state()
 
+        @Slot(int, result="QVariantMap")
+        def authoredHud(self, width):
+            """Same read-only runtime layout projection consumed by Studio Qt Quick."""
+            from drawtemp.player.r51_hud import hud_for_player
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return hud_for_player(self.controller, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot(str)
+        def authoredUiIntent(self, intent):
+            from drawtemp.player.r51_hud import perform_ui_intent
+            self.invoke(perform_ui_intent, self.controller, intent)
+
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
             return self.animator.snapshot()
