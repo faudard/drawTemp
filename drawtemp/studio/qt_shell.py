@@ -479,6 +479,8 @@ class StudioWindow(QMainWindow):
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
                      self.open_project_history)
+        self._action("r78_team_reviews", "R78 • Revues et tâches d’équipe locales…",
+                     self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r49_references", "Vérifier les références du projet…",
@@ -565,6 +567,7 @@ class StudioWindow(QMainWindow):
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
         vcs_menu.addAction(self.commands["r48_history"])
+        vcs_menu.addAction(self.commands["r78_team_reviews"])
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
         tools_menu.addAction(self.commands["r49_metrics"])
@@ -727,6 +730,17 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
+
+    def open_team_reviews(self):
+        """R78.B optional local-only journals, no new authoring authority."""
+        from drawtemp.sdk.team_workflows import TeamAccessPolicy
+        from drawtemp.studio.r78_team_review_qt import TeamReviewDialog
+        # Local Studio has no connected authenticator. An external adapter
+        # must supply authenticated identity + policy for real team grants.
+        dialog = TeamReviewDialog(self.session, actor="local",
+                                  policy=TeamAccessPolicy({"local": "owner"}),
+                                  parent=self)
+        dialog.exec()
 
     def open_r51_hud(self):
         """Edit only the canonical R1 project; Qt preview is non-interactive."""
