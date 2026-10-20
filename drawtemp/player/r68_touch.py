@@ -39,6 +39,7 @@ class TouchInput:
     def update(self, points, width, height):
         if (type(width) is not int or type(height) is not int or
                 width < 240 or height < 160 or
+                width > 16384 or height > 16384 or
                 type(points) not in (list, tuple) or len(points) > _MAX_FINGERS):
             raise ValueError("Invalid touch viewport or finger list")
         directions = []
@@ -51,6 +52,7 @@ class TouchInput:
             if (type(ident) is not int or not 0 <= ident <= 9999 or
                     ident in ids or type(x) not in (int, float) or
                     type(y) not in (int, float) or
+                    abs(x) > 32768 or abs(y) > 32768 or
                     not math.isfinite(x) or not math.isfinite(y)):
                 raise ValueError("Invalid or duplicate touch point")
             ids.add(ident)
