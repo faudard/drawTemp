@@ -210,6 +210,17 @@ class GameProject:
             validate_systems(
                 self.extensions[SYSTEMS_EXTENSION]["data"],
                 set(self.exploration))
+        # R61.A: the settlement is an opt-in projection over R55 stocks.
+        # Do not allow a second autonomous resource graph in GameProject.
+        from .settlement_management import (
+            EXTENSION as SETTLEMENT_EXTENSION, validate_settlement)
+        if SETTLEMENT_EXTENSION in self.extensions:
+            require(SYSTEMS_EXTENSION in self.extensions,
+                    "R61 settlement requires the canonical R55 system graph")
+            validate_settlement(
+                self.extensions[SETTLEMENT_EXTENSION]["data"],
+                self.extensions[SYSTEMS_EXTENSION]["data"],
+                set(self.exploration) | set(content.missions))
         from .world_map import validate_world
         validate_world(self.world, content, self.campaigns, self.story)
         from .game_modes import validate_game_modes
