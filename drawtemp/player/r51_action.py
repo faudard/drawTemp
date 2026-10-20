@@ -58,7 +58,9 @@ def action_hud_for_player(controller, width):
     )
     return {
         "available": True, "error": "", "projection": projected,
-        "permitted_actions": sorted(actions) if enabled else [],
+        "permitted_actions": sorted(
+            actions - ({"action.attack"} if not boss else set())
+        ) if enabled else [],
         "single_frame": True,
     }
 
