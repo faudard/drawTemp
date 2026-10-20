@@ -157,7 +157,7 @@ class CommunityHubTests(unittest.TestCase):
         self.assertFalse((self.recipient / "bad.zip").exists())
         # Read-only discovery does not trust or scan the blob directory.
         self.assertEqual(len(search_catalog(self.hub)), 1)
-        self._reject("stored_pack_changed", self._publish,
+        self._reject("immutable_release", self._publish,
                      "enemy-share", self.packs["enemy-share"])
         already = self.recipient / "owned.zip"
         already.write_bytes(b"precious")
