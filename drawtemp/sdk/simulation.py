@@ -209,6 +209,40 @@ class Simulation:
         return self._apply("farming_collect", animal_id, receipt_id,
                            expected_revision=expected_revision)
 
+    def survival_state(self, *, expected_revision=None):
+        """R63 immutable opt-in survival view."""
+        self._check_revision(expected_revision, "survival_state")
+        if self._session._survival is None:
+            return None
+        return freeze(self._session.survival_state())
+
+    def survival_condition(self, *, expected_revision=None):
+        """Read-only R63 critical-need projection (no revision mutation)."""
+        self._check_revision(expected_revision, "survival_condition")
+        if self._session._survival is None:
+            return None
+        return freeze(self._session.survival_condition())
+
+    def survival_advance(self, ticks=1, *, expected_revision=None):
+        return self._apply("survival_advance", ticks,
+                           expected_revision=expected_revision)
+
+    def survival_gather(self, node_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_gather", node_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_craft(self, recipe_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_craft", recipe_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_rest(self, shelter_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_rest", shelter_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_eat(self, food_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_eat", food_id, transaction_id,
+                           expected_revision=expected_revision)
+
     def living_world_state(self, scene=None):
         """Opt-in detached world projection for Player/Qt; no state mutation."""
         if self._session._living_world is None:

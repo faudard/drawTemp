@@ -506,6 +506,7 @@ class StudioWindow(QMainWindow):
         self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
         self._action("r37_boss", "Boss & AI Director R37.E…", self.open_ai_bosses)
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
+        self._action("r63_survival", "Survival Designer R63 : recettes et refuges…", self.open_survival_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
         self._action("r76_optimizer", "R76 • Optimizer Studio (assets)…",
@@ -605,6 +606,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_squad"])
         tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
+        tools_menu.addAction(self.commands["r63_survival"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
         tools_menu.addAction(self.commands["r76_optimizer"])
@@ -853,6 +855,15 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.farming_qt import FarmStudioDialog
         revision = self.session.revision
         dialog = FarmStudioDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_survival_designer(self):
+        """R63.B visual survival authoring through canonical Studio history."""
+        from drawtemp.studio.survival_designer_qt import SurvivalDesignerDialog
+        revision = self.session.revision
+        dialog = SurvivalDesignerDialog(self.session, parent=self)
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()

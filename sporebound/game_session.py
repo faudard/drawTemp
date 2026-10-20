@@ -182,6 +182,13 @@ class GameSession:
         self._farming = (FarmingLife(farm_spec["data"],
                                      set(self.project.exploration), known_items)
                          if farm_spec is not None else None)
+        # R63: GameSession owns the optional survival journal and needs.
+        from .survival import EXTENSION as SURVIVAL_EXTENSION, SurvivalRuntime
+        survival_spec = self.project.extensions.get(SURVIVAL_EXTENSION)
+        self._survival = (
+            SurvivalRuntime(survival_spec["data"], set(self.project.exploration),
+                            exploration=self.project.exploration)
+            if survival_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -660,6 +667,65 @@ class GameSession:
 
     def farming_collect(self, animal_id, receipt_id):
         return self._farming_command("collect", animal_id, receipt_id)
+
+    def survival_state(self):
+        """R63 detached survival projection; Campaign owns item balances."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.snapshot()
+
+    def survival_condition(self):
+        """R63.C derived failure/recovery status, no persisted shadow state."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.condition()
+
+    def _survival_preflight(self):
+        require(self._survival is not None and self.mode == "campaign"
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Survival actions require routed exploration without dialogue")
+
+    def survival_advance(self, ticks=1):
+        self._survival_preflight()
+        return self._survival.advance(ticks)
+
+    def _survival_near(self, row):
+        """Placed resources/refuges require the canonical campaign position."""
+        if "pos" not in row:
+            return
+        location = self.route_state().get("position")
+        require(type(location) in (list, tuple) and len(location) == 2
+                and all(type(v) in (int, float) for v in location)
+                and abs(location[0] - row["pos"][0])
+                  + abs(location[1] - row["pos"][1]) <= 1,
+                "Survival target is not within interaction reach")
+
+    def survival_gather(self, node_id, transaction_id):
+        self._survival_preflight()
+        row = self._survival.nodes.get(node_id)
+        if row is not None:
+            self._survival_near(row)
+        return self._survival.gather(
+            self.progress, self.route_scene, node_id, transaction_id)
+
+    def survival_craft(self, recipe_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.craft(
+            self.progress, self.route_scene, recipe_id, transaction_id)
+
+    def survival_rest(self, shelter_id, transaction_id):
+        self._survival_preflight()
+        row = self._survival.shelters.get(shelter_id)
+        if row is not None:
+            self._survival_near(row)
+        return self._survival.rest(
+            self.progress, self.route_scene, shelter_id, transaction_id)
+
+    def survival_eat(self, food_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.eat(
+            self.progress, self.route_scene, food_id, transaction_id)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -1197,6 +1263,10 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        # R63 uses the same fixed frame and staged transaction as R55.
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -1230,6 +1300,8 @@ class GameSession:
                 self._farming.sync(self._living_world.day)
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return self.route_realtime_state()
 
     def route_action_state(self):
@@ -1398,6 +1470,9 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         command = {"tick": runtime.tick + 1, "move": move,
                    "jump": jump, "interact": interact}
         if "boss" in runtime.scene:
@@ -1421,6 +1496,8 @@ class GameSession:
         self._platform = runtime
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return {"state": runtime.snapshot(), "events": events}
 
     def route_platform_travel(self, link_id):
@@ -2155,6 +2232,8 @@ class GameSession:
             data["advanced_ai"] = self._advanced_ai.recording()
         if self._systems is not None:
             data["systems"] = self._systems.snapshot()
+        if self._survival is not None:
+            data["survival"] = self._survival.snapshot()
         if self._farming is not None:
             data["farming"] = self._farming.snapshot()
         if self._stream_world is not None:
@@ -2188,7 +2267,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "farming", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "farming", "survival", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -2228,6 +2307,11 @@ class GameSession:
             session._systems.restore(data["systems"])
         else:
             require("systems" not in data, "Unexpected R55 economy in legacy save")
+        if session._survival is not None:
+            require("survival" in data, "R63 configured survival checkpoint missing")
+            session._survival.restore(data["survival"])
+        else:
+            require("survival" not in data, "Unexpected R63 state in legacy save")
         if session._farming is not None:
             require("farming" in data, "R62 configured farming checkpoint missing")
             session._farming.restore(data["farming"])

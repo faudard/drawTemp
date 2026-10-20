@@ -641,6 +641,26 @@ def create_bridge(controller, renderer):
         def systemFulfill(self, quest_id):
             self.invoke(self.controller.system_fulfill, quest_id)
 
+        @Slot(int)
+        def survivalWait(self, ticks):
+            self.invoke(self.controller.survival_wait, ticks)
+
+        @Slot(str)
+        def survivalGather(self, node_id):
+            self.invoke(self.controller.survival_gather, node_id)
+
+        @Slot(str)
+        def survivalCraft(self, recipe_id):
+            self.invoke(self.controller.survival_craft, recipe_id)
+
+        @Slot(str)
+        def survivalRest(self, shelter_id):
+            self.invoke(self.controller.survival_rest, shelter_id)
+
+        @Slot(str)
+        def survivalEat(self, item_id):
+            self.invoke(self.controller.survival_eat, item_id)
+
         @Slot(str)
         def exploreInteract(self, target):
             self.invoke(self.controller.explore_interact, target)
