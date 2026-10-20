@@ -1,11 +1,11 @@
 """R74.A headless regression: no hidden edits, distinct solved proposals and leases."""
-from copy import deepcopy
 import unittest
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.procgen import ProcGenError
 from drawtemp.sdk.procgen_prefabs import demo_library, verify_with_prefabs
 from drawtemp.sdk.reference import MISSION, reference_project
+from sporebound.roguelite import EXTENSION
 from drawtemp.studio.r74_assisted_dungeons import (
     AssistedDungeonController, DungeonAssistError,
 )
@@ -67,7 +67,7 @@ class AssistedDungeonTests(unittest.TestCase):
         applied = transition.snapshot.to_dict()
         self.assertEqual(applied["content"], self.initial["content"])
         self.assertNotEqual(applied["project"], self.initial["project"])
-        self.assertEqual(applied["project"]["extensions"]["roguelite"]["data"]["recipe"]["seed"],
+        self.assertEqual(applied["project"]["extensions"][EXTENSION]["data"]["recipe"]["seed"],
                          proposal.seed)
         self.assertEqual(self.session.undo().snapshot.to_dict()["project"],
                          self.initial["project"])
