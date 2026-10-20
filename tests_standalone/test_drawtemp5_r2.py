@@ -132,6 +132,52 @@ class QtShellTests(unittest.TestCase):
             window.close()
             self.assertIsNotNone(settings.value("window/docks"))
 
+    def test_workspace_switcher_and_grouped_tools_remain_accessible(self):
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QMenu
+        from drawtemp.studio.qt_shell import StudioWindow
+        from drawtemp.studio.r18_navigation import WORKSPACES
+        with tempfile.TemporaryDirectory() as folder:
+            settings = QSettings(str(Path(folder) / "studio.ini"),
+                                 QSettings.IniFormat)
+            window = StudioWindow(session(), settings=settings)
+            try:
+                window.resize(900, 650)
+                window.show()
+                self.app.processEvents()
+                self.assertTrue(window.workspace_switcher.isVisible())
+                self.assertEqual(
+                    window.toolbar_workspaces_menu.actions(),
+                    [window.commands["go_" + key] for key in WORKSPACES])
+                self.assertEqual(set(window._toolbar_buttons),
+                                 {"project", "gameplay", "maps",
+                                  "actors", "events", "campaigns"})
+                tools_action = next(action for action in
+                                    window.menuBar().actions()
+                                    if action.text().replace("&", "") == "Outils")
+                tools_menu = tools_action.menu()
+                self.assertLessEqual(len(tools_menu.actions()), 14)
+                self.assertTrue(any(action.menu() and
+                                    action.menu().title() == "Gameplay, combat et IA"
+                                    for action in tools_menu.actions()))
+                def included(menu):
+                    found = []
+                    for action in menu.actions():
+                        found.append(action)
+                        if action.menu() is not None:
+                            found.extend(included(action.menu()))
+                    return found
+                all_actions = included(tools_menu)
+                for key in ("r31_logic", "r38_preflight", "r43_ability",
+                            "r77_lab", "r30_creator", "r57_translation"):
+                    self.assertIn(window.commands[key], all_actions)
+                window.set_language("en")
+                self.assertEqual(window._toolbar_buttons["maps"].text(), "Map")
+                self.assertIn("All workspaces", window.workspace_switcher.text())
+                self.assertEqual(window.commands["go_maps"].text(), "Workspace: Map")
+            finally:
+                window.close()
+
     def test_shell_native_database_uses_same_session(self):
         from PySide6.QtCore import QSettings
         from drawtemp.studio.qt_shell import StudioWindow
