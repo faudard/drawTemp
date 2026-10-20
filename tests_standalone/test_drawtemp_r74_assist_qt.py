@@ -136,6 +136,57 @@ class AssistedDungeonQtTests(unittest.TestCase):
         self.assertIn("rights", denied.status.text().lower())
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
 
+    def test_three_physical_mission_preview_is_read_only_and_rejectable(self):
+        self.dialog.preview_generation()
+        physical = self.dialog.prepare_physical_generation()
+        self.assertIsNotNone(physical)
+        self.assertEqual(len(physical.proofs), 3)
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        self.assertTrue(self.dialog.physical_apply_button.isEnabled())
+        self.dialog.reject_proposals()
+        self.assertFalse(self.dialog.physical_apply_button.isEnabled())
+        self.assertIsNone(self.dialog.apply_physical_generation())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+
+    def test_physical_confirmation_no_then_yes_then_undo_redo(self):
+        self.dialog.preview_generation()
+        self.assertIsNotNone(self.dialog.prepare_physical_generation())
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            self.assertIsNone(self.dialog.apply_physical_generation())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            transition = self.dialog.apply_physical_generation()
+        self.assertIsNotNone(transition)
+        content = transition.snapshot.to_dict()["content"]
+        self.assertEqual(len(content["missions"]),
+                         len(self.before["content"]["missions"]) + 3)
+        self.assertTrue(self.dialog.undo_button.isEnabled())
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        self.assertEqual(self.dialog.undo_application().snapshot.to_dict()["content"],
+                         self.before["content"])
+        self.assertEqual(self.dialog.redo_application().snapshot.to_dict()["content"],
+                         content)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+
+    def test_physical_prefix_change_and_revision_lease_fail_closed(self):
+        self.dialog.preview_generation()
+        self.assertIsNotNone(self.dialog.prepare_physical_generation())
+        self.dialog.physical_prefix.setText("r74_alt")
+        self.assertFalse(self.dialog.physical_apply_button.isEnabled())
+        self.assertIsNone(self.dialog.apply_physical_generation())
+        plan = self.dialog.prepare_physical_generation()
+        self.assertEqual(plan.prefix, "r74_alt")
+        change = self.session.preview_project(
+            lambda data: {**data, "title": "Another authoring command"})
+        self.session.apply(change)
+        revision = self.session.revision
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            self.assertIsNone(self.dialog.apply_physical_generation())
+        self.assertEqual(self.session.revision, revision)
+        self.assertFalse(self.dialog.physical_apply_button.isEnabled())
+        self.assertIn("bloquée", self.dialog.status.text())
+
     def test_studio_command_palette_and_tools_action(self):
         from drawtemp.studio.qt_shell import StudioWindow
         settings = QSettings(str(self.root / "settings.ini"), QSettings.IniFormat)
