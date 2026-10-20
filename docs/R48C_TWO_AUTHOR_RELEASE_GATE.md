@@ -62,14 +62,41 @@ publication. The last valid archive must remain intact, and the Studio's
 session must remain unchanged. Corrupted archives and stale publications must
 not be overwritten. Sidecars are independent of game saves.
 
-These are **simulated exceptions**, not kill -9, real power loss, failing
-physical media or distributed writer arbitration.
+These are **simulated exceptions**, not failing physical media or real
+power loss.
+
+### R48.C2 partial — independent-process writer gates
+
+`tests_standalone.test_drawtemp_r48c_processes` also launches two actual
+Python interpreters via `multiprocessing.get_context("spawn")` and a
+start barrier. Both independently validate and attempt to create the
+same absent history archive using `LocalHistoryStore.save(...,
+expected_digest=None)`: **exactly one** can succeed, the other must be
+refused due to the exclusive lock or optimistic create-only check. The
+remaining archive must reload, contain the winner's revision and
+leave no normal writer lock behind.
+
+A separate child process terminates deliberately via `os._exit(37)`
+while holding the writer lock. A different process then attempts to
+publish, which must **fail closed** without creating the archive.
+The test itself subsequently inspects/removes that stale lock to
+exercise explicitly owner-directed recovery. Production does not
+steal or silently clear stale locks.
+
+```bash
+python -m unittest tests_standalone.test_drawtemp_r48c_processes -v
+```
+
+These are genuine independent-process scenarios, but are **not**
+power-loss, disk corruption, distributed locking or actual
+cross-machine collaboration tests.
 
 ## Reproduce locally
 
 ```bash
 python -m pip install .
 python -m unittest tests_standalone.test_drawtemp_r48c_vertical -v
+python -m unittest tests_standalone.test_drawtemp_r48c_processes -v
 python -m drawtemp.sdk.r48_vertical_gate
 python -m drawtemp.sdk.migration \
     --verify-baseline docs/drawtemp5/reference-baseline.json
@@ -93,8 +120,10 @@ macOS and Windows headless matrix.
 
 - GitHub Actions must **actually create jobs and execute tests** on all
   three OS; a workflow run with `jobs=[]` is not test evidence.
-- Test recovery after real process termination, coordinated disk
-  interruptions and a **genuine two-process** concurrent publish attempt.
+- Extend interrupted *publication* tests to process death at every stage,
+  coordinated disk interruptions and real physical recovery. The
+  basic independent-process publication race and orphan lock gate are
+  now included; this is not hardware fault certification.
 - Verify Player **export** output and reproducibility; C1 checks gameplay
   save/load and replay, not export packaging.
 - Validate R48.B with screen readers (NVDA, VoiceOver) and GUI *onscreen*.
