@@ -84,6 +84,42 @@ class QtPackageManagerTests(unittest.TestCase):
         self.assertEqual(dialog.table.rowCount(), 0)
         self.assertFalse((self.root / "assets").exists())
 
+    def test_upgrade_dialog_applies_verified_new_version_and_explicit_downgrade(self):
+        from drawtemp.assets.packs import install_pack
+        from drawtemp.studio.package_manager import installed_package_usage
+        old_source = make_source(self.root / "source-old", make_manifest())
+        old_archive = self.root / "old.rpack"
+        old_pack = publish_pack(old_source, old_archive)
+        install_pack(old_pack, self.session, self.root)
+        newer = make_manifest()
+        newer["version"] = "1.1.0"
+        source = make_source(self.root / "source-new", newer)
+        archive = self.root / "new.rpack"
+        pack = publish_pack(source, archive)
+        dialog = PackageManagerDialog(
+            self.session, content_path=self.content_path)
+        self.assertTrue(dialog.upgrade_button.isEnabled())
+        with patch("drawtemp.studio.package_manager_qt.QFileDialog.getOpenFileName",
+                   return_value=(str(archive), "")), patch(
+                   "drawtemp.studio.package_manager_qt.QInputDialog.getText",
+                   return_value=(pack.sha256, True)), patch(
+                   "drawtemp.studio.package_manager_qt.QMessageBox.question",
+                   return_value=QMessageBox.Yes):
+            dialog.upgrade_selected()
+        self.assertEqual(installed_package_usage(self.session, self.root)[0]["version"],
+                         "1.1.0")
+        with patch("drawtemp.studio.package_manager_qt.QFileDialog.getOpenFileName",
+                   return_value=(str(old_archive), "")), patch(
+                   "drawtemp.studio.package_manager_qt.QInputDialog.getText",
+                   return_value=(old_pack.sha256, True)), patch(
+                   "drawtemp.studio.package_manager_qt.QMessageBox.question",
+                   return_value=QMessageBox.Yes):
+            dialog.upgrade_selected()
+        self.assertEqual(installed_package_usage(self.session, self.root)[0]["version"],
+                         "1.0.0")
+        self.assertEqual(self.session.revision, 3)
+
+
 
 if __name__ == "__main__":
     unittest.main()

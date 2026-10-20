@@ -12,6 +12,8 @@ on:
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r58b_package_manager.py'
       - 'tests_standalone/test_drawtemp_r58b_qt.py'
+      - 'drawtemp/studio/package_upgrades.py'
+      - 'tests_standalone/test_drawtemp_r58b_upgrades.py'
       - '.github/workflows/r58a-package-ecosystem.yml'
   push:
     branches: [master]
@@ -25,6 +27,8 @@ on:
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r58b_package_manager.py'
       - 'tests_standalone/test_drawtemp_r58b_qt.py'
+      - 'drawtemp/studio/package_upgrades.py'
+      - 'tests_standalone/test_drawtemp_r58b_upgrades.py'
       - '.github/workflows/r58a-package-ecosystem.yml'
 
 jobs:
@@ -50,7 +54,7 @@ jobs:
       - name: Install editable SDK
         run: python -m pip install -e .
       - name: R58.A and R58.B1 headless lifecycle regression tests
-        run: python -m unittest tests_standalone.test_drawtemp_r58a_package_ecosystem tests_standalone.test_drawtemp_r58b_package_manager tests_standalone.test_drawtemp5_r24c
+        run: python -m unittest tests_standalone.test_drawtemp_r58a_package_ecosystem tests_standalone.test_drawtemp_r58b_package_manager tests_standalone.test_drawtemp_r58b_upgrades tests_standalone.test_drawtemp5_r24c
 
   r58-package-qt-smoke:
     runs-on: ubuntu-latest

@@ -23,6 +23,9 @@ from drawtemp.studio.package_manager import (
     PackageManagerError, installed_package_usage,
     preview_package_removal, apply_package_removal,
 )
+from drawtemp.studio.package_upgrades import (
+    PackageUpgradeError, preview_package_upgrade, apply_package_upgrade,
+)
 
 
 class PackageManagerDialog(QDialog):
@@ -71,6 +74,10 @@ class PackageManagerDialog(QDialog):
         self.install_button.setObjectName("r58-install")
         self.install_button.clicked.connect(self.install_selected)
         actions.addWidget(self.install_button)
+        self.upgrade_button = QPushButton("Mettre à jour / Restaurer…")
+        self.upgrade_button.setObjectName("r58-upgrade")
+        self.upgrade_button.clicked.connect(self.upgrade_selected)
+        actions.addWidget(self.upgrade_button)
         self.remove_button = QPushButton("Retirer les références…")
         self.remove_button.setObjectName("r58-remove")
         self.remove_button.clicked.connect(self.remove_selected)
@@ -89,6 +96,7 @@ class PackageManagerDialog(QDialog):
         self.reports = ()
         self.details.clear()
         self.remove_button.setEnabled(False)
+        self.upgrade_button.setEnabled(False)
         self.install_button.setEnabled(self.project_root is not None)
         if self.project_root is None:
             self.status.setText("Enregistrez le projet avant de gérer les packages.")
@@ -123,6 +131,9 @@ class PackageManagerDialog(QDialog):
     def _select(self):
         report = self._selected_report()
         self.remove_button.setEnabled(bool(report and report["removable"]))
+        # R58.B2 upgrades one isolated pack only: legacy receipts cannot
+        # establish safe reverse dependencies for a multi-pack project.
+        self.upgrade_button.setEnabled(bool(report and len(self.reports) == 1))
         if report is None:
             self.details.clear()
             return
@@ -182,6 +193,69 @@ class PackageManagerDialog(QDialog):
                          expected_revision=initial_revision)
             self.refresh()
         except (PackagePlanError, PackageManagerError, ResourcePackError,
+                ValueError, OSError) as exc:
+            self._error(exc)
+
+    def upgrade_selected(self):
+        report = self._selected_report()
+        if report is None or self.project_root is None or len(self.reports) != 1:
+            return
+        archive, _ = QFileDialog.getOpenFileName(
+            self, "Nouvelle version R24.C (ou archive de retour arrière)", "",
+            "Resource packs (*.rpack *.zip);;Archives (*.zip)")
+        if not archive:
+            return
+        digest, accepted = QInputDialog.getText(
+            self, "Empreinte externe",
+            "SHA-256 vérifié séparément (64 caractères hexadécimaux) :")
+        if not accepted or not digest.strip():
+            return
+        try:
+            revision = self.session.revision
+            try:
+                planned = preview_package_upgrade(
+                    self.session, self.project_root, archive,
+                    expected_sha256=digest.strip(),
+                    expected_revision=revision)
+            except PackageUpgradeError as exc:
+                if exc.code != "downgrade_denied":
+                    raise
+                decision = QMessageBox.question(
+                    self, "Retour arrière explicite",
+                    "La version choisie est antérieure à celle du projet. "
+                    "Restaurer explicitement cette ancienne version ?\n"
+                    "Les anciennes et nouvelles ressources seront conservées.",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if decision != QMessageBox.Yes:
+                    return
+                planned = preview_package_upgrade(
+                    self.session, self.project_root, archive,
+                    expected_sha256=digest.strip(), allow_downgrade=True,
+                    expected_revision=revision)
+            if planned.package_id != report["id"]:
+                raise PackageUpgradeError(
+                    "identity_changed", "Archive différente du package sélectionné")
+            message = (
+                "Package : " + planned.package_id + "\n" +
+                "Version : " + planned.previous_version + " → " + planned.version + "\n" +
+                "SHA-256 : " + planned.sha256 + "\n" +
+                "Fichiers nouveaux : " + str(len(planned.added_paths)) + "\n" +
+                "Fichiers conservés : " + str(len(planned.retained_paths)) + "\n" +
+                ("Réutilisation des fichiers existants vérifiés.\n"
+                 if planned.reuse_existing_bytes else
+                 "Création de fichiers dans un nouveau répertoire de version.\n") +
+                "\nIDs et types d'assets inchangés. Aucune signature/licence "
+                "indépendamment certifiée. Modifications non sauvegardées.\n\n"
+                "Confirmer le changement de version ?"
+            )
+            yes = QMessageBox.question(
+                self, "Prévisualisation de mise à jour", message,
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if yes != QMessageBox.Yes:
+                return
+            apply_package_upgrade(planned, self.session, self.project_root)
+            self.refresh()
+        except (PackageUpgradeError, PackageManagerError, ResourcePackError,
                 ValueError, OSError) as exc:
             self._error(exc)
 
