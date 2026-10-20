@@ -26,6 +26,11 @@ are **not** fulfilled by this PR.
 - Studio preview now exposes equivalent contrast and text-scale inputs;
   retained preview samples remain marked **synthetic**, and Studio warns
   when `DIALOGUE`, `INVENTORY`, `HUD_ACTION` have no Player equivalent.
+- In the Studio visual preview, an **Export bloqué** diagnostic now
+  re-audits the *current draft* plus the other saved UI screens and shows
+  concrete unsupported actions, missing New Game or runtime bindings
+  without applying the draft. This is a capability warning, not a
+  test/certification success indicator.
 
 ### 2. Explicit Player capability / parity report
 
