@@ -71,6 +71,13 @@ class ManifestTests(unittest.TestCase):
             with self.assertRaises(ModError) as err:
                 read_mod_manifest(file)
             self.assertEqual(err.exception.code, "size_limit")
+            # Python's JSON parser can raise RecursionError before returning a
+            # dictionary; deep input must fail closed with a stable SDK error.
+            file.write_text("[" * 3000 + "0" + "]" * 3000,
+                            encoding="utf-8")
+            with self.assertRaises(ModError) as err:
+                read_mod_manifest(file)
+            self.assertEqual(err.exception.code, "invalid_manifest")
             link = root / "link.json"
             try:
                 link.symlink_to(file)
