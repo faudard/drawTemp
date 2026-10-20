@@ -101,7 +101,7 @@ class R60FreezeTests(unittest.TestCase):
         row["project"] = "../elsewhere.game.json"
         (self.root / "fixtures.json").write_text(
             json.dumps(self.manifest), encoding="utf-8")
-        self.assertIn("outside", self.audit()["preflight_errors"][0].lower())
+        self.assertIn("repository-relative", self.audit()["preflight_errors"][0])
         row["content"] = "corpus/jeanne.json"
         row["project"] = "corpus/jeanne.game.json"
         (self.root / "fixtures.json").write_text(
