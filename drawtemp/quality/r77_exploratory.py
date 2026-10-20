@@ -122,14 +122,6 @@ def _run_seed(scene, goals, seed, ticks):
             outcome = "hero_dead"
             break
         cmd = _next_input(runner, goals, rng, attempted)
-        if cmd.get("interact"):
-            actions.add("interact")
-        elif cmd.get("attack"):
-            actions.add("attack")
-        elif cmd.get("dx") or cmd.get("dy"):
-            actions.add("move")
-        else:
-            actions.add("idle")
         try:
             events = runner.step(deepcopy(cmd))
         except Exception as exc:
@@ -138,6 +130,15 @@ def _run_seed(scene, goals, seed, ticks):
                              "message": str(exc)[:250]})
             outcome = "runtime_exception"
             break
+        # Only successfully executed commands count toward action coverage.
+        if cmd.get("interact"):
+            actions.add("interact")
+        elif cmd.get("attack"):
+            actions.add("attack")
+        elif cmd.get("dx") or cmd.get("dy"):
+            actions.add("move")
+        else:
+            actions.add("idle")
         event_kinds.update(event["kind"] for event in events)
         snap = runner.snapshot()
         cells.add(_cell(snap["hero"]["pos"]))
