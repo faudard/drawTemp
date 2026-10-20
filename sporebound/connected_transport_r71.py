@@ -26,7 +26,7 @@ from .model import RuleError, require
 
 MAX_REQUEST_BYTES = 8192
 MAX_REPLY_BYTES = 131072
-READ_TIMEOUT_SECONDS = 15
+READ_TIMEOUT_SECONDS = 30
 MAX_ACCEPT_ATTEMPTS = 8
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -323,10 +323,11 @@ def submit_private_probe(*, host, port, context, server_name,
                 "player": player, "sequence": 1, "tick": 8, "entity": entity,
                 "command": {"kind": "hold", "args": {}}}})
             receipt = read_packet(tls)
-            require(receipt.get("ok") is True, "Cooperative command rejected")
+            require(type(receipt) is dict and type(receipt.get("ok")) is bool,
+                    "Malformed command receipt")
             return {"format": "r71c-mtls-client-v1",
                     "player": player, "rotated_ticket": admission["admission"]["ticket"],
-                    "command_accepted": True, "rtt_ms": round(
+                    "command_accepted": receipt["ok"], "rtt_ms": round(
                         (time.perf_counter()-start)*1000, 3)}
 
 
