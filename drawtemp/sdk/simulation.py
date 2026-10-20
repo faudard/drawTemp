@@ -185,6 +185,64 @@ class Simulation:
         return self._apply("system_fulfill", quest_id,
                            expected_revision=expected_revision)
 
+    def farming_state(self, scene=None, *, expected_revision=None):
+        """Immutable R62 view using the same canonical R35 world clock."""
+        self._check_revision(expected_revision, "farming_state")
+        try:
+            return freeze(self._session.farming_state(scene))
+        except RuleError as exc:
+            raise SimulationError("invalid_action", "farming_state", str(exc)) from exc
+
+    def farming_plant(self, plot_id, crop_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_plant", plot_id, crop_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_harvest(self, plot_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_harvest", plot_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_feed(self, animal_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_feed", animal_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def farming_collect(self, animal_id, receipt_id, *, expected_revision=None):
+        return self._apply("farming_collect", animal_id, receipt_id,
+                           expected_revision=expected_revision)
+
+    def survival_state(self, *, expected_revision=None):
+        """R63 immutable opt-in survival view."""
+        self._check_revision(expected_revision, "survival_state")
+        if self._session._survival is None:
+            return None
+        return freeze(self._session.survival_state())
+
+    def survival_condition(self, *, expected_revision=None):
+        """Read-only R63 critical-need projection (no revision mutation)."""
+        self._check_revision(expected_revision, "survival_condition")
+        if self._session._survival is None:
+            return None
+        return freeze(self._session.survival_condition())
+
+    def survival_advance(self, ticks=1, *, expected_revision=None):
+        return self._apply("survival_advance", ticks,
+                           expected_revision=expected_revision)
+
+    def survival_gather(self, node_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_gather", node_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_craft(self, recipe_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_craft", recipe_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_rest(self, shelter_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_rest", shelter_id, transaction_id,
+                           expected_revision=expected_revision)
+
+    def survival_eat(self, food_id, transaction_id, *, expected_revision=None):
+        return self._apply("survival_eat", food_id, transaction_id,
+                           expected_revision=expected_revision)
+
     def living_world_state(self, scene=None):
         """Opt-in detached world projection for Player/Qt; no state mutation."""
         if self._session._living_world is None:

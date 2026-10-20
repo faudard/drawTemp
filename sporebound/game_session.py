@@ -164,10 +164,31 @@ class GameSession:
         # R55: canonical GameSession-owned economy, opt-in for authored projects.
         from .system_design import EXTENSION as SYSTEMS_EXTENSION, SystemEconomy
         system_spec = self.project.extensions.get(SYSTEMS_EXTENSION)
+        from .settlement_management import EXTENSION as SETTLEMENT_EXTENSION
+        settlement_spec = self.project.extensions.get(SETTLEMENT_EXTENSION)
         self._systems = (
-            SystemEconomy(system_spec["data"],
-                          set(self.project.exploration) | set(self.content.missions))
+            SystemEconomy(
+                system_spec["data"],
+                set(self.project.exploration) | set(self.content.missions),
+                settlement=(settlement_spec["data"]
+                            if settlement_spec is not None else None))
             if system_spec is not None else None)
+        # R62.A opt-in farms share R35 time and Campaign inventory.
+        from .farming_life import EXTENSION as FARM_EXTENSION, FarmingLife
+        farm_spec = self.project.extensions.get(FARM_EXTENSION)
+        known_items = set(self.content.equipment)
+        if system_spec is not None:
+            known_items.update(row["id"] for row in system_spec["data"]["resources"])
+        self._farming = (FarmingLife(farm_spec["data"],
+                                     set(self.project.exploration), known_items)
+                         if farm_spec is not None else None)
+        # R63: GameSession owns the optional survival journal and needs.
+        from .survival import EXTENSION as SURVIVAL_EXTENSION, SurvivalRuntime
+        survival_spec = self.project.extensions.get(SURVIVAL_EXTENSION)
+        self._survival = (
+            SurvivalRuntime(survival_spec["data"], set(self.project.exploration),
+                            exploration=self.project.exploration)
+            if survival_spec is not None else None)
         self.battle = None
         self.fronts = None
         self.finalized = False
@@ -583,6 +604,129 @@ class GameSession:
                 "R55 quest delivery requires active campaign without dialogue")
         return self._systems.fulfill(self.progress, quest_id)
 
+    def settlement_state(self):
+        """R61.A settlement view; stocks remain owned by R55 SystemEconomy."""
+        require(self._systems is not None, "R61 settlement not configured")
+        return self._systems.settlement_state()
+
+    def settlement_build(self, building_id, receipt_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R61 construction requires an unblocked campaign")
+        return self._systems.settlement_build(building_id, receipt_id)
+
+    def settlement_assign(self, resident_id, building_id, receipt_id):
+        require(self._systems is not None and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R61 workforce changes require an unblocked campaign")
+        return self._systems.settlement_assign(
+            resident_id, building_id, receipt_id)
+
+    def farming_state(self, scene=None):
+        """R62 detached plot, weather and animal view, including off-focus scenes."""
+        require(self._farming is not None, "R62 farming not configured")
+        return self._farming.view(scene=scene)
+
+    def _farming_command(self, kind, target, receipt_id, *, crop=None):
+        require(self._farming is not None and self._living_world is not None
+                and self.mode == "campaign" and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R62 farming requires routed exploration without dialogue")
+        authored = (self._farming.plots.get(target) if kind in ("plant", "harvest")
+                    else self._farming.animals.get(target))
+        require(authored is not None and authored["scene"] == self.route_scene,
+                "R62 target must be in the active scene")
+        # Compute every change privately; a failed command cannot alter the
+        # farm, Campaign inventory or any other canonical session component.
+        staged = deepcopy(self._farming)
+        change = staged.command(kind, target, receipt_id, crop=crop)
+        if change is None:
+            return False
+        item, delta = change
+        existing = self.progress.inventory.get(item, 0)
+        from .farming_life import MAX_ITEM_QUANTITY
+        require(type(existing) is int and 0 <= existing <= MAX_ITEM_QUANTITY
+                and 0 <= existing + delta <= MAX_ITEM_QUANTITY,
+                "R62 insufficient inventory or capacity")
+        self.progress.inventory[item] = existing + delta
+        self._farming = staged
+        return True
+
+    def farming_plant(self, plot_id, crop_id, receipt_id):
+        return self._farming_command("plant", plot_id, receipt_id, crop=crop_id)
+
+    def farming_harvest(self, plot_id, receipt_id):
+        return self._farming_command("harvest", plot_id, receipt_id)
+
+    def farming_feed(self, animal_id, receipt_id):
+        return self._farming_command("feed", animal_id, receipt_id)
+
+    def farming_collect(self, animal_id, receipt_id):
+        return self._farming_command("collect", animal_id, receipt_id)
+
+    def survival_state(self):
+        """R63 detached survival projection; Campaign owns item balances."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.snapshot()
+
+    def survival_condition(self):
+        """R63.C derived failure/recovery status, no persisted shadow state."""
+        require(self._survival is not None, "Survival is not configured")
+        return self._survival.condition()
+
+    def _survival_preflight(self):
+        require(self._survival is not None and self.mode == "campaign"
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "Survival actions require routed exploration without dialogue")
+
+    def survival_advance(self, ticks=1):
+        self._survival_preflight()
+        return self._survival.advance(ticks)
+
+    def _survival_near(self, row):
+        """Placed resources/refuges require the canonical campaign position."""
+        if "pos" not in row:
+            return
+        location = self.route_state().get("position")
+        require(type(location) in (list, tuple) and len(location) == 2
+                and all(type(v) in (int, float) for v in location)
+                and abs(location[0] - row["pos"][0])
+                  + abs(location[1] - row["pos"][1]) <= 1,
+                "Survival target is not within interaction reach")
+
+    def survival_gather(self, node_id, transaction_id):
+        self._survival_preflight()
+        row = self._survival.nodes.get(node_id)
+        if row is not None:
+            self._survival_near(row)
+        return self._survival.gather(
+            self.progress, self.route_scene, node_id, transaction_id)
+
+    def survival_craft(self, recipe_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.craft(
+            self.progress, self.route_scene, recipe_id, transaction_id)
+
+    def survival_rest(self, shelter_id, transaction_id):
+        self._survival_preflight()
+        row = self._survival.shelters.get(shelter_id)
+        if row is not None:
+            self._survival_near(row)
+        return self._survival.rest(
+            self.progress, self.route_scene, shelter_id, transaction_id)
+
+    def survival_eat(self, food_id, transaction_id):
+        self._survival_preflight()
+        return self._survival.eat(
+            self.progress, self.route_scene, food_id, transaction_id)
+
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
         require(self._living_world is not None, "Living world is not configured")
@@ -593,7 +737,10 @@ class GameSession:
         require(self._living_world is not None and self.mode == "campaign"
                 and not self.progress.story_pending,
                 "Living-world clock is paused outside exploration")
-        return self._living_world.advance(ticks)
+        result = self._living_world.advance(ticks)
+        if self._farming is not None:
+            self._farming.sync(self._living_world.day)
+        return result
 
     def living_world_reputation_event(self, faction, delta, event_id):
         """Apply an idempotent, explicit faction event to the session checkpoint."""
@@ -1116,6 +1263,10 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        # R63 uses the same fixed frame and staged transaction as R55.
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -1145,8 +1296,12 @@ class GameSession:
             origin, snapshot["position"], journal)
         if self._living_world is not None:
             self._living_world.advance(1)
+            if self._farming is not None:
+                self._farming.sync(self._living_world.day)
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return self.route_realtime_state()
 
     def route_action_state(self):
@@ -1315,6 +1470,9 @@ class GameSession:
         staged_system = deepcopy(self._systems) if self._systems is not None else None
         if staged_system is not None:
             staged_system.advance(1)
+        staged_survival = deepcopy(self._survival) if self._survival is not None else None
+        if staged_survival is not None:
+            staged_survival.advance(1)
         command = {"tick": runtime.tick + 1, "move": move,
                    "jump": jump, "interact": interact}
         if "boss" in runtime.scene:
@@ -1333,9 +1491,13 @@ class GameSession:
                 self.progress.story_flags[_key(self.route_scene, "boss_defeated")] = True
         if self._living_world is not None:
             self._living_world.advance(1)
+            if self._farming is not None:
+                self._farming.sync(self._living_world.day)
         self._platform = runtime
         if staged_system is not None:
             self._systems = staged_system
+        if staged_survival is not None:
+            self._survival = staged_survival
         return {"state": runtime.snapshot(), "events": events}
 
     def route_platform_travel(self, link_id):
@@ -2070,6 +2232,10 @@ class GameSession:
             data["advanced_ai"] = self._advanced_ai.recording()
         if self._systems is not None:
             data["systems"] = self._systems.snapshot()
+        if self._survival is not None:
+            data["survival"] = self._survival.snapshot()
+        if self._farming is not None:
+            data["farming"] = self._farming.snapshot()
         if self._stream_world is not None:
             data["world_stream"] = self._stream_world.recording()
         if self._cinematic_pro is not None:
@@ -2101,7 +2267,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"classic_party", "party_orchestration", "rpg_encounter", "front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "scene_action", "scene_action_history", "living_world", "advanced_ai", "world_stream", "cinematic_pro", "roguelite", "systems", "farming", "survival", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -2141,6 +2307,18 @@ class GameSession:
             session._systems.restore(data["systems"])
         else:
             require("systems" not in data, "Unexpected R55 economy in legacy save")
+        if session._survival is not None:
+            require("survival" in data, "R63 configured survival checkpoint missing")
+            session._survival.restore(data["survival"])
+        else:
+            require("survival" not in data, "Unexpected R63 state in legacy save")
+        if session._farming is not None:
+            require("farming" in data, "R62 configured farming checkpoint missing")
+            session._farming.restore(data["farming"])
+            require(session._farming.day == session._living_world.day,
+                    "R62 farm calendar diverges from R35 living-world clock")
+        else:
+            require("farming" not in data, "Unexpected R62 farm checkpoint")
         if session._stream_world is not None:
             require("world_stream" in data, "R54 world checkpoint is missing")
             session._stream_world.restore(data["world_stream"])

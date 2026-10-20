@@ -1,0 +1,47 @@
+name: R65.B Combat Composer
+on:
+  pull_request:
+    paths:
+      - 'sporebound/action_combat_catalog_r65.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/studio/combat_composer_r65.py'
+      - 'drawtemp/studio/combat_composer_r65_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r65b_combat_composer*.py'
+      - 'docs/drawtemp5/R65_B_COMBAT_COMPOSER.md'
+      - '.github/workflows/r65b-combat-composer.yml'
+  push:
+    branches:
+      - master
+permissions:
+  contents: read
+jobs:
+  r65b-contract:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Canonical authoring and replay
+        run: python -m unittest -v tests_standalone.test_r65b_combat_composer tests_standalone.test_action_combat_r65 tests_standalone.test_action_runtime_r26
+      - name: Preserve tactical GameSession
+        run: python -m unittest -v tests_standalone.test_game_session
+  r65b-qt-offscreen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install . PySide6
+      - name: Run PySide6 composer smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m unittest -v tests_standalone.test_r65b_combat_composer_qt

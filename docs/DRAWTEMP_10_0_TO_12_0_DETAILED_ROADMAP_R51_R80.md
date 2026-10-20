@@ -277,6 +277,11 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-62 — Ferme et village social.
 
+**Suivi R62.B.1 :** [Farm Studio natif](R62_B1_FARM_STUDIO.md), formulaires typés de parcelles/cultures/animaux et transaction R1 ; relations sociales persistantes et vertical slice restent à faire (R62.B.2/C).
+
+**Suivi d'implémentation :** [R62.A — Farming Life headless/SDK](R62_A_FARMING_LIFE.md), proposé dans la [PR #423](https://github.com/faudard/drawTemp/pull/423). Le gate R62.A n'est pas certifié ; R62.B/C et la qualification CI/Player restent ouverts.
+
+
 ## R63 — Survival & Crafting (10.3→11.0)
 
 **Objectif :** Permettre une aventure de survie équilibrable sans modifier le Core CT.
@@ -389,6 +394,8 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-69 — Échange contrôlé de trois packs.
 
+**Implémentation en revue :** [PR #426](https://github.com/faudard/drawTemp/pull/426) — catalogue local opt-in, packs R30 inertes, tombstones, tests headless VS-69 et [contrat R69](drawtemp5/R69_COMMUNITY_CREATOR_HUB.md). Le gate complet et la CI restent **non validés** tant qu'aucun job n'a exécuté les tests.
+
 ## R70 — Genre Expansion Certification (11.0)
 
 **Objectif :** Livrer de vrais jeux de nouveaux genres sans dégrader les classiques.
@@ -420,6 +427,9 @@ Avant tout tag 10.0 :
 **Gate R71 (sortie vérifiable) :** Contrats autoritaires et tests robustes avant exposition à de vrais joueurs; sinon reporter le lot.
 
 **Vertical slice :** VS-71 (conditionnel) — Session synchronisée de laboratoire.
+
+**Implémentation proposée (R71.A uniquement) :** [laboratoire de sessions connectées v1](R71_CONNECTED_LAB.md). Expérimental, hors Player, non certifié : R67=GO et R70 restent à établir; R71.B/C ne sont pas couverts.
+
 
 ## R72 — Cooperative Gameplay Prototype (11.2 conditionnel)
 
@@ -516,6 +526,8 @@ Avant tout tag 10.0 :
 **Gate R77 (sortie vérifiable) :** Un bug de progression artificiel est découvert, réduit, corrigé et prouvé absent sur le SHA final.
 
 **Vertical slice :** VS-77 — Chasse au softlock avec preuve reproductible.
+
+**R77.A–B, incréments de développement (PR #433, non certifiés) :** [exploration R26 headless, replay, heatmaps vérifiées, inspection Qt et qualification humaine](R77_EXPLORATORY_QA.md). R77.C, l'UX onscreen et la gate restent ouverts.
 
 ## R78 — Professional Team Workflows (11.8→12.0)
 

@@ -1,0 +1,60 @@
+name: DrawTemp R78.B Team Reviews
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/team_review_board.py'
+      - 'drawtemp/studio/r78_team_review_qt.py'
+      - 'drawtemp/studio/qt_shell.py'
+      - 'tests_standalone/test_r78b_team_review_board.py'
+      - 'docs/R78B_TEAM_REVIEWS.md'
+      - '.github/workflows/drawtemp-r78b-team-reviews.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  board-headless:
+    name: R78.B review journal / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install .
+      - name: Permissions, concurrent authors and R48 notes regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_r78a_team_workflows
+          tests_standalone.test_r78b_team_review_board
+          tests_standalone.test_drawtemp_r48a_collaboration
+          -v
+
+  board-qt:
+    name: R78.B Qt offscreen / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install ".[qt6]"
+      - name: Qt task board and review UI
+        run: python -m unittest tests_standalone.test_r78b_team_review_board -v

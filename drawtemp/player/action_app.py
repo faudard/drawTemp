@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 import time
 
-from drawtemp.player.action_clock import ActionStepClock
+from drawtemp.player.r68_touch import PortableActionDriver
 from drawtemp.player.action_controller import ActionPlayerController, demo_scene
 from drawtemp.render.iso_scene import scene_from_action
 from drawtemp.render.r36_frame_budget import R36FrameBudget
@@ -31,15 +31,16 @@ def create_bridge(controller, renderer, *, profiling=False):
             self.renderer = renderer
             self.telemetry = R36FrameBudget() if profiling else None
             self._last_profile_tick = -1
-            self._clock = ActionStepClock()
-            self._last_ns = time.monotonic_ns()
-            self._pending_dodge = False
-            self._pending_interact = False
+            self._input = PortableActionDriver(controller)
             self._publish()
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
             return self.controller.state()
+
+        @Property(bool, notify=stateChanged)
+        def suspended(self):
+            return not self._input.active
 
         def _publish(self):
             hero = self.controller.runtime.hero
@@ -77,10 +78,7 @@ def create_bridge(controller, renderer, *, profiling=False):
             self.stateChanged.emit()
 
         def _resync(self):
-            self._clock.reset()
-            self._last_ns = time.monotonic_ns()
-            self._pending_dodge = False
-            self._pending_interact = False
+            self._input.reset()
 
         @Slot(int, int, bool, bool, bool, bool)
         def tick(self, dx, dy, attack, dodge, guard, interact):
@@ -93,35 +91,39 @@ def create_bridge(controller, renderer, *, profiling=False):
             self._resync()
             self._publish()
 
+        @Slot("QVariantList", int, int)
+        def touchUpdate(self, points, width, height):
+            """R68.B1 opt-in touch probe; coordinates are viewport pixels."""
+            try:
+                self._input.update_touch(points, width, height)
+            except (TypeError, ValueError) as exc:
+                self._input.touch.reset()
+                self.controller.message = "Tactile ignoré : " + str(exc)
+
+        @Slot()
+        def clearTouches(self):
+            self._input.touch.reset()
+
+        @Slot(bool)
+        def setPlatformActive(self, active):
+            """External OS lifecycle callback; never changes manual pause."""
+            changed = self._input.active != active
+            self._input.set_active(active)
+            if changed:
+                self.stateChanged.emit()
+
         @Slot(int, int, bool, bool, bool, bool)
         def pulse(self, dx, dy, attack, dodge, guard, interact):
-            """Poll input at arbitrary UI FPS and step 60 Hz logical time."""
-            now = time.monotonic_ns()
-            elapsed = max(0, now - self._last_ns)
-            self._last_ns = now
-            if self.controller.paused or not self.controller.runtime.hero["alive"]:
-                self._resync()
-                return
-            # Edge-triggered actions survive polls that produce zero logical
-            # ticks, and are consumed once on the first successful tick.
-            self._pending_dodge |= dodge
-            self._pending_interact |= interact
-            steps = self._clock.advance(elapsed)
-            if not steps:
-                return
+            """Canonical fixed-step polling, with optional touch/lifecycle input."""
             try:
-                for _ in range(steps):
-                    if not self.controller.runtime.hero["alive"]:
-                        break
-                    self.controller.step(
-                        dx, dy, attack=attack, dodge=self._pending_dodge,
-                        guard=guard, interact=self._pending_interact)
-                    self._pending_dodge = False
-                    self._pending_interact = False
+                steps = self._input.pulse(dx, dy, attack, dodge, guard, interact)
             except Exception as exc:
                 self.controller.message = "Action refusée : " + str(exc)
                 self._resync()
-            self._publish()
+                self._publish()
+                return
+            if steps:
+                self._publish()
 
         @Slot()
         def pause(self):
@@ -183,6 +185,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="R26 experimental Action Player preview")
     parser.add_argument("--smoke", action="store_true",
                         help="Instantiate offscreen UI and stop before gameplay")
+    parser.add_argument("--touch-preview", action="store_true",
+                        help="R68.B1 desktop touch-input spike; NOT an Android package")
     parser.add_argument("--save-dir", type=Path,
                         default=Path.home() / ".drawtemp" / "action-preview")
     parser.add_argument("--content", type=Path,
@@ -198,7 +202,7 @@ def main(argv=None):
             (args.content, args.animation_project, args.hero_controller)):
         parser.error("--content, --animation-project and --hero-controller are required together")
     try:
-        from PySide6.QtCore import QTimer, QUrl
+        from PySide6.QtCore import Qt, QTimer, QUrl
         from PySide6.QtGui import QGuiApplication
         from PySide6.QtQml import QQmlApplicationEngine
     except ImportError as exc:
@@ -244,11 +248,15 @@ def main(argv=None):
                                assets=assets)
     bridge = create_bridge(controller, renderer,
                            profiling=args.profile_r36 is not None)
+    app.applicationStateChanged.connect(
+        lambda state: bridge.setPlatformActive(state == Qt.ApplicationActive))
     engine = QQmlApplicationEngine()
     renderer.attach_engine(engine)
     engine.rootContext().setContextProperty("renderer", renderer)
     engine.rootContext().setContextProperty("action", bridge)
-    engine.setInitialProperties({"smokeMode": args.smoke})
+    engine.setInitialProperties({
+        "smokeMode": args.smoke, "touchMode": args.touch_preview,
+    })
     engine.load(QUrl.fromLocalFile(str(Path(__file__).with_name("ActionPreview.qml"))))
     if not engine.rootObjects():
         print("R26 action preview QML failed to load", file=sys.stderr)

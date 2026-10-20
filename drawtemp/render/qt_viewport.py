@@ -298,6 +298,11 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             return "tile:%d:%d" % (x, y) in self._batched_ids
 
         @Property("QVariantMap", notify=sceneChanged)
+        def visibilityStats(self):
+            """R52.C1 bounds, counters and estimated CPU bytes, not GPU memory."""
+            return self._index.visibility_stats
+
+        @Property("QVariantMap", notify=sceneChanged)
         def textureStats(self):
             return {
                 "tiles": len(self._batched_ids),

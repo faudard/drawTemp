@@ -83,6 +83,13 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         directory = Path.home() / ".drawtemp" / "player5" / campaign
     controller = PlayerController(content, project, campaign, directory)
     controller.asset_project_path = project_manifest
+    # Optional localization sidecar, deliberately outside canonical saves.
+    controller.localization = None
+    if content_path is not None:
+        from drawtemp.localization import Catalog, sidecar_path
+        catalog_path = sidecar_path(source)
+        if catalog_path.exists() or catalog_path.is_symlink():
+            controller.localization = Catalog.load(catalog_path)
     return controller
 
 
@@ -141,7 +148,34 @@ def create_bridge(controller, renderer):
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
-            return self.controller.state()
+            from drawtemp.localization import localize_view
+            from drawtemp.player.r57_accessibility import filtered_cinematic_frame
+            state = self.controller.state()
+            access = state["accessibility"]
+            result = localize_view(
+                state, getattr(self.controller, "localization", None),
+                access["language"])
+            cinematic = result.get("cinematic")
+            if isinstance(cinematic, dict) and isinstance(cinematic.get("frame"), dict):
+                result["cinematic"] = dict(cinematic)
+                result["cinematic"]["frame"] = filtered_cinematic_frame(
+                    cinematic["frame"], access)
+            return result
+
+        @Slot(str)
+        def selectLanguage(self, language):
+            self.settings_update(self.controller.set_accessibility,
+                                 "language", language)
+
+        @Slot(str, bool)
+        def setAccessibilityBool(self, setting, enabled):
+            self.settings_update(self.controller.set_accessibility,
+                                 setting, enabled)
+
+        @Slot(float)
+        def setSubtitleScale(self, value):
+            self.settings_update(self.controller.set_accessibility,
+                                 "subtitle_scale", value)
 
         @Slot(int, result="QVariantMap")
         def authoredHud(self, width):
@@ -174,9 +208,31 @@ def create_bridge(controller, renderer):
             from drawtemp.player.r51_hud import perform_menu_intent
             self.invoke(perform_menu_intent, self.controller, intent)
 
+        @Slot(str, int, result="QVariantMap")
+        def authoredScreen(self, kind, width):
+            """Typed real-screen projection (dialogue or tactical inventory)."""
+            from drawtemp.player.r51_screens import authored_screen
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return authored_screen(self.controller, kind, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot()
+        def authoredDialogueAdvance(self):
+            from drawtemp.player.r51_screens import perform_dialogue_advance
+            self.invoke(perform_dialogue_advance, self.controller)
+
+        @Slot(str)
+        def authoredInventoryUse(self, item_id):
+            from drawtemp.player.r51_screens import perform_inventory_use
+            self.invoke(perform_inventory_use, self.controller, item_id)
+
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
-            return self.animator.snapshot()
+            from drawtemp.player.r57_accessibility import presentation_animation
+            return presentation_animation(self.animator.snapshot(),
+                                          self.controller.accessibility.view())
 
         @Property("QVariantMap", notify=stateChanged)
         def recoveryOffer(self):
@@ -584,6 +640,26 @@ def create_bridge(controller, renderer):
         @Slot(str)
         def systemFulfill(self, quest_id):
             self.invoke(self.controller.system_fulfill, quest_id)
+
+        @Slot(int)
+        def survivalWait(self, ticks):
+            self.invoke(self.controller.survival_wait, ticks)
+
+        @Slot(str)
+        def survivalGather(self, node_id):
+            self.invoke(self.controller.survival_gather, node_id)
+
+        @Slot(str)
+        def survivalCraft(self, recipe_id):
+            self.invoke(self.controller.survival_craft, recipe_id)
+
+        @Slot(str)
+        def survivalRest(self, shelter_id):
+            self.invoke(self.controller.survival_rest, shelter_id)
+
+        @Slot(str)
+        def survivalEat(self, item_id):
+            self.invoke(self.controller.survival_eat, item_id)
 
         @Slot(str)
         def exploreInteract(self, target):

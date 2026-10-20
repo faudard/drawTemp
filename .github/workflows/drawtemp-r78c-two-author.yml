@@ -1,0 +1,46 @@
+name: DrawTemp R78.C Two-Author Vertical Gate
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/r78_vertical_gate.py'
+      - 'tests_standalone/test_r78c_two_author_vertical.py'
+      - 'docs/R78C_TWO_AUTHOR_VERTICAL.md'
+      - '.github/workflows/drawtemp-r78c-two-author.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collaboration-vertical:
+    name: R78.C two-author replay and preview export / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the canonical headless engine
+        run: python -m pip install .
+      - name: Two-author semantic merge, Undo, replay, recovery and R15 bundle evidence
+        run: >-
+          python -m unittest
+          tests_standalone.test_r78c_two_author_vertical
+          -v
+      - name: R48 baseline collaboration and R78 A/B regression
+        run: >-
+          python -m unittest
+          tests_standalone.test_r78a_team_workflows
+          tests_standalone.test_r78b_team_review_board
+          tests_standalone.test_drawtemp_r48c_vertical
+          -v
+      - name: Standalone R78.C deterministic diagnostic (no duplicate gameplay)
+        run: python -m drawtemp.sdk.r78_vertical_gate --no-gameplay --no-export

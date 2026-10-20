@@ -10,6 +10,7 @@ from drawtemp.sdk.slots import PlayerSlotStore
 from drawtemp.core import RuleError
 from drawtemp.player.save_manager import SaveManager
 from drawtemp.player.preferences import PlayerPreferences
+from drawtemp.player.r57_accessibility import AccessibilityPreferences
 from sporebound.cinematic_transport import CinematicTransport
 from drawtemp.cinematics.projection import frame_payload
 
@@ -27,10 +28,13 @@ class PlayerController:
         self.autosave_warning = ""
         self._autosaved_key = None
         self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
+        self.accessibility = AccessibilityPreferences(
+            self.save_dir / 'r57-accessibility.json',
+            default_language=self.project.options['language'])
         self.session = None
         self.show_title = True
         self.selected = [0, 0]
-        self.message = self.preferences.warning
+        self.message = self.preferences.warning or self.accessibility.warning
         self.forecast = ""
         self.inspected_skill = "attack"
         self._cinematic_clip = None
@@ -446,6 +450,46 @@ class PlayerController:
         self.message = "Arrivée : " + route["title"]
         return self._changed(keep_message=True)
 
+    def survival_wait(self, ticks=1):
+        """R63 time step belongs to GameSession, never the Qt frame clock."""
+        self._require_cinematic_completed()
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("Survival needs active exploration")
+        if self.session.survival_state(expected_revision=state.revision) is None:
+            raise ValueError("Survival is not configured")
+        self.session.survival_advance(ticks, expected_revision=state.revision)
+        return self._changed()
+
+    def _survival_action(self, kind, target_id, transaction_id=None):
+        self._require_cinematic_completed()
+        if kind not in ("gather", "craft", "rest", "eat"):
+            raise ValueError("Invalid survival action")
+        state = self._current()
+        if not state.exploration or state.exploration["completed"]:
+            raise ValueError("Survival requires active exploration")
+        snapshot = self.session.survival_state(expected_revision=state.revision)
+        if snapshot is None:
+            raise ValueError("Survival is not configured")
+        if transaction_id is None:
+            # Revision-checked, checkpoint-backed index, not a GUI-only clock.
+            transaction_id = "r63-player-" + str(len(snapshot["journal"]))
+        getattr(self.session, "survival_" + kind)(
+            target_id, transaction_id, expected_revision=state.revision)
+        return self._changed()
+
+    def survival_gather(self, node_id, transaction_id=None):
+        return self._survival_action("gather", node_id, transaction_id)
+
+    def survival_craft(self, recipe_id, transaction_id=None):
+        return self._survival_action("craft", recipe_id, transaction_id)
+
+    def survival_rest(self, shelter_id, transaction_id=None):
+        return self._survival_action("rest", shelter_id, transaction_id)
+
+    def survival_eat(self, item_id, transaction_id=None):
+        return self._survival_action("eat", item_id, transaction_id)
+
     def world_wait(self, ticks=1):
         """R35 player clock action, never an implicit renderer tick."""
         state = self._current()
@@ -768,6 +812,12 @@ class PlayerController:
         self.message = "Option enregistrée"
         return self.state()
 
+    def set_accessibility(self, name, value):
+        """UI-only accessibility settings, never a GameSession/checkpoint action."""
+        state = self.accessibility.update(name, value)
+        self.message = "Accessibilité : réglage enregistré"
+        return state
+
     def resolve_key(self, key, context):
         return self.preferences.resolve(key, context)
 
@@ -850,6 +900,7 @@ class PlayerController:
                 "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
+                "accessibility": self.accessibility.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "dialogue_line": {}, "exploration": {},
                 "world_atlas": {"enabled": False, "scene": "", "region": "",
@@ -861,7 +912,8 @@ class PlayerController:
                 "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
-                "living_world": None, "systems": None, "cinematic": {}, "revision": 0,
+                "living_world": None, "systems": None, "survival": None,
+                "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []},
                 "party": {"enabled": False, "heroes": [], "active": [],
@@ -999,6 +1051,75 @@ class PlayerController:
                      "fulfilled": progress["story_flags"].get(row["flag"]) is True}
                     for row in system_spec["quests"]
                 ],
+            }
+        # R63 needs/recipe HUD is a detached projection. Player never owns
+        # item balances, changes the survival journal or runs a render-frame tick.
+        survival_snapshot = self.session.survival_state(
+            expected_revision=snapshot.revision)
+        if survival_snapshot is not None:
+            survival = thaw(survival_snapshot)
+            authored = self.project.extensions["org.drawtemp.survival"]["data"]
+            inventory = progress.get("inventory", {})
+            scene_id = base["exploration"].get("scene_id")
+            energy = survival["needs"]["energy"]
+            hunger = survival["needs"]["hunger"]
+            condition = thaw(self.session.survival_condition(
+                expected_revision=snapshot.revision))
+            can_work = condition["can_work"]
+            position = base["exploration"].get("position")
+            def within_reach(row):
+                return ("pos" not in row or
+                        (type(position) in (list, tuple)
+                         and len(position) == 2
+                         and abs(position[0] - row["pos"][0])
+                             + abs(position[1] - row["pos"][1]) <= 1))
+            def has_items(items):
+                return all(inventory.get(item, 0) >= quantity
+                           for item, quantity in items.items())
+            def has_capacity(items, consumed=None):
+                from sporebound.survival import MAX_QUANTITY
+                consumed = consumed or {}
+                return all(inventory.get(item, 0) - consumed.get(item, 0)
+                           + quantity <= MAX_QUANTITY
+                           for item, quantity in items.items())
+            base["survival"] = {
+                "enabled": True, "tick": survival["tick"],
+                "needs": survival["needs"], "condition": condition,
+                "tools": [
+                    {"id": key, "durability": value}
+                    for key, value in sorted(survival["durability"].items())],
+                "inventory": [
+                    {"id": item, "quantity": quantity}
+                    for item, quantity in sorted(inventory.items())
+                    if item in authored["items"] and quantity > 0],
+                "nodes": [
+                    {"id": row["id"], "item": row["item"],
+                     "pos": row.get("pos"), "remaining": survival["stock"][row["id"]],
+                     "cold": row["cold"], "tool": row["tool"],
+                     "available": (within_reach(row) and can_work
+                         and energy >= row["energy_cost"]
+                         and survival["stock"][row["id"]] >= row["yield"]
+                         and has_capacity({row["item"]: row["yield"]})
+                         and (row["tool"] is None or
+                              (inventory.get(row["tool"], 0) > 0 and
+                               survival["durability"][row["tool"]] >= row["wear"])))}
+                    for row in authored["nodes"] if row["scene"] == scene_id],
+                "recipes": [
+                    {"id": row["id"], "inputs": row["inputs"],
+                     "outputs": row["outputs"],
+                     "available": (can_work and energy >= row["energy_cost"]
+                                   and has_items(row["inputs"])
+                                   and has_capacity(row["outputs"], row["inputs"]))}
+                    for row in authored["recipes"]],
+                "shelters": [
+                    {"id": row["id"], "pos": row.get("pos"),
+                     "available": within_reach(row) and has_items(row["fuel"])}
+                    for row in authored["shelters"]
+                    if row["scene"] == scene_id],
+                "foods": [
+                    {"item": row["item"], "nutrition": row["nutrition"],
+                     "available": inventory.get(row["item"], 0) > 0}
+                    for row in authored["foods"]],
             }
         # Optional read-only R25 routes, never a second Player-owned cursor.
         # Preserve route buttons even when an exploration exit is completed.

@@ -479,16 +479,24 @@ class StudioWindow(QMainWindow):
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
                      self.open_project_history)
+        self._action("r78_team_reviews", "R78 • Revues et tâches d’équipe locales…",
+                     self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
+        self._action("r77_lab", "R77 • Exploration Lab (R26)…", self.open_exploration_lab)
         self._action("r49_references", "Vérifier les références du projet…",
                      self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
+        self._action("r75_narrative", "R75 • Quêtes et dialogues assistés…", self.open_r75_narrative)
+        self._action("r74_dungeons", "R74 • Assistant de donjons vérifiés…",
+                     self.open_r74_dungeons)
         self._action("procgen", "R34 • Prévisualiser des donjons procéduraux…", self.open_procgen)
         self._action("r31_logic", "Game Logic Studio R31…", self.open_logic_graph)
         self._action("r42_narrative", "Narrative Studio R42…", self.open_narrative_studio)
         self._action("r43_ability", "Combat & Ability Designer R43…", self.open_ability_designer)
+        self._action("r65_composer", "R65 • Combat Composer action…", self.open_r65_composer)
         self._action("r35_world", "Monde vivant : horaires PNJ R35…", self.open_living_world)
+        self._action("r62_farm", "Farm Studio R62 : cultures et élevage…", self.open_farm_studio)
         self._action("r41_party", "R41 • Groupe RPG classique…", self.open_party_studio)
         self._action("r53_composer", "R53 • Party Composer et combos…", self.open_r53_composer)
         self._action("r41_encounter", "R41 • Rencontres RPG classiques…", self.open_encounter_studio)
@@ -498,8 +506,12 @@ class StudioWindow(QMainWindow):
         self._action("r37_squad", "Escouades IA R37.D3…", self.open_ai_squads)
         self._action("r37_boss", "Boss & AI Director R37.E…", self.open_ai_bosses)
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
+        self._action("r63_survival", "Survival Designer R63 : recettes et refuges…", self.open_survival_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
+        self._action("r76_optimizer", "R76 • Optimizer Studio (assets)…",
+                     self.open_r76_optimizer)
+        self._action("r57_translation", "Translation Studio R57…", self.open_translation_studio)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -565,11 +577,15 @@ class StudioWindow(QMainWindow):
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
         vcs_menu.addAction(self.commands["r48_history"])
+        vcs_menu.addAction(self.commands["r78_team_reviews"])
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
         tools_menu.addAction(self.commands["r49_metrics"])
+        tools_menu.addAction(self.commands["r77_lab"])
         tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
+        tools_menu.addAction(self.commands["r75_narrative"])
+        tools_menu.addAction(self.commands["r74_dungeons"])
         tools_menu.addAction(self.commands["procgen"])
         tools_menu.addAction(self.commands["r31_logic"])
         tools_menu.addAction(self.commands["r42_narrative"])
@@ -578,7 +594,9 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r38_refactor"])
         tools_menu.addAction(self.commands["r38_preflight"])
         tools_menu.addAction(self.commands["r43_ability"])
+        tools_menu.addAction(self.commands["r65_composer"])
         tools_menu.addAction(self.commands["r35_world"])
+        tools_menu.addAction(self.commands["r62_farm"])
         tools_menu.addAction(self.commands["r41_party"])
         tools_menu.addAction(self.commands["r53_composer"])
         tools_menu.addAction(self.commands["r41_encounter"])
@@ -588,14 +606,20 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_squad"])
         tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
+        tools_menu.addAction(self.commands["r63_survival"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
+        tools_menu.addAction(self.commands["r76_optimizer"])
+        tools_menu.addAction(self.commands["r57_translation"])
         tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
         tools_menu.addAction(self.commands["preferences"])
         tools_menu.addAction(self.commands["guide"])
+        package_menu = tools_menu.addMenu("Packages de ressources R58")
+        manage_packages = package_menu.addAction("Gérer les packages…")
+        manage_packages.triggered.connect(self.open_package_manager)
         plugin_menu = tools_menu.addMenu("Plugins Studio")
         load_plugin = plugin_menu.addAction("Charger un manifeste…")
         load_plugin.triggered.connect(self._load_plugin_dialog)
@@ -728,6 +752,17 @@ class StudioWindow(QMainWindow):
         if self.session.revision != revision:
             self.refresh()
 
+    def open_team_reviews(self):
+        """R78.B optional local-only journals, no new authoring authority."""
+        from drawtemp.sdk.team_workflows import TeamAccessPolicy
+        from drawtemp.studio.r78_team_review_qt import TeamReviewDialog
+        # Local Studio has no connected authenticator. An external adapter
+        # must supply authenticated identity + policy for real team grants.
+        dialog = TeamReviewDialog(self.session, actor="local",
+                                  policy=TeamAccessPolicy({"local": "owner"}),
+                                  parent=self)
+        dialog.exec()
+
     def open_r51_hud(self):
         """Edit only the canonical R1 project; Qt preview is non-interactive."""
         from drawtemp.studio.r51_designer_qt import R51DesignerDialog
@@ -737,6 +772,20 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if before != self.session.revision:
             self.refresh()
+
+    def open_r76_optimizer(self):
+        """Derived asset previews only; canonical Studio history is untouched."""
+        if self.content_path is None or self.session.snapshot().dirty:
+            QMessageBox.warning(
+                self, "R76 Optimizer Studio",
+                "Enregistrez d'abord le projet canonique avant d'auditer ses assets.")
+            return
+        from drawtemp.assets.optimizer import OptimizerError
+        from drawtemp.studio.r76_optimizer_qt import OptimizerDialog
+        try:
+            OptimizerDialog(self.session, self.content_path, self).exec()
+        except (OptimizerError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "R76 Optimizer Studio", str(exc))
 
     def open_world_streaming(self):
         """R54.B inspect canonical R25 region links and R54 cell metadata."""
@@ -794,6 +843,29 @@ class StudioWindow(QMainWindow):
         dialog.updated.connect(self.refresh)
         dialog.exec()
         if self.session.revision != original:
+            self.refresh()
+
+    def open_translation_studio(self):
+        """R57 localization sidecar separate from the canonical R1 session."""
+        from drawtemp.studio.r57_translation_qt import open_translation_studio
+        open_translation_studio(self)
+
+    def open_farm_studio(self):
+        """R62.B.1 typed authoring, canonical R1 apply and undo/redo."""
+        from drawtemp.studio.farming_qt import FarmStudioDialog
+        revision = self.session.revision
+        dialog = FarmStudioDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
+    def open_survival_designer(self):
+        """R63.B visual survival authoring through canonical Studio history."""
+        from drawtemp.studio.survival_designer_qt import SurvivalDesignerDialog
+        revision = self.session.revision
+        dialog = SurvivalDesignerDialog(self.session, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
             self.refresh()
 
     def open_living_world(self):
@@ -862,6 +934,16 @@ class StudioWindow(QMainWindow):
         if self.session.revision != initial_revision:
             self.refresh()
 
+    def open_r65_composer(self):
+        """R65.B uses the canonical R1 Studio session; all edits are reversible."""
+        from drawtemp.studio.combat_composer_r65_qt import CombatComposerDialog
+        revision = self.session.revision
+        dialog = CombatComposerDialog(self.session, parent=self)
+        dialog.updated.connect(self.refresh)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
+
     def open_ability_designer(self):
         """R43.B shares the original R1 owner and has no independent save."""
         from drawtemp.studio.ability_designer_r43_qt import AbilityDesignerDialog
@@ -899,6 +981,11 @@ class StudioWindow(QMainWindow):
         if self.session.revision != prior:
             self.refresh()
 
+    def open_exploration_lab(self):
+        """Read-only R77.B R26 scene explorer; no AuthoringSession edits."""
+        from drawtemp.studio.r77_exploration_qt import ExplorationLabDialog
+        ExplorationLabDialog(self).exec()
+
     def open_scale_dashboard(self):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
@@ -909,6 +996,22 @@ class StudioWindow(QMainWindow):
         from drawtemp.studio.r30_assist_qt import R30AssistDialog
         prior = self.session.revision
         R30AssistDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_r74_dungeons(self):
+        """R74.B opt-in dungeon graph review; same R1 history and save lifecycle."""
+        from drawtemp.studio.r74_assist_qt import R74DungeonAssistDialog
+        prior = self.session.revision
+        R74DungeonAssistDialog(self.session, parent=self).exec()
+        if self.session.revision != prior:
+            self.refresh()
+
+    def open_r75_narrative(self):
+        """R75.B assisted narrative with canonical preview, approval and Undo."""
+        from drawtemp.studio.r75_narrative_assist_qt import R75NarrativeAssistDialog
+        prior = self.session.revision
+        R75NarrativeAssistDialog(self.session, parent=self).exec()
         if self.session.revision != prior:
             self.refresh()
 
@@ -1675,6 +1778,12 @@ class StudioWindow(QMainWindow):
             "analysis": "Analyse et ressources • diagnostics de la session canonique",
         }.get(identifier, "Atelier disponible prochainement")
         layout.addWidget(QLabel(text))
+        if identifier == "analysis":
+            lab = QPushButton("R77 • Exploration Lab (scènes R26)…")
+            lab.setObjectName("r77-lab-open-analysis")
+            lab.setAccessibleName("Ouvrir Exploration Lab R77")
+            lab.clicked.connect(self.open_exploration_lab)
+            layout.addWidget(lab)
         listing = QListWidget()
         listing.setAccessibleName("Ressources : " + LABELS[identifier])
         family = {"events": "events", "cinematics": "cinematics"}.get(identifier)
@@ -1915,6 +2024,16 @@ class StudioWindow(QMainWindow):
             self.plugins.disable(selected)
             self._unmount_plugin(selected)
             self.statusBar().showMessage("Plugin désactivé : " + selected)
+
+    def open_package_manager(self):
+        """R58.B1 native manager shares the canonical Studio session and Undo."""
+        from drawtemp.studio.package_manager_qt import PackageManagerDialog
+        revision = self.session.revision
+        dialog = PackageManagerDialog(
+            self.session, content_path=self.content_path, parent=self)
+        dialog.exec()
+        if self.session.revision != revision:
+            self.refresh()
 
     def open_mod_manager(self):
         """Open the R47 inspector; Studio remains owner of edits and grants."""

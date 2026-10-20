@@ -10,6 +10,7 @@ import "../render"
 ApplicationWindow {
     id: root
     property bool smokeMode: false
+    property bool touchMode: false  // Opt-in research-only overlay
     visible: !smokeMode
     width: 1000
     height: 730
@@ -30,9 +31,20 @@ ApplicationWindow {
     // Presentation preference only: no change to canonical R26 game state.
     property bool reducedFlashes: false
 
+    function clearHeldInput() {
+        up = down = left = right = false
+        attackHeld = guardHeld = false
+        dodgeQueued = interactQueued = false
+        touchPanel.clear()
+    }
+
     Connections {
         target: action
-        function onStateChanged() { root.actionData = action.view }
+        function onStateChanged() {
+            root.actionData = action.view
+            if (action.suspended)
+                root.clearHeldInput()
+        }
     }
 
     Timer {
@@ -42,7 +54,7 @@ ApplicationWindow {
         // independent of this timer's refresh frequency or GPU frame rate.
         interval: 8
         repeat: true
-        running: !root.smokeMode && !root.actionData.paused && root.actionData.hero.alive
+        running: !root.smokeMode && !action.suspended && !root.actionData.paused && root.actionData.hero.alive
         onTriggered: {
             var dx = (root.right ? 1 : 0) - (root.left ? 1 : 0)
             var dy = (root.down ? 1 : 0) - (root.up ? 1 : 0)
@@ -126,6 +138,19 @@ ApplicationWindow {
             TopDownViewport {
                 id: sharedViewport
                 anchors.fill: parent
+            }
+            // R68.B1: independent touch overlay on the shared R3 viewport.
+            // No new gameplay engine or projection; hidden in desktop mode.
+            MobileTouchOverlay {
+                id: touchPanel
+                anchors.fill: parent
+                z: 80
+                visible: root.touchMode
+                enabled: root.touchMode && !action.suspended
+                onSamples: function(points, viewportWidth, viewportHeight) {
+                    action.touchUpdate(points, viewportWidth, viewportHeight)
+                }
+                onCleared: action.clearTouches()
             }
             // R36.B2: bounded CPU light plan with a Qt Quick fallback.
             // Concentric halos are a visual approximation (no occlusion/GPU shader).
@@ -276,7 +301,9 @@ ApplicationWindow {
             }
             Text {
                 color: "#a9c5bc"
-                text: "ZQSD / WASD / flèches : bouger   |   Espace : attaquer   |   Maj : esquiver   |   Ctrl : parer   |   E : interagir"
+                text: root.touchMode
+                      ? "R68.B1 tactile : pavé directionnel + 4 commandes (prototype PC non certifié)"
+                      : "ZQSD / WASD / flèches : bouger   |   Espace : attaquer   |   Maj : esquiver   |   Ctrl : parer   |   E : interagir"
                 font.pixelSize: 13
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap

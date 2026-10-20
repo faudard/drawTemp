@@ -1,0 +1,39 @@
+name: R68.A alternative platform research (no release claims)
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/quality/r68_feasibility.py'
+      - 'tests_standalone/test_r68_feasibility.py'
+      - 'docs/R68_*'
+      - 'docs/ADR_R68_*'
+      - '.github/workflows/r68-feasibility.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'drawtemp/quality/r68_feasibility.py'
+      - 'tests_standalone/test_r68_feasibility.py'
+      - 'docs/R68_*'
+      - 'docs/ADR_R68_*'
+      - '.github/workflows/r68-feasibility.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  r68-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed evidence tests
+        run: python -m unittest tests_standalone.test_r68_feasibility -v
+      - name: Source-only baseline (all alternative platforms NO-GO)
+        run: python -m drawtemp.quality.r68_feasibility --root . > r68-source-baseline.json
+      - name: Retain baseline, not platform certification
+        uses: actions/upload-artifact@v4
+        with:
+          name: r68-source-only-no-go
+          path: r68-source-baseline.json
+          if-no-files-found: error
