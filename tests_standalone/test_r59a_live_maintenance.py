@@ -155,6 +155,29 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual((self.snapshot / "snapshot.json").read_bytes(),
                          (self.root / "snapshot-two" / "snapshot.json").read_bytes())
 
+    def test_copy_failure_does_not_publish_partial_snapshot_or_restore(self):
+        with patch("drawtemp.export.live_maintenance._copy_checked",
+                   side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                snapshot_saves(self.saves, self.snapshot)
+        self.assertFalse(self.snapshot.exists())
+        snapshot_saves(self.saves, self.snapshot)
+        target = self.root / "restored"
+        with patch("drawtemp.export.live_maintenance._copy_checked",
+                   side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                restore_saves(self.snapshot, target)
+        self.assertFalse(target.exists())
+
+    def test_nonportable_save_paths_fail_closed(self):
+        for basename in ("CON.json", "trailing.", "colon:name.json"):
+            candidate = self.saves / basename
+            candidate.write_bytes(b"save")
+            with self.subTest(basename=basename), self.assertRaisesRegex(
+                    ExportError, "Unsafe"):
+                snapshot_saves(self.saves, self.root / ("snapshot-" + str(len(basename))))
+            candidate.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()
