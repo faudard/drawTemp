@@ -91,8 +91,14 @@ class AbilityDesignerQtTests(unittest.TestCase):
         dialog = AbilityDesignerDialog(self.session)
         try:
             self.assertEqual(dialog.ability_select.count(), 1)
+            # The graph is now a first-class editor: unchanged is rejected,
+            # but editing other fields must preserve the original AST.
             self.assertFalse(dialog.preview_changes())
-            self.assertIn("unsupported_formula", dialog.report.toPlainText())
+            dialog.name.setText("Arbre conservé")
+            self.assertTrue(dialog.preview_changes(), dialog.report.toPlainText())
+            self.assertEqual(
+                dialog.draft.document["effects"][0]["formula"],
+                spec["effects"][0]["formula"])
             self.assertEqual(self.session.snapshot().to_dict(), before)
         finally:
             dialog.close()
