@@ -228,6 +228,30 @@ def create_bridge(controller, renderer):
             from drawtemp.player.r51_screens import perform_inventory_use
             self.invoke(perform_inventory_use, self.controller, item_id)
 
+        @Slot(int, result="QVariantMap")
+        def authoredActionHud(self, width):
+            from drawtemp.player.r51_action import action_hud_for_player
+            from sporebound.ui_layout_r51 import UiLayoutError
+            try:
+                return action_hud_for_player(self.controller, width)
+            except UiLayoutError as exc:
+                return {"available": False, "error": str(exc)}
+
+        @Slot(str)
+        def authoredActionIntent(self, intent):
+            from drawtemp.player.r51_action import perform_action_intent
+            self.invoke(perform_action_intent, self.controller, intent)
+
+        @Slot(str)
+        def authoredCampaignEquip(self, item_id):
+            from drawtemp.player.r51_screens import perform_campaign_equip
+            self.invoke(perform_campaign_equip, self.controller, item_id)
+
+        @Slot(str)
+        def authoredCampaignUnequip(self, slot):
+            from drawtemp.player.r51_screens import perform_campaign_unequip
+            self.invoke(perform_campaign_unequip, self.controller, slot)
+
         @Property("QVariantMap", notify=stateChanged)
         def animationPlan(self):
             from drawtemp.player.r57_accessibility import presentation_animation
