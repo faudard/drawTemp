@@ -23,10 +23,24 @@ ApplicationWindow {
     property bool reduceMotion: playerData.accessibility.reduce_motion
     property bool reduceFlashes: playerData.accessibility.reduce_flashes
     property bool highContrast: playerData.settings.display.high_contrast
+    property bool authoredInventoryOpen: false
+    property var authoredDialoguePayload: {
+        var screen = playerData.screen
+        var revision = playerData.revision
+        if (screen !== "dialogue") return ({ "available": false })
+        return player.authoredScreen("DIALOGUE", Math.max(1, Math.round(width * 0.55)))
+    }
+    property var authoredInventoryPayload: {
+        var screen = playerData.screen
+        var revision = playerData.revision
+        if (screen !== "battle") return ({ "available": false })
+        return player.authoredScreen("INVENTORY", Math.max(1, Math.round(width * 0.65)))
+    }
     property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
-                               recoveryPopup.opened || recoveryErrorPopup.opened
+                               recoveryPopup.opened || recoveryErrorPopup.opened || authoredInventoryOpen
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
+        if (playerData.screen !== "battle") authoredInventoryOpen = false
         if (smokeMode) return
         if (playerData.settings.display.fullscreen && visibility !== Window.FullScreen)
             showFullScreen()
@@ -212,6 +226,12 @@ ApplicationWindow {
         onActivated: pausePopup.open()
     }
 
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.authoredInventoryOpen
+        onActivated: root.authoredInventoryOpen = false
+    }
+
     // R51.B2 authored title menu: declared widgets, same Qt Quick renderer,
     // canonical R12 new/continue commands. Never hide the legacy fallback.
     R51Layout {
@@ -275,7 +295,101 @@ ApplicationWindow {
         allowActions: !root.inputLocked
         permittedActions: authoredPayload.permitted_actions || []
         onIntent: function(action) {
-            if (!root.inputLocked) player.authoredUiIntent(action)
+            if (root.inputLocked) return
+            if (action === "combat.open_inventory") {
+                if (root.authoredInventoryPayload.available === true)
+                    root.authoredInventoryOpen = true
+            } else {
+                player.authoredUiIntent(action)
+            }
+        }
+    }
+
+    // R51.C2: real tactical inventory items, delegated to the canonical
+    // PlayerController.use_item; the author controls the surrounding UI.
+    Button {
+        objectName: "r51-open-inventory"
+        z: 21
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 15
+        visible: root.playerData.screen === "battle" &&
+                 root.authoredInventoryPayload.available === true &&
+                 !root.authoredInventoryOpen
+        text: "Sac personnalisé"
+        enabled: !root.inputLocked
+        onClicked: root.authoredInventoryOpen = true
+    }
+    Rectangle {
+        id: authoredInventoryOverlay
+        objectName: "r51-inventory-overlay"
+        z: 60
+        anchors.fill: parent
+        color: "#de10151e"
+        visible: root.authoredInventoryOpen &&
+                 root.authoredInventoryPayload.available === true
+        Rectangle {
+            width: Math.min(720, parent.width - 48)
+            height: Math.min(650, parent.height - 48)
+            anchors.centerIn: parent
+            radius: 12
+            color: root.highContrast ? "#000000" : "#202d3b"
+            border.color: root.highContrast ? "#ffffff" : "#73818d"
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 14
+                R51Layout {
+                    id: authoredInventoryDesign
+                    objectName: "r51-inventory-author-layout"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 210
+                    projection: root.authoredInventoryPayload.projection || ({})
+                    highContrast: root.highContrast
+                    textScale: root.textScale
+                    allowActions: true
+                    permittedActions: root.authoredInventoryPayload.permitted_actions || []
+                    onIntent: function(action) {
+                        if (action === "inventory.close")
+                            root.authoredInventoryOpen = false
+                    }
+                }
+                Label {
+                    text: "Objets réellement disponibles"
+                    color: root.highContrast ? "#ffffff" : root.ivory
+                    Accessible.name: text
+                }
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    ColumnLayout {
+                        width: parent.width
+                        Repeater {
+                            model: root.authoredInventoryPayload.items || []
+                            Button {
+                                objectName: "r51-item-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Utiliser " + modelData.id + " ×" + modelData.count
+                                enabled: root.authoredInventoryPayload.can_use &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: {
+                                    player.authoredInventoryUse(modelData.id)
+                                    root.authoredInventoryOpen = false
+                                }
+                            }
+                        }
+                    }
+                }
+                Button {
+                    objectName: "r51-inventory-escape"
+                    text: "Fermer le sac  (Échap)"
+                    Accessible.name: "Fermer l'inventaire personnalisé"
+                    Layout.alignment: Qt.AlignRight
+                    onClicked: root.authoredInventoryOpen = false
+                }
+            }
         }
     }
 
@@ -450,7 +564,23 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 30
+            R51Layout {
+                objectName: "r51-player-dialogue"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.authoredDialoguePayload.available === true
+                projection: root.authoredDialoguePayload.projection || ({})
+                highContrast: root.highContrast
+                textScale: root.textScale
+                allowActions: !root.inputLocked
+                permittedActions: root.authoredDialoguePayload.permitted_actions || []
+                onIntent: function(action) {
+                    if (action === "dialogue.advance" && !root.inputLocked)
+                        player.authoredDialogueAdvance()
+                }
+            }
             Rectangle {
+                visible: root.authoredDialoguePayload.available !== true
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 12
