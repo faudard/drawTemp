@@ -5,8 +5,14 @@ on:
       - "sporebound/connected_lab_r71.py"
       - "sporebound/connected_service_r71.py"
       - "scripts/r71_lab_report.py"
+      - "scripts/r71c_certification.py"
+      - "scripts/r71c_mtls_probe.py"
+      - "sporebound/connected_certification_r71.py"
+      - "sporebound/connected_transport_r71.py"
       - "tests_standalone/test_r71_connected_lab.py"
       - "tests_standalone/test_r71_connected_service.py"
+      - "tests_standalone/test_r71_connected_certification.py"
+      - "tests_standalone/test_r71_connected_transport.py"
       - "docs/R71_CONNECTED_LAB.md"
       - ".github/workflows/r71-connected-lab.yml"
   push:
@@ -34,5 +40,15 @@ jobs:
         run: python -m unittest tests_standalone.test_r71_connected_service -v
       - name: R71.B deterministic diagnostics CLI
         run: python scripts/r71_lab_report.py --seed 71 --latency 2 --loss 25 --duplicate 10
+      - name: R71.C offline two-client certification evidence
+        run: python -m unittest tests_standalone.test_r71_connected_certification -v
+      - name: R71.C pinned mTLS loopback contract and ephemeral certificates
+        run: python -m unittest tests_standalone.test_r71_connected_transport -v
+      - name: R71.C certification report requires NO-GO
+        run: |
+          python scripts/r71c_certification.py --seed 71 > r71c-certification.json
+          python -c "import json; r=json.load(open('r71c-certification.json')); assert r['decision']=='NO-GO' and not r['public_multiplayer_enabled']"
+      - name: R71.C fail-closed release gate
+        run: python -c "import subprocess,sys; p=subprocess.run([sys.executable,'scripts/r71c_certification.py','--seed','71','--require-go'],capture_output=True); assert p.returncode==2, p.stderr"
       - name: R25 fixed clock and legacy game compatibility
         run: python -m unittest tests_standalone.test_r25_foundation -v
