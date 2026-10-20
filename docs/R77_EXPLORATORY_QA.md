@@ -1,4 +1,4 @@
-# R77.A — Exploratory QA headless (développement, NO-GO)
+# R77.A–B — Exploratory QA et Exploration Lab (développement, NO-GO)
 
 La [roadmap R51–R80](DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md) demande
 des agents bornés, couverture, traces, diagnostic de softlocks et aucune
@@ -68,7 +68,61 @@ sur les puzzles ne couvrent pas leurs tactiques. Les collisions dynamiques,
 saves GameSession, transitions, tous les genres, faux positifs, QTest Qt,
 comparaison Studio, GPU réel et tests humains **ne sont pas certifiés**.
 
-R77.B : interface Exploration Lab (heatmaps, navigation et comparaison de
-versions, validation humaine). R77.C : campagne quatre genres, fuzz
-save/transition, minimisation de contre-exemples, preuves SHA/CI et
-correctif d'un softlock injecté avant certification.
+R77.C : campagne quatre genres, fuzz sauvegardes/transitions, preuves SHA/CI,
+correction d'un softlock injecté et certification après validations réelles.
+
+## R77.B — Exploration Lab Qt et inspection headless
+
+Le menu **Studio → Outils → R77 • Exploration Lab (R26)** et l'atelier
+**Analyse** donnent accès à un dialogue de lecture seule. Charger **un
+fichier JSON de scène ActionRuntime R26 existant** (≤256 Kio) ne convertit pas
+automatiquement les scènes d'exploration R25 ni les missions CT en scènes R26.
+
+Parcours : choisir une scène R26 → fixer les cellules objectif (`x,y;x,y`)
+et les seeds → choisir les budgets → **Exécuter l'exploration**. L'interface
+présente :
+
+- Heatmap d'occupation par tick, fenêtre de 24×24 cellules navigable pour
+  les scènes jusqu'à 128×128 ; chaque cellule indique visites et seeds.
+- Parcours par seed et timeline des commandes/ticks exécutés, plus des chemins
+  critiques issus du BFS statique R29. Ces chemins abstraits **ne sont pas
+  nécessairement exécutables dans le Player**.
+- Liste des constats et annotations humaines explicites (`suspected_false_positive`,
+  `needs_investigation`, `reproduced_manually`, `accepted_risk`).
+  Ces qualifications sont conservées uniquement en mémoire, ne modifient
+  pas le projet et ne produisent aucun badge de certification.
+- **Geler comme référence**, puis charger une seconde version de la scène
+  et relancer : comparaison de couverture et de visits par cellule. Seules
+  scènes de même ID et mêmes dimensions sont comparées. La différence de
+  SHA indique si les sources ont changé ; il faut conserver les seeds/budgets
+  équivalents avant d'interpréter une différence comme une régression.
+- Liens vers les ateliers Cartes / Graphes **uniquement si un identifiant
+  de ressource Studio correspond exactement à l'ID de la scène importée** ;
+  identité du nom ne vaut pas preuve de parité du contenu.
+
+Le modèle headless `drawtemp.quality.r77_lab.build_lab_view` **recalcule**
+les preuves R77.A depuis la source détachée et rejette toute incohérence avant
+de produire une heatmap. `minimize_runtime_failure` réduit par suppression de
+commands une exception R26 **reproductible**, sous budget (≤64 tentatives),
+sans prétendre produire une séquence globalement minimale. Les risques R29
+fournissent leurs témoins BFS séparés. Le rapport R77.A enregistre désormais
+l'ordre exact des objectifs dans `config.goals` pour une vérification fidèle
+même avec plusieurs sorties.
+
+### Vérifications ciblées
+
+```bash
+python -m unittest discover -s tests_standalone -p 'test_drawtemp_r77a_exploratory.py'
+python -m unittest discover -s tests_standalone -p 'test_drawtemp_r77b_lab.py'
+QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests_standalone -p 'test_drawtemp_r77b_qt.py'
+```
+
+QTest offscreen valide les commandes et interactions de ce dialogue seulement.
+Une revue **onscreen** (clavier, accessibilité, DPI) reste nécessaire. Un bouton
+« ouvrir carte » absent/disabled signifie qu'aucune ressource Studio reliée par
+ID n'a pu être établie. Les rapports ne sont pas écrits sur disque par le
+dialogue, ne sont pas exportés et n'attribuent jamais `release_certified=True`.
+
+**Gate toujours NO-GO :** campagne quatre genres (R77.C), fuzz
+save/transition, inspection manuelle de faux positifs, sessions longues,
+CI sur les plateformes et preuve d'un bug corrigé sur SHA final manquent.
