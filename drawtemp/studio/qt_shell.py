@@ -483,6 +483,7 @@ class StudioWindow(QMainWindow):
                      self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
+        self._action("r77_lab", "R77 • Exploration Lab (R26)…", self.open_exploration_lab)
         self._action("r49_references", "Vérifier les références du projet…",
                      self.inspect_references)
         self._action("r30_assist", "Terrains et puzzles assistés…", self.open_assist_generation)
@@ -574,6 +575,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
         tools_menu.addAction(self.commands["r49_metrics"])
+        tools_menu.addAction(self.commands["r77_lab"])
         tools_menu.addAction(self.commands["r49_references"])
         tools_menu.addAction(self.commands["r30_assist"])
         tools_menu.addAction(self.commands["r74_dungeons"])
@@ -925,6 +927,11 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != prior:
             self.refresh()
+
+    def open_exploration_lab(self):
+        """Read-only R77.B R26 scene explorer; no AuthoringSession edits."""
+        from drawtemp.studio.r77_exploration_qt import ExplorationLabDialog
+        ExplorationLabDialog(self).exec()
 
     def open_scale_dashboard(self):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
@@ -1710,6 +1717,12 @@ class StudioWindow(QMainWindow):
             "analysis": "Analyse et ressources • diagnostics de la session canonique",
         }.get(identifier, "Atelier disponible prochainement")
         layout.addWidget(QLabel(text))
+        if identifier == "analysis":
+            lab = QPushButton("R77 • Exploration Lab (scènes R26)…")
+            lab.setObjectName("r77-lab-open-analysis")
+            lab.setAccessibleName("Ouvrir Exploration Lab R77")
+            lab.clicked.connect(self.open_exploration_lab)
+            layout.addWidget(lab)
         listing = QListWidget()
         listing.setAccessibleName("Ressources : " + LABELS[identifier])
         family = {"events": "events", "cinematics": "cinematics"}.get(identifier)
