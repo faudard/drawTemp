@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
     QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QToolButton, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -94,8 +94,18 @@ def apply_theme(app, name, scale=100):
     palette.setColor(QPalette.Disabled, QPalette.Text, QColor("#a0a8b6"))
     app.setPalette(palette)
     font = QFont(app.font())
-    font.setPointSizeF(max(8.0, min(18.0, 10.0 * scale / 100)))
+    font.setPointSizeF(max(8.0, min(18.0, 10.5 * scale / 100)))
     app.setFont(font)
+    # Use spacing and moderate emphasis rather than tiny, crowded native menus.
+    # The palette still controls foreground/background in both themes.
+    app.setStyleSheet(
+        "QMenuBar { font-weight: 600; spacing: 4px; }"
+        "QMenuBar::item { padding: 6px 10px; }"
+        "QMenu { font-weight: 500; }"
+        "QMenu::item { padding: 7px 28px 7px 14px; }"
+        "QMenu::separator { height: 1px; margin: 5px 10px; }"
+        "QToolButton#studio-workspaces-button { font-weight: 600; padding: 5px 10px; }"
+    )
 
 
 class ResourceProxy(QSortFilterProxyModel):
@@ -575,75 +585,96 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
-        vcs_menu = tools_menu.addMenu("Collaboration / VCS")
+        # Make the two discovery commands available without opening a submenu.
+        tools_menu.addAction(self.commands["palette"])
+        tools_menu.addAction(self.commands["global_search"])
+        tools_menu.addSeparator()
+        # Keep one canonical QAction per command: only the visual grouping changes.
+        tool_groups = (
+            ("Monde et exploration", (
+                "r35_world", "r44_atlas", "r54_stream", "r77_lab",
+                "r30_assist", "r74_dungeons", "procgen")),
+            ("Gameplay, combat et IA", (
+                "r43_ability", "r65_composer", "r41_party", "r53_composer",
+                "r41_encounter", "r37_ai", "r37_sensor", "r37_squad",
+                "r37_boss")),
+            ("Scénarios et narration", (
+                "r31_logic", "r42_narrative", "r75_narrative",
+                "r62_relationships")),
+            ("Systèmes et économie", (
+                "r55_systems", "r62_farm", "r63_survival",
+                "r45_economy", "r51_hud")),
+            ("Projet, qualité et diagnostic", (
+                "r49_references", "r38_prefabs", "r38_refactor",
+                "r38_preflight", "r76_optimizer", "r49_metrics",
+                "r30_scale", "r57_translation")),
+        )
+        for title, keys in tool_groups:
+            submenu = tools_menu.addMenu(title)
+            for key in keys:
+                submenu.addAction(self.commands[key])
+        collab_menu = tools_menu.addMenu("Publication et collaboration")
+        vcs_menu = collab_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
         vcs_menu.addAction(self.commands["r48_history"])
         vcs_menu.addAction(self.commands["r78_team_reviews"])
-        tools_menu.addAction(self.commands["r30_creator"])
-        tools_menu.addAction(self.commands["r30_scale"])
-        tools_menu.addAction(self.commands["r49_metrics"])
-        tools_menu.addAction(self.commands["r77_lab"])
-        tools_menu.addAction(self.commands["r49_references"])
-        tools_menu.addAction(self.commands["r30_assist"])
-        tools_menu.addAction(self.commands["r75_narrative"])
-        tools_menu.addAction(self.commands["r74_dungeons"])
-        tools_menu.addAction(self.commands["procgen"])
-        tools_menu.addAction(self.commands["r31_logic"])
-        tools_menu.addAction(self.commands["r42_narrative"])
-        tools_menu.addAction(self.commands["global_search"])
-        tools_menu.addAction(self.commands["r38_prefabs"])
-        tools_menu.addAction(self.commands["r38_refactor"])
-        tools_menu.addAction(self.commands["r38_preflight"])
-        tools_menu.addAction(self.commands["r43_ability"])
-        tools_menu.addAction(self.commands["r65_composer"])
-        tools_menu.addAction(self.commands["r35_world"])
-        tools_menu.addAction(self.commands["r62_farm"])
-        tools_menu.addAction(self.commands["r62_relationships"])
-        tools_menu.addAction(self.commands["r41_party"])
-        tools_menu.addAction(self.commands["r53_composer"])
-        tools_menu.addAction(self.commands["r41_encounter"])
-        tools_menu.addAction(self.commands["r44_atlas"])
-        tools_menu.addAction(self.commands["r37_ai"])
-        tools_menu.addAction(self.commands["r37_sensor"])
-        tools_menu.addAction(self.commands["r37_squad"])
-        tools_menu.addAction(self.commands["r37_boss"])
-        tools_menu.addAction(self.commands["r55_systems"])
-        tools_menu.addAction(self.commands["r63_survival"])
-        tools_menu.addAction(self.commands["r54_stream"])
-        tools_menu.addAction(self.commands["r51_hud"])
-        tools_menu.addAction(self.commands["r76_optimizer"])
-        tools_menu.addAction(self.commands["r57_translation"])
-        tools_menu.addAction(self.commands["r45_economy"])
-        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
-        import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
-        import_hooks.triggered.connect(self._import_hooks_dialog)
-        tools_menu.addAction(self.commands["preferences"])
-        tools_menu.addAction(self.commands["guide"])
-        package_menu = tools_menu.addMenu("Packages de ressources R58")
+        collab_menu.addAction(self.commands["r30_creator"])
+        package_menu = collab_menu.addMenu("Packages de ressources R58")
         manage_packages = package_menu.addAction("Gérer les packages…")
         manage_packages.triggered.connect(self.open_package_manager)
-        plugin_menu = tools_menu.addMenu("Plugins Studio")
+        plugin_menu = collab_menu.addMenu("Plugins Studio")
         load_plugin = plugin_menu.addAction("Charger un manifeste…")
         load_plugin.triggered.connect(self._load_plugin_dialog)
         disable_plugin = plugin_menu.addAction("Désactiver un plugin…")
         disable_plugin.triggered.connect(self._disable_plugin_dialog)
-        mod_menu = tools_menu.addMenu("Modules / SDK R47")
+        mod_menu = collab_menu.addMenu("Modules / SDK R47")
         mod_manager = mod_menu.addAction("Inspecter les mods déclaratifs…")
         mod_manager.triggered.connect(self.open_mod_manager)
+
+        tools_menu.addSeparator()
+        tools_menu.addAction(self.commands["preferences"])
+        tools_menu.addAction(self.commands["guide"])
+        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
+        import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
+        import_hooks.triggered.connect(self._import_hooks_dialog)
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
-        # Localization applies to global workspace labels; legacy editors
-        # maintain their own FR labels while they are being migrated.
         locale_menu = tools_menu.addMenu("Langue")
         for lang in ("fr", "en"):
             action = locale_menu.addAction(lang.upper())
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+
+        # A permanent, keyboard-accessible selector always exposes all
+        # workspaces; the old 13-item toolbar overflow was easily missed.
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
+        self.toolbar.setMovable(False)
+        self.toolbar.setFloatable(False)
         self.addToolBar(self.toolbar)
+        self.workspace_switcher = QToolButton(self.toolbar)
+        self.workspace_switcher.setObjectName("studio-workspaces-button")
+        self.workspace_switcher.setText("Tous les ateliers ▾")
+        self.workspace_switcher.setAccessibleName("Accéder à tous les ateliers")
+        self.workspace_switcher.setPopupMode(QToolButton.InstantPopup)
+        self.toolbar_workspaces_menu = QMenu(self.workspace_switcher)
+        self.toolbar_workspaces_menu.setTitle("Tous les ateliers")
         for identifier in WORKSPACES:
-            self.toolbar.addAction(self.commands["go_" + identifier])
+            self.toolbar_workspaces_menu.addAction(self.commands["go_" + identifier])
+        self.workspace_switcher.setMenu(self.toolbar_workspaces_menu)
+        self.toolbar.addWidget(self.workspace_switcher)
+        self.toolbar.addSeparator()
+
+        # Only frequent destinations live on the toolbar. The shared actions
+        # remain checkable and are also reachable from both workspace menus.
+        self._toolbar_buttons = {}
+        for identifier in ("project", "gameplay", "maps", "actors", "events", "campaigns"):
+            button = QToolButton(self.toolbar)
+            button.setDefaultAction(self.commands["go_" + identifier])
+            button.setText(LABELS[identifier])
+            button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+            self.toolbar.addWidget(button)
+            self._toolbar_buttons[identifier] = button
 
     def _restore_layout(self):
         geometry = self.settings.value("window/geometry")
@@ -684,6 +715,10 @@ class StudioWindow(QMainWindow):
             self.commands["go_" + identifier].setText("Workspace: " + labels[identifier]
                                                       if language == "en" else
                                                       "Atelier : " + labels[identifier])
+            if identifier in self._toolbar_buttons:
+                self._toolbar_buttons[identifier].setText(labels[identifier])
+        self.workspace_switcher.setText(
+            "All workspaces ▾" if language == "en" else "Tous les ateliers ▾")
         self.statusBar().showMessage("Langue du shell : " + language.upper())
         self._update_guide()
 
@@ -1589,6 +1624,8 @@ class StudioWindow(QMainWindow):
         self._active_workspace = identifier
         for name in WORKSPACES:
             self.commands["go_" + name].setChecked(name == identifier)
+        self.workspace_switcher.setToolTip(
+            "Atelier actif : " + LABELS[identifier])
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
     def _r49_on_focus_changed(self, _old, current):
