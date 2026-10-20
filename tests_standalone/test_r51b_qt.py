@@ -59,6 +59,51 @@ class R51QtDesignerTests(unittest.TestCase):
         finally:
             dialog.close()
 
+    def test_gauge_inspector_and_focus_order_are_real_widgets(self):
+        from PySide6.QtCore import Qt
+        from drawtemp.studio.r51_designer_qt import R51DesignerDialog
+        from drawtemp.studio.r51_layout_draft import edit_layout
+        content, project = reference_project()
+        session = AuthoringSession.new(content, project)
+        author = LayoutAuthoring(session)
+        draft = edit_layout(new_layout("MENU"), "add", target="root", widget={
+            "id": "gauge", "type": "gauge",
+            "binding": {"path": "combat.active_hp", "type": "int"},
+            "max_binding": {"path": "combat.active_max_hp", "type": "int"},
+        })
+        author.apply(author.preview_replace("title", draft))
+        dialog = R51DesignerDialog(session)
+        try:
+            gauge = dialog.tree.findItems(
+                "gauge", Qt.MatchExactly | Qt.MatchRecursive, 0)[0]
+            dialog.tree.setCurrentItem(gauge)
+            self.assertTrue(dialog.gauge_current.isEnabled())
+            self.assertTrue(dialog.gauge_maximum.isEnabled())
+            dialog.gauge_current.setCurrentIndex(
+                dialog.gauge_current.findData("session.seed"))
+            dialog.update_widget()
+            self.assertEqual(session.revision, 1)
+            self.assertEqual(
+                dialog._draft["root"]["children"][-1]["binding"]["path"],
+                "session.seed")
+            button = dialog.tree.findItems(
+                "continue_action", Qt.MatchExactly | Qt.MatchRecursive, 0)[0]
+            dialog.tree.setCurrentItem(button)
+            self.assertTrue(dialog.focus_up.isEnabled())
+            dialog.move_keyboard_focus("up")
+            self.assertEqual(dialog._draft["focus_order"][0],
+                             "continue_action")
+            self.assertEqual(session.revision, 1)
+            dialog.stage()
+            dialog.apply_changes()
+            self.assertEqual(session.revision, 2)
+            stored = author.inspect()["catalog"]["layouts"]["title"]
+            self.assertEqual(stored["focus_order"][0], "continue_action")
+            self.assertEqual(stored["root"]["children"][-1]
+                             ["binding"]["path"], "session.seed")
+        finally:
+            dialog.close()
+
 
 if __name__ == "__main__":
     unittest.main()
