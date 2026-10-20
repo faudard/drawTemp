@@ -84,6 +84,45 @@ La CI R63 lance les tests headless sous Python 3.10 / 3.12 et les tests Qt
 sous 3.12, ainsi qu'un smoke QML. Ces tests ne constituent **pas** à eux seuls
 une certification GPU ou une preuve d'accessibilité assistive sur machine réelle.
 
+## R63.C — VS-63 refuge, exposition et récupération
+
+Implémentation livrée sur cette branche :
+
+- `SurvivalRuntime.condition()` : calcul **dérivé** et non persisté de
+  `stable / warning / incapacitated`. Énergie, satiété ou chaleur nulle
+  déclenche l'incapacité ; la collecte et la fabrication deviennent impossibles.
+  Manger et utiliser un refuge restent permis, mais seulement en dépensant
+  des objets possédés par le Campaign canonique.
+- `GameSession.survival_condition()` / `Simulation.survival_condition()` :
+  même résultat via l'API habituelle, avec contrôle de révision. Le HUD Qt
+  indique les risques et les actions de récupération possibles.
+- `examples/r63_survival_refuge.py` : exemple exécutable sans interface,
+  création via `AuthoringSession`, **deux recettes**, trois récoltes initiales,
+  un gisement à risque de froid dans une seconde zone, retour au refuge,
+  récupération payante (ration + camp), sauvegarde/rechargement, reçus
+  rejoués sans doubler les objets. Ni inventaire secondaire ni RNG divergent.
+- `sporebound/survival_balance.py` : prévision **en lecture seule** sur
+  jusqu'à 256 ticks, avec délai avant avertissement/incapacité, risques
+  environnementaux et besoins énergétiques. Le Survival Designer Qt affiche
+  maintenant ce bilan sans muter le projet.
+- `tests_standalone/test_r63_journey.py` : parcours complet, quatre seeds,
+  épuisement et récupération, antidupe, checkpoint falsifié et bornes
+  de simulation.
+
+Vérification à exécuter :
+
+```sh
+python -m unittest tests_standalone.test_r63_survival tests_standalone.test_r63_player tests_standalone.test_r63_journey -v
+python -m examples.r63_survival_refuge
+QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_r63_survival_gui -v
+```
+
+**Portée exacte :** la verticale est codée et les preuves de tests sont
+ajoutées au dépôt, mais les jobs GitHub Actions n'ont pas encore établi
+le succès de l'exécution. Une release R63 reste non certifiée tant que la
+CI et le contrôle de non-régression complet (CT, R45, R55, R61/R62)
+ne sont pas verts.
+
 ## Gates à poursuivre
 
 1. **R63.A :** compléter la preuve de cohérence avec d'autres opérations de Campaign (R45/R55), les restaurations hostiles et les limites de journal.
