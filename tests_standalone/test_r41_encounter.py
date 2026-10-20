@@ -159,7 +159,7 @@ class R41EncounterTests(unittest.TestCase):
         self.assertEqual(self.session.rpg_state()["result"], "fled")
         self.session.rpg_finish()
         self.assertEqual(self.session.progress.gold, 0)
-        self.assertFalse(self.session.progress.story_flags.get("r41:sparring"))
+        self.assertFalse(self.session.progress.story_flags.get("r41_sparring"))
         self.assertEqual(self.session.rpg_available(), ["sparring"])
 
     def test_guard_until_ko_defeat_never_grants_victory_reward(self):
