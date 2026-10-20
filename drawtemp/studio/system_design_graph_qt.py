@@ -5,7 +5,7 @@ coordinates live in the editor's local draft history, never in GameProject.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem, QGraphicsItem, QGraphicsLineItem,
@@ -36,8 +36,12 @@ class GraphPort(QGraphicsEllipseItem):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.canvas.port_clicked((self.node.category, self.node.identifier),
-                                     self.direction)
+            # Defer until after Qt has dispatched mousePress/Release: applying
+            # a link rebuilds the scene and destroys the clicked port item.
+            canvas = self.canvas
+            key = (self.node.category, self.node.identifier)
+            direction = self.direction
+            QTimer.singleShot(0, lambda: canvas.port_clicked(key, direction))
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -62,10 +66,7 @@ class GraphNode(QGraphicsRectItem):
         text.setTextWidth(NODE_W - 28)
         text.setPos(15, 6)
         text.setAcceptedMouseButtons(Qt.NoButton)
-        if category in ("resources", "producers"):
-            self.input = GraphPort(self, "input", canvas)
-        else:
-            self.input = GraphPort(self, "input", canvas)
+        self.input = GraphPort(self, "input", canvas)
         self.output = (GraphPort(self, "output", canvas)
                        if category in ("resources", "producers") else None)
         self.setToolTip("Sélectionner, déplacer ou utiliser un port pour relier")
@@ -161,8 +162,7 @@ class InteractiveSystemGraph(QGraphicsView):
             a, b = self.nodes[edge.source], self.nodes[edge.target]
             start = a.mapToScene(NODE_W if edge.source[0] in ("resources", "producers")
                                  else 0, NODE_H / 2)
-            stop = b.mapToScene(0 if edge.target[0] in (
-                "producers", "merchants", "quests") else NODE_W, NODE_H / 2)
+            stop = b.mapToScene(0, NODE_H / 2)
             edge.setLine(start.x(), start.y(), stop.x(), stop.y())
 
     def port_clicked(self, key, direction):
