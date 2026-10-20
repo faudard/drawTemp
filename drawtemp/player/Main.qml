@@ -1759,7 +1759,7 @@ ApplicationWindow {
                                     Repeater {
                                         model: modelData.crops || []
                                         Button {
-                                            objectName: "r62Plant-" + modelData.id
+                                            objectName: "r62Plant-" + parent.plotId + "-" + modelData.id
                                             text: "Semer " + modelData.id + " (" +
                                                   modelData.seed + " : " + modelData.seed_owned +
                                                   ", pousse " + modelData.days + " j)"
@@ -1835,7 +1835,7 @@ ApplicationWindow {
                                     Repeater {
                                         model: modelData.gifts || []
                                         Button {
-                                            objectName: "r62Gift-" + modelData.item
+                                            objectName: "r62Gift-" + parent.npcId + "-" + modelData.item
                                             text: "Offrir " + modelData.item + " (" +
                                                   modelData.owned + ") · affinité " +
                                                   (modelData.gain >= 0 ? "+" : "") + modelData.gain
