@@ -115,3 +115,55 @@ tactique effective**.
   couverture des scènes hors entrée de campagne.
 
 **Ne pas fusionner cette PR en l'absence de résultats de CI fiables.**
+
+
+## R42.C2 — Événement tactique et épilogue de victoire (incrément)
+
+La mission `r42_captain_quest` n'est plus une simple mission
+débloquée : elle porte maintenant un objectif CT canonique
+`survive` (`target_ticks=50`) et un **trigger R9 one-shot**
+`captain_orders` (`condition=tick, value=0`). Le trigger est
+associé à `story.during_tactical_event` pour ouvrir la scène
+multiligne `orders` pendant le combat.
+
+Le joueur doit lire les deux répliques et choisir `acknowledge`
+avant de pouvoir reprendre les commandes CT. La décision passe par
+`GameSession.choose_tactical_story_option`, qui écrit une action
+`story_effects` dans le journal Battle vérifiable. Le flag typé
+`battle_orders` est écrit par l'effet R9, pas par le rendu Qt.
+
+Après une **victoire produite par de vraies commandes CT**, le moteur
+effectue son `_settle()` habituel :
+
+- `Campaign.finish` crédite normalement la récompense de mission et la
+  progression des héros ;
+- `campaign_flow.outcomes[mission].victory` ajoute **une seule fois**
+  le bonus d'or (+13) et le flag typé `quest_won=True` au travers du
+  registre R5 `flow_ledger` ;
+- `story.after_mission[mission]` ouvre la scène `quest_return` pour
+  le rapport du capitaine ; la réponse `report` inscrit le flag
+  `captain_report=True` dans le même `Campaign.story_flags`.
+
+Les tests `tests_standalone/test_r42_captain_battle.py` enregistrent
+une vraie session pendant le dialogue tactique, reprennent le Battle,
+exécutent des commandes `end` jusqu'à la victoire (sans assigner
+`battle.result`), enregistrent l'après-bataille, rechargent ce
+checkpoint, vérifient l'unicité des effets et terminent le rapport.
+Ils vérifient également que la mission ne peut être lancée avant son
+déverrouillage narratif.
+
+```bash
+python -m unittest tests_standalone.test_r42_captain_battle -v
+```
+
+L'audit R42.C1 s'arrête volontairement aux scènes déclenchées depuis
+l'entrée de campagne. Les racines `orders` (trigger tactique) et
+`quest_return` (victoire mission) sont désormais énumérées
+explicitement dans `external_trigger_scenes_unverified`, **sans les
+classifier faussement comme orphelines**, et sans prétendre qu'un simple
+parcours des dialogues suffit à prouver un déclenchement Battle.
+Le test C2 fournit un témoin séparé, fondé sur le vrai moteur tactique.
+
+La certification **sur vrai PC**, les scénarios de défaite, les
+déclenchements tactiques composés et la validation packaging du Player
+restent des critères ouverts.
