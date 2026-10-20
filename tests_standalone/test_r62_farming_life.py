@@ -118,7 +118,42 @@ class R62FarmingLifeTests(unittest.TestCase):
         self.assertFalse(restored.farming_collect("hen", "collect-1"))
         self.assertFalse(restored.farming_harvest("field", "harvest-1"))
         self.assertEqual(restored.recording(), recorded)
-        self.assertNotIn("farming", initial["progress"])
+        self.assertEqual(initial["farming"]["day"], 0)
+        self.assertEqual(initial["farming"]["journal"], [])
+        next_day(restored)
+        self.assertFalse(restored.farming_harvest("field", "harvest-1"))
+        self.assertFalse(restored.farming_collect("hen", "collect-1"))
+
+    def test_canonical_r55_sale_of_harvested_goods(self):
+        from sporebound.system_design import EXTENSION as SYSTEMS_EXTENSION
+        content, project = fixture()
+        project.extensions[SYSTEMS_EXTENSION] = {
+            "schema_version": 1, "references": [],
+            "data": {
+                "version": 1,
+                "resources": [{"id": "elixir", "initial": 0, "capacity": 10}],
+                "producers": [],
+                "merchants": [{"id": "trader", "resource": "elixir",
+                               "scene": "arrival", "buy_price": 8, "sell_price": 4}],
+                "quests": [],
+            },
+        }
+        project.validate(content)
+        session = GameSession.new(content, project, "main", seed=62)
+        session.progress.inventory["herb"] = 1
+        session.progress.gold = 0
+        self.assertTrue(session.farming_plant("field", "herb_crop", "seed-sale"))
+        next_day(session)
+        self.assertTrue(session.farming_harvest("field", "harvest-sale"))
+        self.assertEqual(session.progress.inventory["elixir"], 2)
+        self.assertTrue(session.system_trade("trader", "sell", 1, "sale-r62"))
+        self.assertEqual(session.progress.inventory["elixir"], 1)
+        self.assertEqual(session.system_state()["stocks"]["elixir"], 1)
+        self.assertEqual(session.progress.gold, 4)
+        restored = GameSession.from_recording(session.recording(), content, project)
+        self.assertFalse(restored.system_trade("trader", "sell", 1, "sale-r62"))
+        self.assertFalse(restored.farming_harvest("field", "harvest-sale"))
+        self.assertEqual(restored.recording(), session.recording())
 
     def test_failed_commands_are_atomic_and_fail_closed_on_tamper(self):
         content, project = fixture()
