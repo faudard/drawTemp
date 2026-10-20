@@ -491,6 +491,7 @@ class StudioWindow(QMainWindow):
         self._action("r55_systems", "System Designer R55 : ressources et ateliers…", self.open_system_designer)
         self._action("r54_stream", "World Streaming Inspector R54…", self.open_world_streaming)
         self._action("r51_hud", "UI & HUD Designer R51…", self.open_r51_hud)
+        self._action("r57_translation", "Translation Studio R57…", self.open_translation_studio)
         self._action("r45_economy", "Économie vivante : commerces et recettes R45…", self.open_living_economy)
         self._action("focus_resources", "Rechercher les ressources",
                      lambda: self.search.setFocus())
@@ -572,6 +573,7 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r55_systems"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
+        tools_menu.addAction(self.commands["r57_translation"])
         tools_menu.addAction(self.commands["r45_economy"])
         scripts_menu = tools_menu.addMenu("Hooks contrôlés")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
@@ -737,6 +739,11 @@ class StudioWindow(QMainWindow):
         dialog.exec()
         if self.session.revision != revision:
             self.refresh()
+
+    def open_translation_studio(self):
+        """R57.B: project-local translation sidecar, separate from R1 history."""
+        from drawtemp.studio.r57_translation_qt import open_translation_studio
+        open_translation_studio(self)
 
     def open_living_world(self):
         """R35 world schedules: use the one authoritative R1 editor history."""
