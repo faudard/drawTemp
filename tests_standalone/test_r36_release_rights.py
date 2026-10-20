@@ -147,6 +147,34 @@ class R36ReleaseRightsTests(unittest.TestCase):
             self.assertEqual(len(result["files"]), 2)
             self.assertFalse(result["errors"])
 
+    def test_unrelated_licensed_portraits_do_not_fail_scoped_r36_audit(self):
+        with TemporaryDirectory() as directory:
+            path, project = fixture(directory)
+            approve_assets(directory)
+            image = Path(directory) / "art/portrait.png"
+            image.write_bytes(rgba_png(16, 32))
+            project["assets"]["entries"].append({
+                "id": "extra_portrait", "kind": "portrait",
+                "path": "art/portrait.png",
+            })
+            (Path(directory) / "game.game.json").write_text(
+                json.dumps(project), encoding="utf-8")
+            rights_path = Path(directory) / "asset-licenses.json"
+            index = json.loads(rights_path.read_text(encoding="utf-8"))
+            index["assets"]["art/portrait.png"] = {
+                "status": "approved", "rights_holder": "R36 test fixture",
+                "license_id": "CC0-1.0", "evidence_path": "licenses/rights.txt",
+                "sha256": sha256(image.read_bytes()).hexdigest(),
+                "allow_modification": True, "allow_redistribution": True,
+            }
+            rights_path.write_text(json.dumps(index), encoding="utf-8")
+            report = preflight(path, require_licenses=True)
+            self.assertTrue(report["passed"], report["errors"])
+            self.assertEqual(len(report["r36_animation"]["files"]), 3)
+            self.assertNotIn("art/portrait.png", {
+                row["path"] for row in report["r36_animation"]["files"]
+            })
+
     def test_legacy_projects_do_not_invent_r36_asset_requirements(self):
         with TemporaryDirectory() as directory:
             snapshot = project_with_graph()
