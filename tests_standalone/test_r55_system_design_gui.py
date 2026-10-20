@@ -7,6 +7,8 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from drawtemp.studio.system_design_qt import SystemDesignerDialog, _parse_amount_text
     QT = True
@@ -71,6 +73,104 @@ class SystemDesignerQtTests(unittest.TestCase):
         self.assertEqual(dlg.document["producers"][0]["outputs"], {"ingot": 2})
         dlg.preview()
         self.assertIn("ore:", dlg.report.toPlainText())
+        dlg.close()
+
+    def _authored_graph(self):
+        content, project = scene_fixture()
+        project.extensions[EXTENSION] = {
+            "schema_version": 1, "data": system_spec(), "references": []}
+        project.validate(content)
+        session = AuthoringSession(content, project)
+        dlg = SystemDesignerDialog(session)
+        return dlg, session
+
+    def test_draft_undo_redo_move_graph_inspector_and_one_project_commit(self):
+        dlg, session = self._authored_graph()
+        original_revision = session.revision
+        old = dlg.graph.nodes[("resources", "ore")].pos()
+        dlg.move_node(("resources", "ore"), old.x() + 32, old.y() + 18)
+        self.assertEqual(
+            dlg.positions[("resources", "ore")], (old.x() + 32, old.y() + 18))
+        self.assertEqual(session.revision, original_revision)
+        self.assertTrue(dlg.undo_draft())
+        self.assertNotIn(("resources", "ore"), dlg.positions)
+        self.assertTrue(dlg.redo_draft())
+        self.assertIn(("resources", "ore"), dlg.positions)
+
+        # Selecting a QGraphicsItem fills inspector and syncs list selection.
+        node = dlg.graph.nodes[("resources", "ore")]
+        node.setSelected(True)
+        self.assertIn("ore", dlg.inspector.toPlainText())
+        self.assertEqual(dlg.tabs.currentIndex(), 0)
+        self.assertTrue(dlg.edit_selected.isEnabled())
+        self.assertFalse(dlg.unlink_selected.isEnabled())
+
+        self.assertTrue(dlg.connect_nodes(
+            ("resources", "ore"), ("producers", "jeweler"), 3))
+        self.assertEqual(dlg.document["producers"][1]["inputs"]["ore"], 3)
+        self.assertEqual(session.revision, original_revision)
+        self.assertTrue(dlg.undo_draft())
+        self.assertNotIn("ore", dlg.document["producers"][1]["inputs"])
+        self.assertTrue(dlg.redo_draft())
+        self.assertEqual(dlg.document["producers"][1]["inputs"]["ore"], 3)
+        dlg.apply()
+        self.assertEqual(session.revision, original_revision + 1)
+        self.assertEqual(
+            session.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+            ["data"]["producers"][1]["inputs"]["ore"], 3)
+        session.undo()
+        self.assertNotIn(
+            "ore", session.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+            ["data"]["producers"][1]["inputs"])
+        dlg.close()
+
+    def test_click_graph_ports_to_rebind_merchant_and_select_link(self):
+        dlg, session = self._authored_graph()
+        dlg.show()
+        self.app.processEvents()
+        source = dlg.graph.nodes[("resources", "gem")].output
+        target = dlg.graph.nodes[("merchants", "trader")].input
+
+        def click(port):
+            pos = dlg.graph.mapFromScene(port.sceneBoundingRect().center())
+            QTest.mouseClick(dlg.graph.viewport(), Qt.LeftButton, pos=pos)
+            self.app.processEvents()
+
+        click(source)
+        self.assertEqual(dlg.graph.pending, ("resources", "gem"))
+        click(target)
+        self.assertIsNone(dlg.graph.pending)
+        self.assertEqual(dlg.document["merchants"][0]["resource"], "gem")
+        self.assertEqual(
+            session.snapshot().to_dict()["project"]["extensions"][EXTENSION]
+            ["data"]["merchants"][0]["resource"], "ingot")
+        edge = next(e for e in dlg.graph.connections
+                    if e.source == ("resources", "gem")
+                    and e.target == ("merchants", "trader"))
+        dlg.scene.clearSelection()
+        edge.setSelected(True)
+        self.assertIn("Liaison", dlg.inspector.toPlainText())
+        self.assertTrue(dlg.unlink_selected.isEnabled())
+        self.assertTrue(dlg.undo_draft())
+        self.assertEqual(dlg.document["merchants"][0]["resource"], "ingot")
+        dlg.close()
+
+    def test_keyboard_node_movement_and_incompatible_graph_edge(self):
+        dlg, session = self._authored_graph()
+        node = dlg.graph.nodes[("producers", "smelter")]
+        node.setSelected(True)
+        dlg.graph.setFocus()
+        original = node.pos()
+        QTest.keyClick(dlg.graph, Qt.Key_Right)
+        self.assertEqual(dlg.graph.nodes[("producers", "smelter")].pos().x(),
+                         original.x() + 12)
+        self.assertTrue(dlg.undo_draft())
+        self.assertEqual(dlg.graph.nodes[("producers", "smelter")].pos().x(),
+                         original.x())
+        before = session.snapshot().to_dict()
+        with self.assertRaises(ValueError):
+            dlg.connect_nodes(("resources", "gem"), ("producers", "smelter"))
+        self.assertEqual(session.snapshot().to_dict(), before)
         dlg.close()
 
     def test_stale_editor_cannot_override_new_revision(self):
