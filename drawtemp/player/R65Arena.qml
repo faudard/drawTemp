@@ -126,32 +126,32 @@ ApplicationWindow {
                     model: root.state.arena.projectiles || []
                     delegate: Rectangle {
                         required property var modelData
-                        readonly property real scale: renderer.cameraState.zoom
-                        width: 13 * scale
+                        readonly property real zoomFactor: renderer.cameraState.zoom
+                        width: 13 * zoomFactor
                         height: width
                         radius: width / 2
                         color: "#ff947a"
                         border.width: 1
                         border.color: "#ffe4b2"
                         x: projectileLayer.width / 2 + renderer.cameraState.panX
-                           + (modelData.pos[0] / 1000 - .5) * 64 * scale - width / 2
+                           + (modelData.pos[0] / 1000 - .5) * 64 * zoomFactor - width / 2
                         y: projectileLayer.height / 2 + renderer.cameraState.panY
-                           + (modelData.pos[1] / 1000 - .5) * 64 * scale - height / 2
+                           + (modelData.pos[1] / 1000 - .5) * 64 * zoomFactor - height / 2
                     }
                 }
                 Repeater {
                     model: root.state.r65.projectiles || []
                     delegate: Rectangle {
                         required property var modelData
-                        readonly property real scale: renderer.cameraState.zoom
-                        width: 9 * scale
+                        readonly property real zoomFactor: renderer.cameraState.zoom
+                        width: 9 * zoomFactor
                         height: width
                         radius: width / 2
                         color: "#7ddcf4"
                         x: projectileLayer.width / 2 + renderer.cameraState.panX
-                           + (modelData.pos[0] / 1000 - .5) * 64 * scale - width / 2
+                           + (modelData.pos[0] / 1000 - .5) * 64 * zoomFactor - width / 2
                         y: projectileLayer.height / 2 + renderer.cameraState.panY
-                           + (modelData.pos[1] / 1000 - .5) * 64 * scale - height / 2
+                           + (modelData.pos[1] / 1000 - .5) * 64 * zoomFactor - height / 2
                     }
                 }
             }
