@@ -20,6 +20,9 @@ from drawtemp.studio.event_graph_qt import EventGraphView
 from drawtemp.studio.r28d_workflow import (
     AnimationHitboxStudio, EventQuestGraph, IsolatedPlaytest, R28DError,
 )
+from drawtemp.studio.r49_first_scene import (
+    FirstSceneError, FirstSceneRequest, preview_first_scene,
+)
 from sporebound.model import RuleError
 
 
@@ -382,6 +385,155 @@ class PlaytestRoundtripPanel(QWidget):
             self.report.setPlainText(_message(exc))
 
 
+class FirstScenePanel(QWidget):
+    """Guided one-transaction scene + event + action, on the real R1 session."""
+
+    updated = Signal()
+    playtestRequested = Signal()
+    exportRequested = Signal()
+
+    def __init__(self, session, parent=None):
+        super().__init__(parent)
+        self.session = session
+        self._pending = None
+        self._revision = -1
+        self.setObjectName("r49c2-first-scene")
+        layout = QVBoxLayout(self)
+        title = QLabel("Premier scénario : scène narrative, déclencheur CT et action")
+        title.setWordWrap(True)
+        layout.addWidget(title)
+        limits = QLabel(
+            "Cet assistant crée une scène liée à un événement tactique sur tick. "
+            "L'action est un message. Action temps réel, RPG et hybride "
+            "ne sont pas certifiés par cet assistant.")
+        limits.setWordWrap(True)
+        layout.addWidget(limits)
+        form = QFormLayout()
+        self.mission = QComboBox()
+        self.mission.setAccessibleName("Mission pour le premier scénario")
+        form.addRow("Mission", self.mission)
+        self.event_id = QLineEdit("intro_event")
+        self.event_id.setObjectName("r49c2-event-id")
+        form.addRow("ID événement", self.event_id)
+        self.tick = QSpinBox()
+        self.tick.setRange(1, 100000)
+        self.tick.setValue(1)
+        form.addRow("Déclencher au tick", self.tick)
+        self.scene_id = QLineEdit("intro_scene")
+        self.scene_id.setObjectName("r49c2-scene-id")
+        form.addRow("ID scène", self.scene_id)
+        self.scene_title = QLineEdit("Une première rencontre")
+        form.addRow("Titre de scène", self.scene_title)
+        self.speaker = QLineEdit("Narrateur")
+        form.addRow("Intervenant", self.speaker)
+        self.dialogue = QPlainTextEdit()
+        self.dialogue.setPlainText("Une aventure commence.")
+        self.dialogue.setMaximumHeight(98)
+        form.addRow("Dialogue", self.dialogue)
+        self.action_message = QLineEdit("La première action est déclenchée.")
+        form.addRow("Message tactique", self.action_message)
+        layout.addLayout(form)
+        self.preview_button = QPushButton("Prévisualiser sans modifier")
+        self.preview_button.setObjectName("r49c2-preview")
+        self.preview_button.clicked.connect(self.preview_changes)
+        layout.addWidget(self.preview_button)
+        self.apply_button = QPushButton("Créer scène et action (un Undo)")
+        self.apply_button.setObjectName("r49c2-apply")
+        self.apply_button.setEnabled(False)
+        self.apply_button.clicked.connect(self.apply_changes)
+        layout.addWidget(self.apply_button)
+        self.report = QPlainTextEdit()
+        self.report.setObjectName("r49c2-report")
+        self.report.setAccessibleName("Validation du premier scénario")
+        self.report.setReadOnly(True)
+        self.report.setMaximumHeight(142)
+        layout.addWidget(self.report)
+        self.play_button = QPushButton("Enregistrer puis lancer le vrai Player…")
+        self.play_button.setObjectName("r49c2-playtest")
+        self.play_button.setEnabled(False)
+        self.play_button.clicked.connect(self.playtestRequested.emit)
+        layout.addWidget(self.play_button)
+        self.export_button = QPushButton("Ouvrir l'export Player natif…")
+        self.export_button.setObjectName("r49c2-export")
+        self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self.exportRequested.emit)
+        layout.addWidget(self.export_button)
+        layout.addStretch(1)
+        for field in (self.event_id, self.scene_id, self.scene_title,
+                      self.speaker, self.action_message):
+            field.textChanged.connect(self.invalidate)
+        self.dialogue.textChanged.connect(self.invalidate)
+        self.tick.valueChanged.connect(self.invalidate)
+        self.mission.currentIndexChanged.connect(self.invalidate)
+        self.refresh()
+
+    def invalidate(self, *_):
+        self._pending = None
+        self.apply_button.setEnabled(False)
+
+    def refresh(self):
+        previous = self.mission.currentData()
+        self.mission.blockSignals(True)
+        self.mission.clear()
+        current = self.session.snapshot()
+        for row in current.to_dict()["content"]["missions"]:
+            self.mission.addItem(row["name"] + " [" + row["id"] + "]", row["id"])
+        _select(self.mission, previous)
+        self.mission.blockSignals(False)
+        self._revision = current.revision
+        self.invalidate()
+
+    def _request(self):
+        return FirstSceneRequest(
+            mission_id=self.mission.currentData(),
+            event_id=self.event_id.text().strip(),
+            scene_id=self.scene_id.text().strip(),
+            title=self.scene_title.text(),
+            speaker=self.speaker.text(),
+            dialogue=self.dialogue.toPlainText(),
+            action_message=self.action_message.text(),
+            tick=self.tick.value(),
+        )
+
+    def preview_changes(self):
+        self.invalidate()
+        try:
+            self._pending = preview_first_scene(
+                self.session, self._request(),
+                expected_revision=self._revision)
+            self.apply_button.setEnabled(True)
+            self.report.setPlainText(
+                "Préflight validé. Aucune écriture. "
+                "Appliquer créera une scène, un trigger CT, une action message "
+                "et leur liaison, dans une transaction annulable.")
+            return True
+        except (AuthoringError, RuleError, FirstSceneError,
+                ValueError, TypeError) as exc:
+            self.report.setPlainText(_message(exc))
+            return False
+
+    def apply_changes(self):
+        if self._pending is None:
+            self.report.setPlainText("Prévisualiser et vérifier avant d'appliquer.")
+            return False
+        try:
+            self.session.apply(self._pending)
+            self._pending = None
+            self.apply_button.setEnabled(False)
+            self.report.setPlainText(
+                "Scène, événement, action message et liaison créés. "
+                "Enregistrer puis tester le vrai Player ou ouvrir l'export.")
+            self.play_button.setEnabled(True)
+            self.export_button.setEnabled(True)
+            self.updated.emit()
+            return True
+        except (AuthoringError, RuleError, FirstSceneError,
+                ValueError, TypeError) as exc:
+            self.invalidate()
+            self.report.setPlainText(_message(exc))
+            return False
+
+
 class R28DWorkspace(QWidget):
     updated = Signal()
 
@@ -394,14 +546,18 @@ class R28DWorkspace(QWidget):
         layout.addWidget(self.tabs)
         self.animation = AnimationHitboxPanel(session)
         self.events = EventQuestPanel(session)
+        self.first_scene = FirstScenePanel(session)
         self.playtest = PlaytestRoundtripPanel(session)
         self.tabs.addTab(self.animation, "Animation / Hitbox")
         self.tabs.addTab(self.events, "Événements / Quêtes")
+        self.tabs.addTab(self.first_scene, "Premier scénario R49")
         self.tabs.addTab(self.playtest, "Playtest")
         self.animation.updated.connect(self.updated.emit)
         self.events.updated.connect(self.updated.emit)
+        self.first_scene.updated.connect(self.updated.emit)
 
     def refresh(self):
         self.animation.refresh()
         self.events.refresh()
+        self.first_scene.refresh()
         self.playtest.refresh()
