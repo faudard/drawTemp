@@ -55,6 +55,7 @@ def audit_r36_rights(project, asset_root, *, require_licenses=False):
         return result
     result["sprites"] = sorted(ids)
     file_hashes = {}
+    file_dimensions = {}
     for sprite_id in sorted(ids):
         try:
             descriptor = registry.require_reference(sprite_id, "sprite")
@@ -63,17 +64,18 @@ def audit_r36_rights(project, asset_root, *, require_licenses=False):
             resolved = registry.resolve(sprite_id, root)
             if path != resolved:
                 raise ValueError("R28 sprite file path does not match canonical registry")
-            raw = resolved.read_bytes()
-            width, height = png_dimensions(raw)
+            if relative not in file_dimensions:
+                # Multiple regions in an atlas use one physical validation
+                # and SHA-256 pass, never one 32 MiB read per sprite region.
+                raw = resolved.read_bytes()
+                dims = png_dimensions(raw)
+                file_hashes[relative] = sha256(raw).hexdigest()
+                file_dimensions[relative] = dims
+            width, height = file_dimensions[relative]
             if "region" in descriptor:
                 x, y, w, h = descriptor["region"]
                 if x + w > width or y + h > height:
                     raise ValueError("Sprite atlas region exceeds verified PNG")
-            digest = sha256(raw).hexdigest()
-            previous = file_hashes.get(relative)
-            if previous is not None and previous != digest:
-                raise ValueError("Referenced atlas changed during audit")
-            file_hashes[relative] = digest
         except (OSError, TypeError, ValueError) as exc:
             result["errors"].append(sprite_id + ": " + str(exc))
 
