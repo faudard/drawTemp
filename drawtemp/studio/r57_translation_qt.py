@@ -90,6 +90,9 @@ class TranslationStudioDialog(QDialog):
         panel.addWidget(self.text, 1)
         panel.addWidget(QLabel("Prévisualisation pseudo-localisée"))
         self.preview = QLabel()
+        # Catalog content is data, never HTML; do not let a translated label
+        # create rich-text links or image requests in the Studio preview.
+        self.preview.setTextFormat(Qt.PlainText)
         self.preview.setWordWrap(True)
         self.preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
         panel.addWidget(self.preview)
@@ -148,8 +151,12 @@ class TranslationStudioDialog(QDialog):
         if key:
             entry = self.catalog.data["entries"][key]
             self.key_label.setText(key)
+            source_details = entry["source"]
+            if isinstance(source_details, dict):
+                source_details = ("one: " + source_details["one"] +
+                                  "\nother: " + source_details["other"])
             self.context.setPlainText(entry["context"] + "\n\n" +
-                                      str(entry["source"]))
+                                      source_details)
             lang = self.current_language()
             editable = lang in ("fr", "en")
             source = entry["source"]
