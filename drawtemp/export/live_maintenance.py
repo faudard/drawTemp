@@ -131,9 +131,15 @@ def plan_update(installed, candidate, *, observed_save_schemas=()):
 
 
 def _relative(name):
+    parts = name.split("/") if isinstance(name, str) else []
+    reserved = {"con", "prn", "aux", "nul"} | {
+        prefix + str(n) for prefix in ("com", "lpt") for n in range(1, 10)
+    }
     if (type(name) is not str or not name or "\\" in name or ":" in name
             or name.startswith("/") or any(
-                part in ("", ".", "..") for part in name.split("/"))):
+                not part or part in (".", "..") or part[-1] in (".", " ")
+                or part.split(".")[0].casefold() in reserved
+                or any(ord(ch) < 32 for ch in part) for part in parts)):
         raise ExportError("Unsafe snapshot relative path")
     return name
 
@@ -142,7 +148,10 @@ def _walk_regular(root):
     """Enumerate *all* files; silently skipping a hidden save is forbidden."""
     entries = []
     casefolded = set()
-    for directory, subdirs, filenames in os.walk(root, topdown=True, followlinks=False):
+    def fail_walk(error):
+        raise ExportError("Cannot enumerate complete save tree: " + str(error))
+    for directory, subdirs, filenames in os.walk(
+            root, topdown=True, followlinks=False, onerror=fail_walk):
         for name in subdirs + filenames:
             path = Path(directory) / name
             mode = path.lstat().st_mode
@@ -188,7 +197,8 @@ def _copy_checked(src, dst):
         after = os.fstat(stream.fileno())
     final = src.lstat()
     if (after.st_size != before.st_size or after.st_mtime_ns != before.st_mtime_ns
-            or final.st_ino != before.st_ino or final.st_mtime_ns != before.st_mtime_ns
+            or (final.st_dev, final.st_ino) != (before.st_dev, before.st_ino)
+            or final.st_size != before.st_size or final.st_mtime_ns != before.st_mtime_ns
             or size != before.st_size):
         raise ExportError("Save changed during snapshot")
     return {"size": size, "sha256": h.hexdigest()}
