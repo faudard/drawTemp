@@ -6,7 +6,7 @@ import unittest
 
 from drawtemp.player.controller import PlayerController
 from drawtemp.sdk.r42_captain_slice import (
-    ENDINGS, QUEST_MISSION, make_captain_slice,
+    ENDINGS, QUEST_MISSION, make_captain_slice, save_captain_template,
 )
 from drawtemp.sdk.r42_reachability import audit_narrative, captain_slice_audit
 from sporebound.game_project import GameProject
@@ -154,6 +154,21 @@ class CaptainLoyaltySliceR42Tests(unittest.TestCase):
         self.assertEqual(dead['condition']['gold_gte'], 999999)
         self.assertEqual(dead['counterexample']['gold'], 0)
         self.assertIn('route_to_scene', dead['counterexample'])
+
+    def test_template_export_is_validated_pair_and_never_overwrites(self):
+        from sporebound.model import Content
+        with TemporaryDirectory() as folder:
+            target = Path(folder) / 'captain.json'
+            paths = save_captain_template(target)
+            self.assertEqual(len(paths), 2)
+            saved_content = Content.load(target)
+            saved_project = GameProject.load(
+                target.with_suffix('.game.json'), saved_content)
+            self.assertEqual(saved_project.story, self.project.story)
+            self.assertEqual(saved_content.to_dict(), self.content.to_dict())
+            with self.assertRaises(RuleError):
+                save_captain_template(target)
+            self.assertEqual(saved_project.story['schema_version'], 2)
 
     def test_bounded_execution_refuses_underbudgeted_audit(self):
         with self.assertRaises(RuleError):
