@@ -1,8 +1,8 @@
-"""R74.B: opt-in Qt review of R74.A verified *logical* dungeon variants.
+"""R74.B/C1 opt-in Qt review of logical graphs and bounded physical R27 maps.
 
-The scene draws a room graph, not a physical or collision-certified dungeon.
-All proposal and comparison operations are read-only. Explicit QMessageBox
-approval precedes the only canonical AuthoringSession write.
+The graphs are not spatial R5 plans. Only the separate R74.C1 action can
+prepare three physical puzzle missions. Every canonical write requires
+explicit confirmation; no operation saves files on disk implicitly.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _spin(name, low, high, initial):
 
 
 class R74DungeonAssistDialog(QDialog):
-    """One user-approved R34 project transaction, never implicit file writes."""
+    """One explicitly approved R34 or R27 editor transaction, no disk writes."""
 
     def __init__(self, session, *, parent=None, library=None):
         super().__init__(parent)
@@ -56,10 +56,10 @@ class R74DungeonAssistDialog(QDialog):
         root = QVBoxLayout(self)
         warning = QLabel(
             "Variantes locales et déterministes, sans IA distante ni écriture "
-            "automatique. Les chemins sont prouvés sur le graphe R34, PAS "
-            "sur des cases R5 ni dans un Player exporté. Ajuster les "
-            "paramètres régénère le donjon ; portes et cases ne sont pas "
-            "éditées directement ici.")
+            "automatique. Les variantes ci-dessous sont des graphes R34, "
+            "pas des cartes R5. Le bouton 'Préparer 3 cartes R27' ajoute "
+            "une preuve physique distincte, sans IA/combat ni export certifiés. "
+            "Ajuster les paramètres régénère le donjon.")
         warning.setWordWrap(True)
         warning.setObjectName("r74-scope-warning")
         root.addWidget(warning)
