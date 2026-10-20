@@ -277,6 +277,8 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-62 — Ferme et village social.
 
+**Suivi R62.B.1 :** [Farm Studio natif](R62_B1_FARM_STUDIO.md), formulaires typés de parcelles/cultures/animaux et transaction R1 ; relations sociales persistantes et vertical slice restent à faire (R62.B.2/C).
+
 **Suivi d'implémentation :** [R62.A — Farming Life headless/SDK](R62_A_FARMING_LIFE.md), proposé dans la [PR #423](https://github.com/faudard/drawTemp/pull/423). Le gate R62.A n'est pas certifié ; R62.B/C et la qualification CI/Player restent ouverts.
 
 ## R63 — Survival & Crafting (10.3→11.0)
