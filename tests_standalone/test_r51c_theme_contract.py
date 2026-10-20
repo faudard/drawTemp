@@ -43,6 +43,8 @@ class R51CThemeContractTests(unittest.TestCase):
         self.assertIn("self.scale_preview = QSpinBox", self.studio)
         self.assertIn('setProperty("highContrast"', self.studio)
         self.assertIn('setProperty("textScale"', self.studio)
+        self.assertIn("ui_export_audit", self.studio)
+        self.assertIn("Export bloqué", self.studio)
         self.assertIn("Accessible.description", self.node)
         self.assertIn("Math.max(44", self.node)
         self.assertIn("parent.activeFocus", self.node)
