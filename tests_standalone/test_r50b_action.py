@@ -58,7 +58,9 @@ class R50BActionCombatTests(unittest.TestCase):
         self.assertTrue(result["player_save_resume"])
         self.assertTrue(result["same_gamesession_checkpoint"])
         self.assertTrue(result["replay_verified"])
-        self.assertFalse(result["campaign_loot_integrated"])
+        self.assertTrue(result["campaign_loot_integrated"])
+        self.assertTrue(result["once_only_action_reward"])
+        self.assertTrue(result["r26_to_ct_to_exploration"])
         self.assertFalse(result["qt_onscreen_verified"])
         self.assertFalse(result["release_9_0_certified"])
 
@@ -135,6 +137,95 @@ class R50BActionCombatTests(unittest.TestCase):
         with self.assertRaises(RuleError):
             player.route_transition("unknown")
         self.assertEqual(player.session.recording(), battle)
+
+    def _defeat_enemy(self, player):
+        player.route_action_step({"tick": 1, "dx": 1, "attack": True})
+        for tick in range(2, 13):
+            player.route_action_step({"tick": tick, "guard": True})
+        player.route_action_step({"tick": 13, "attack": True})
+        self.assertEqual(player.route_action_state()["enemies"][ENEMY]["hp"], 0)
+
+    def test_one_shot_reward_then_ct_then_return_cannot_restart(self):
+        path = author_action_prototype(self.root / "project")
+        content, project = self._pair(path)
+        profile = self.root / "p.json"
+        player = PlayerController(content, project, profile)
+        player.new_game("main", 1, seed=50)
+        old_gold = player.session.progress.gold
+        with self.assertRaises(RuleError):
+            player.route_transition("after_action_to_ct")
+        self.assertEqual(player.session.progress.gold, old_gold)
+        self._defeat_enemy(player)
+        result = player.route_action_settle("after_action_to_ct")
+        self.assertEqual(result["coins_awarded"], 1)
+        self.assertEqual(player.session.progress.gold, old_gold + 1)
+        recorded = player.session.recording()
+        self.assertNotIn("scene_action", recorded)
+        self.assertEqual(len(recorded["scene_action_history"]), 1)
+        self.assertEqual(recorded["scene_route"]["current"],
+                         next(iter(content.missions)))
+        reader = PlayerController(content, project, profile)
+        reader.load_game("main", 1)
+        self.assertEqual(reader.session.recording(), recorded)
+        self.assertEqual(reader.session.progress.gold, old_gold + 1)
+        with self.assertRaises(RuleError):
+            reader.route_action_settle("after_action_to_ct")
+        reader.abandon_encounter()
+        reader.route_transition("ct_to_action")
+        with self.assertRaises(RuleError):
+            reader.route_action_step({"tick": 1, "attack": True})
+        self.assertEqual(reader.session.progress.gold, old_gold + 1)
+        self.assertEqual(len(reader.session.recording()["scene_action_history"]), 1)
+
+    def test_settlement_requires_a_genuine_victory_and_restores_on_error(self):
+        path = author_action_prototype(self.root / "project")
+        content, project = self._pair(path)
+        player = PlayerController(content, project, self.root / "p.json")
+        player.new_game("main", 1, seed=50)
+        player.route_action_step({"tick": 1, "attack": True})
+        before = player.session.recording()
+        data = player.path_for("main", 1).read_bytes()
+        with self.assertRaises(RuleError):
+            player.route_action_settle("after_action_to_ct")
+        self.assertEqual(player.session.recording(), before)
+        self.assertEqual(player.path_for("main", 1).read_bytes(), data)
+        self._defeat_remaining(player)
+        won = player.session.recording()
+        with self.assertRaises(RuleError):
+            player.route_action_settle("missing")
+        self.assertEqual(player.session.recording(), won)
+
+    def _defeat_remaining(self, player):
+        # First tick was already accepted above with attack, cooldown lasts 12.
+        for tick in range(2, 13):
+            player.route_action_step({"tick": tick, "guard": True})
+        player.route_action_step({"tick": 13, "attack": True})
+
+    def test_tampered_settlement_fails_even_with_matching_outer_digest(self):
+        path = author_action_prototype(self.root / "project")
+        content, project = self._pair(path)
+        player = PlayerController(content, project, self.root / "p.json")
+        player.new_game("main", 1, seed=50)
+        self._defeat_enemy(player)
+        player.route_action_settle("after_action_to_ct")
+        original = player.session.recording()
+        broken = [
+            lambda d: d.pop("scene_action_history"),
+            lambda d: d["scene_action_history"][0].update(coin=10),
+            lambda d: d["scene_action_history"][0].update(route_index=2),
+            lambda d: d["scene_action_history"][0]["runtime"]["commands"][0].update(
+                attack=False),
+            lambda d: d["progress"]["story_flags"].clear(),
+            lambda d: d["scene_action_history"].append(
+                deepcopy(d["scene_action_history"][0])),
+        ]
+        for mutation in broken:
+            forged = deepcopy(original)
+            mutation(forged)
+            forged["digest"] = digest(
+                {k: v for k, v in forged.items() if k != "digest"})
+            with self.subTest(mutation=mutation), self.assertRaises(RuleError):
+                GameSession.from_recording(forged, content, project)
 
     def test_failed_action_audit_never_publishes_partial_creator_project(self):
         output = self.root / "failed"
