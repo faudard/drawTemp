@@ -116,6 +116,11 @@ class GameSession:
         self.fronts = None
         self.finalized = False
         self.settled_fronts = set()
+        from .world_streaming import EXTENSION as STREAM_EXTENSION, WorldStreamState
+        stream_spec = self.project.extensions.get(STREAM_EXTENSION)
+        self._stream_world = (
+            WorldStreamState(stream_spec["data"], self.project)
+            if stream_spec is not None else None)
         self.siege_id = None  # Optional authored siege identity; old slots omit it.
         # Project-owned narrative choices; no mutation of Battle's replay log.
         self.tactical_story_pending = ""
@@ -179,6 +184,17 @@ class GameSession:
 
     def roguelite_checkpoint(self):
         return self._roguelite_action("checkpoint")
+
+    def world_stream_state(self):
+        """Read-only projection of opt-in R54 world state."""
+        require(self._stream_world is not None, "R54 world is not configured")
+        return self._stream_world.view()
+
+    def world_stream_event(self, event_id, entity_id, before, after):
+        """Apply one persistent compare-and-swap entity event without rewards."""
+        require(self._stream_world is not None and self.mode == "campaign",
+                "R54 world events require an active exploration campaign")
+        return self._stream_world.apply(event_id, entity_id, before, after)
 
     def living_world_state(self, scene=None):
         """R35.A detached schedule projection, including off-focus scenes."""
@@ -382,7 +398,8 @@ class GameSession:
                            self.settled_fronts, self.siege_id, self.route_scene,
                            self.route_history, self.tactical_story_pending,
                            self.tactical_story_queue, self._rt_origin,
-                           self._rt_position, self._rt_journal, self._platform))
+                           self._rt_position, self._rt_journal, self._platform,
+                           self._stream_world))
         try:
             dest = route["destination"]
             if dest in self.content.missions:
@@ -398,6 +415,8 @@ class GameSession:
                     map(str, route["spawn"]))
                 self.exploration.state(self.progress, dest)
             self.route_scene = dest
+            if self._stream_world is not None:
+                self._stream_world.enter_scene(dest)
             self.route_history.append(route["id"])
             # The next exploration segment starts a fresh tick log.
             # R25.E will certify continuous replay spanning mode boundaries.
@@ -412,7 +431,8 @@ class GameSession:
              self.settled_fronts, self.siege_id, self.route_scene,
              self.route_history, self.tactical_story_pending,
              self.tactical_story_queue, self._rt_origin,
-             self._rt_position, self._rt_journal, self._platform) = before
+             self._rt_position, self._rt_journal, self._platform,
+             self._stream_world) = before
             raise
 
     def _tactical_story_progress(self):
@@ -978,6 +998,8 @@ class GameSession:
                 "journal": self._rt_journal.recording()}
         if self._living_world is not None:
             data["living_world"] = self._living_world.snapshot()
+        if self._stream_world is not None:
+            data["world_stream"] = self._stream_world.recording()
         if self._roguelite is not None:
             data["roguelite"] = self._roguelite.recording()
         if self.siege_id is not None:
@@ -1005,7 +1027,7 @@ class GameSession:
                 and data.get("version") == cls.VERSION
                 and data.get("kind") == "game_session", "Unsupported game session")
         require(set(data) - {"front_battle_ids", "siege_id", "scene_route",
-                             "scene_realtime", "scene_platform", "living_world", "roguelite", "tactical_story_pending",
+                             "scene_realtime", "scene_platform", "living_world", "world_stream", "roguelite", "tactical_story_pending",
                              "tactical_story_queue"} ==
                 {"version", "kind", "campaign_id", "seed",
                 "content_digest", "project_digest", "rules", "progress",
@@ -1036,6 +1058,12 @@ class GameSession:
         else:
             require("living_world" not in data,
                     "Unexpected living-world state in legacy checkpoint")
+        if session._stream_world is not None:
+            require("world_stream" in data, "R54 world checkpoint is missing")
+            session._stream_world.restore(data["world_stream"])
+        else:
+            require("world_stream" not in data,
+                    "Unexpected R54 checkpoint on legacy project")
         if session._roguelite is not None:
             require("roguelite" in data,
                     "R34 configured project checkpoint is missing its run state")
@@ -1246,6 +1274,19 @@ class GameSession:
             require(saved_opened == platform.disabled_colliders,
                     "R32 physics replay disagrees with canonical campaign flags")
             session._platform = platform
+        if session._stream_world is not None:
+            session._stream_world.assert_scene(session.route_scene)
+            expected = [session._stream_world.spec["start"]]
+            for route_id in session.route_history:
+                route = session.scene_router.links[route_id]
+                target = session._stream_world.scenes.get(route["destination"])
+                if target is not None and target != expected[-1]:
+                    require(target in session._stream_world.cells[
+                        expected[-1]]["neighbors"],
+                        "R54 route history crosses a non-neighbor cell")
+                    expected.append(target)
+            require(expected == session._stream_world.history,
+                    "R54 world history diverged from R25 route journal")
         # World map travel is optional, but an existing cursor must never be
         # accepted from a malformed or inaccessible persisted route.
         session.world_state()
