@@ -23,6 +23,8 @@ from drawtemp.sdk.simulation import freeze, thaw
 from sporebound.assets import AssetRegistry
 
 RECEIPT_NAMESPACE = "org.drawtemp.resourcepacks"
+# R58.B3: a pending write-ahead version stage must block all pack writes.
+PENDING_UPGRADE_JOURNAL = ".drawtemp-r58-package-upgrade.pending.json"
 PACK_SCHEMA = 1
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_FILE_BYTES = 16 * 1024 * 1024
@@ -364,6 +366,9 @@ def install_pack(preview, editor, project_root, *, expected_revision=None):
     root = Path(project_root).resolve(strict=True)
     if not root.is_dir():
         fail("unsafe_path", "Project root must exist")
+    if ((root / PENDING_UPGRADE_JOURNAL).exists() or
+            (root / PENDING_UPGRADE_JOURNAL).is_symlink()):
+        fail("recovery_required", "Pending R58 upgrade must be inspected first")
     if expected_revision is not None and (
             type(expected_revision) is not int or editor.revision != expected_revision):
         fail("stale_revision", "Editor changed since pack inspection")
