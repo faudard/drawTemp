@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from drawtemp.studio.survival_authoring import (
     apply_survival_design, preview_survival_design)
 from sporebound.survival import EXTENSION, SurvivalRuntime, validate_survival
+from sporebound.survival_balance import balance_survival
 
 
 def starter_survival(scene):
@@ -524,18 +525,22 @@ class SurvivalDesignerDialog(QDialog):
             # Full shared authoring validator, including revision freshness.
             plan = preview_survival_design(
                 self.session, self.document, expected_revision=self.source_revision)
-            runtime = SurvivalRuntime(
-                self.document, self.scenes, exploration=self.exploration)
-            before = dict(runtime.needs)
-            runtime.advance(8)
-            after = runtime.needs
+            forecast = balance_survival(
+                self.document, self.scenes, exploration=self.exploration,
+                horizon=128)
+            initial, after = forecast["initial_needs"], forecast["forecast_needs"]
+            failed = forecast["exhausted_tick"]
             rows = [
                 "R63 — projet non modifié",
                 f"Recettes : {plan.report['recipes']} ; gisements : {plan.report['nodes']}",
                 f"Refuges : {plan.report['shelters']} ; dangers : {plan.report['hazards']}",
-                "Simulation sans déplacement, 8 ticks:",
-                *[f"{key} : {before[key]} → {after[key]}"
+                "Sans collectes, nourriture ni refuge :",
+                "Incapacité au tick : " +
+                (str(failed) if failed is not None else "hors horizon de 128 ticks"),
+                *[f"{key} : {initial[key]} → {after[key]}"
                   for key in ("energy", "hunger", "temperature")],
+                "Avertissements : " +
+                (", ".join(forecast["issues"]) or "aucun"),
             ]
             self.report.setPlainText("\n".join(rows))
             self.status.setText("Prévisualisation valide ; aucun commit.")
