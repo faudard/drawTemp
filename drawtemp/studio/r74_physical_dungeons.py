@@ -129,6 +129,19 @@ def prepare_physical_dungeons(
         goal = (door_x, 8)
         sandbox.set_objective("extract")
         sandbox.paint([goal], "goal")
+        # Make the authored key immediately available at spawn in the real
+        # tactical Player; combat is deliberately kept separate from the
+        # static puzzle witness (R27's established starter convention).
+        def configure_spawn(data):
+            row = next(m for m in data["missions"] if m["id"] == mid)
+            hero = next(u for u in row["units"] if u["team"] == "player")
+            enemy = next(u for u in row["units"] if u["team"] == "enemy")
+            hero["pos"] = [door_x, 2]
+            hero["speed"] = 100
+            enemy["speed"] = 1
+            row["reward"] = 30 * (index + 1)
+            return data
+        sandbox._change(configure_spawn, kind="r74-physical-spawn", mission_id=mid)
         proof = _proof(dungeon, mission_id=mid, key_id=key_id,
                        door_id="room_door", destination=goal)
         proof["source_seed"] = proposal.seed
