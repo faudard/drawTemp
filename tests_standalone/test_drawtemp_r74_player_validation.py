@@ -70,6 +70,38 @@ class R74PlayerCertificationTests(unittest.TestCase):
                              25 * report["loot_units"])
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
 
+    def test_headless_player_controller_campaign_launch_and_save_resume(self):
+        from drawtemp.player.controller import PlayerController
+        from drawtemp.sdk.simulation import thaw
+        candidate = self.prepare()
+        docs = thaw(candidate.plan.content)
+        content = Content.from_dict(
+            docs, rules=authored_rules_for_document(docs))
+        project = GameProject.from_dict(
+            thaw(candidate.plan.project), content)
+        with TemporaryDirectory() as folder:
+            player = PlayerController(content, project,
+                                      candidate.campaign_id, folder)
+            state = player.new_game()
+            self.assertEqual(state["screen"], "campaign")
+            self.assertIn(candidate.missions[0],
+                          [mission["id"] for mission in state["missions"]]
+                          if isinstance(state["missions"], list)
+                          and state["missions"] and
+                          isinstance(state["missions"][0], dict)
+                          else candidate.missions)
+            player.start_mission(candidate.missions[0])
+            current = player.state()
+            self.assertEqual(current["screen"], "battle")
+            self.assertTrue(current["puzzle"]["enabled"])
+            player.save(1)
+            restored = PlayerController(content, project,
+                                        candidate.campaign_id, folder)
+            self.assertEqual(restored.load(1)["battle"], current["battle"])
+            self.assertEqual(restored.session.recording(),
+                             player.session.recording())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+
     def test_canonical_undo_redo_and_manual_content_save(self):
         candidate = self.prepare()
         self.assertEqual(self.session.snapshot().to_dict(), self.before)
