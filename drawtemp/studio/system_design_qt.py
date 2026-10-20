@@ -417,12 +417,12 @@ class SystemDesignerDialog(QDialog):
                 lines = [f"{category} · {ident}"]
                 lines.extend(f"{key}: {value}" for key, value
                              in sorted(item.items()) if key != "id")
-                self.inspector.setPlainText("\\n".join(lines))
+                self.inspector.setPlainText("\n".join(lines))
         else:
             source, target = selection[1]
             self.inspector.setPlainText(
                 "Liaison : " + source[1] + " → " + target[1] +
-                "\\nSupprimer la liaison (ports recette obligatoires).")
+                "\nSupprimer la liaison (ports recette obligatoires).")
         self.edit_selected.setEnabled(
             selection is not None and selection[0] == "node")
         self.unlink_selected.setEnabled(
