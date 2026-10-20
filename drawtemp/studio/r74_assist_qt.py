@@ -14,7 +14,7 @@ from PySide6.QtGui import QColor, QBrush, QPen
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QGraphicsScene,
     QGraphicsView, QGroupBox, QHBoxLayout, QLabel, QMessageBox,
-    QPlainTextEdit, QPushButton, QSpinBox, QTableWidget,
+    QLineEdit, QPlainTextEdit, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -23,6 +23,9 @@ from drawtemp.sdk.procgen import ProcGenError
 from .r74_assisted_dungeons import (
     AssistedDungeonController, DungeonAssistError, DungeonSuggestion,
     compare_dungeon_suggestions,
+)
+from .r74_physical_dungeons import (
+    prepare_physical_dungeons, apply_physical_dungeons,
 )
 
 
@@ -48,6 +51,7 @@ class R74DungeonAssistDialog(QDialog):
         self.pinned = None
         self._applied_revision = None
         self._undone_revision = None
+        self.physical_plan = None
 
         root = QVBoxLayout(self)
         warning = QLabel(
@@ -84,6 +88,11 @@ class R74DungeonAssistDialog(QDialog):
         ):
             form.addRow(text, widget)
         form.addRow("", self.locked_box)
+        self.physical_prefix = QLineEdit("r74")
+        self.physical_prefix.setObjectName("r74-physical-prefix")
+        self.physical_prefix.setAccessibleName("Préfixe des trois missions R27")
+        self.physical_prefix.setMaxLength(12)
+        form.addRow("Préfixe R27", self.physical_prefix)
         settings = QWidget()
         settings.setLayout(form)
         controls.addWidget(settings, 1)
@@ -138,6 +147,12 @@ class R74DungeonAssistDialog(QDialog):
         self.apply_button = QPushButton("Appliquer la sélection…")
         self.apply_button.setObjectName("r74-apply")
         self.apply_button.setEnabled(False)
+        self.physical_preview_button = QPushButton("Préparer 3 cartes R27")
+        self.physical_preview_button.setObjectName("r74-physical-preview")
+        self.physical_preview_button.setEnabled(False)
+        self.physical_apply_button = QPushButton("Créer les 3 cartes…")
+        self.physical_apply_button.setObjectName("r74-physical-apply")
+        self.physical_apply_button.setEnabled(False)
         self.undo_button = QPushButton("Annuler l'application")
         self.undo_button.setObjectName("r74-undo")
         self.undo_button.setEnabled(False)
@@ -146,7 +161,8 @@ class R74DungeonAssistDialog(QDialog):
         self.redo_button.setEnabled(False)
         close_button = QPushButton("Fermer")
         for widget in (self.preview_button, self.pin_button, self.reject_button,
-                       self.apply_button, self.undo_button, self.redo_button,
+                       self.apply_button, self.physical_preview_button,
+                       self.physical_apply_button, self.undo_button, self.redo_button,
                        close_button):
             actions.addWidget(widget)
         root.addLayout(actions)
@@ -155,6 +171,9 @@ class R74DungeonAssistDialog(QDialog):
         self.pin_button.clicked.connect(self.pin_selected)
         self.reject_button.clicked.connect(self.reject_proposals)
         self.apply_button.clicked.connect(self.apply_selected)
+        self.physical_preview_button.clicked.connect(self.prepare_physical_generation)
+        self.physical_apply_button.clicked.connect(self.apply_physical_generation)
+        self.physical_prefix.textChanged.connect(self._invalidate_physical)
         self.undo_button.clicked.connect(self.undo_application)
         self.redo_button.clicked.connect(self.redo_application)
         close_button.clicked.connect(self.close)
@@ -171,9 +190,15 @@ class R74DungeonAssistDialog(QDialog):
     def _adjust_branch_limit(self, *_):
         self.branches_spin.setMaximum(min(5, self.rooms_spin.value() - 3))
 
+    def _invalidate_physical(self, *_):
+        self.physical_plan = None
+        self.physical_apply_button.setEnabled(False)
+
     def _clear(self):
         self.proposals = ()
         self.controller.invalidate()
+        self._invalidate_physical()
+        self.physical_preview_button.setEnabled(False)
         self.variant_table.setRowCount(0)
         self.pin_button.setEnabled(False)
         self.apply_button.setEnabled(False)
@@ -203,6 +228,7 @@ class R74DungeonAssistDialog(QDialog):
             self.status.setText("Génération refusée : " + str(exc))
             return ()
         self.proposals = proposals
+        self.physical_preview_button.setEnabled(len(proposals) == 3)
         self.variant_table.setRowCount(len(proposals))
         for i, proposal in enumerate(proposals):
             fields = (str(proposal.seed), str(len(proposal.layout["rooms"])),
@@ -287,6 +313,61 @@ class R74DungeonAssistDialog(QDialog):
             label.setBrush(QBrush(QColor("#171717")))
             label.setPos(x + 5, y + 15)
         scene.setSceneRect(scene.itemsBoundingRect())
+
+    def prepare_physical_generation(self):
+        """Dry-run three actual R27 missions; the live editor remains untouched."""
+        self._invalidate_physical()
+        if not self.physical_preview_button.isEnabled() or len(self.proposals) != 3:
+            return None
+        try:
+            plan = prepare_physical_dungeons(
+                self.controller, self.proposals,
+                prefix=self.physical_prefix.text().strip())
+        except (DungeonAssistError, ProcGenError, AuthoringError,
+                ValueError, OSError) as exc:
+            self.status.setText("Cartes physiques refusées : " + str(exc))
+            return None
+        self.physical_plan = plan
+        self.physical_apply_button.setEnabled(True)
+        self.diff_report.setPlainText(json.dumps(
+            plan.to_dict(), ensure_ascii=False, indent=2))
+        self.status.setText(
+            "3 missions R27 et 3 témoins clé→porte→objectif préparés dans "
+            "une session isolée. Aucun fichier ni projet actif modifié ; "
+            "le graphe R34 complet n'est pas instancié.")
+        return plan
+
+    def apply_physical_generation(self):
+        """Separate modal consent for a single, 3-mission R1 transaction."""
+        if self.physical_plan is None or not self.physical_apply_button.isEnabled():
+            return None
+        decision = QMessageBox.question(
+            self, "Confirmer les trois missions R74",
+            "Ajouter 3 cartes R27, leurs clés/portes et une campagne au projet ? "
+            "Une transaction annulable, sans sauvegarde disque. "
+            "La preuve exclut IA/combat et export Player.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if decision != QMessageBox.Yes:
+            self.status.setText("Création physique refusée. Aucun changement.")
+            return None
+        plan = self.physical_plan
+        self._invalidate_physical()
+        try:
+            transition = apply_physical_dungeons(self.controller, plan)
+        except (DungeonAssistError, ProcGenError, AuthoringError,
+                ValueError, OSError) as exc:
+            self._clear()
+            self.status.setText("Création physique bloquée : " + str(exc))
+            return None
+        self._applied_revision = transition.snapshot.revision
+        self._undone_revision = None
+        self._clear()
+        self.undo_button.setEnabled(transition.snapshot.can_undo)
+        self.redo_button.setEnabled(False)
+        self.status.setText(
+            "Trois cartes R27 créées en une transaction. "
+            "Save/reload Player et certification export restent à prouver.")
+        return transition
 
     def apply_selected(self):
         proposal = self._selected()
