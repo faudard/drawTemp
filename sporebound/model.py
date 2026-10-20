@@ -301,6 +301,9 @@ class Content:
             integer(m.target_ticks, 1, 100000, "target_ticks")
             integer(m.reward, 0, 1000000, "reward")
             objective = rules.objectives.get(m.objective)
+            from .logic_vertical_objective import OBJECTIVE as R31H_OBJECTIVE, validate_slice_mission
+            if m.objective == R31H_OBJECTIVE:
+                validate_slice_mission(m)
             require(not objective.needs_goal or bool(m.goal), "Objective needs goal cells")
             require(not objective.needs_relic or m.relic is not None, "Objective needs a relic")
             if m.relic is not None:
