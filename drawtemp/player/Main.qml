@@ -24,6 +24,12 @@ ApplicationWindow {
     property bool reduceFlashes: playerData.accessibility.reduce_flashes
     property bool highContrast: playerData.settings.display.high_contrast
     property bool authoredInventoryOpen: false
+    property bool authoredActionHudVisible: true
+    property var authoredActionHudPayload: {
+        var revision = playerData.revision
+        if (playerData.screen !== "platform") return ({ "available": false })
+        return player.authoredActionHud(Math.max(1, Math.round(width * 0.31)))
+    }
     property var authoredDialoguePayload: {
         var screen = playerData.screen
         var revision = playerData.revision
@@ -33,14 +39,15 @@ ApplicationWindow {
     property var authoredInventoryPayload: {
         var screen = playerData.screen
         var revision = playerData.revision
-        if (screen !== "battle") return ({ "available": false })
+        if (screen !== "battle" && screen !== "campaign") return ({ "available": false })
         return player.authoredScreen("INVENTORY", Math.max(1, Math.round(width * 0.65)))
     }
     property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
                                recoveryPopup.opened || recoveryErrorPopup.opened || authoredInventoryOpen
     function binding(action) { return playerData.settings.bindings[action] || "" }
     onPlayerDataChanged: {
-        if (playerData.screen !== "battle") authoredInventoryOpen = false
+        if (playerData.screen !== "battle" && playerData.screen !== "campaign")
+            authoredInventoryOpen = false
         if (smokeMode) return
         if (playerData.settings.display.fullscreen && visibility !== Window.FullScreen)
             showFullScreen()
@@ -305,6 +312,42 @@ ApplicationWindow {
         }
     }
 
+    // R51.C3 — authored buttons emit exactly one revisioned R32 frame.
+    // The native PlatformViewport keeps the 60 Hz continuous physics clock.
+    R51Layout {
+        id: authoredActionHud
+        objectName: "r51-player-action-hud"
+        z: 22
+        width: Math.min(420, root.width * 0.32)
+        height: Math.min(230, root.height * 0.27)
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        visible: root.playerData.screen === "platform" &&
+                 root.authoredActionHudPayload.available === true &&
+                 root.authoredActionHudVisible
+        projection: root.authoredActionHudPayload.projection || ({})
+        allowActions: !root.inputLocked
+        permittedActions: root.authoredActionHudPayload.permitted_actions || []
+        onIntent: function(action) {
+            if (!root.inputLocked &&
+                (root.authoredActionHudPayload.permitted_actions || []).indexOf(action) !== -1)
+                player.authoredActionIntent(action)
+        }
+    }
+    Button {
+        objectName: "r51-action-hud-toggle"
+        z: 23
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 16
+        visible: root.playerData.screen === "platform" &&
+                 root.authoredActionHudPayload.available === true
+        text: root.authoredActionHudVisible ? "Masquer HUD action" : "Afficher HUD action"
+        enabled: !root.inputLocked
+        onClicked: root.authoredActionHudVisible = !root.authoredActionHudVisible
+    }
+
     // R51.C2: real tactical inventory items, delegated to the canonical
     // PlayerController.use_item; the author controls the surrounding UI.
     Button {
@@ -313,10 +356,12 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.margins: 15
-        visible: root.playerData.screen === "battle" &&
+        visible: (root.playerData.screen === "battle" ||
+                  root.playerData.screen === "campaign") &&
                  root.authoredInventoryPayload.available === true &&
                  !root.authoredInventoryOpen
-        text: "Sac personnalisé"
+        text: root.playerData.screen === "campaign" ?
+              "Équipement personnalisé" : "Sac personnalisé"
         enabled: !root.inputLocked
         onClicked: root.authoredInventoryOpen = true
     }
@@ -355,7 +400,8 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: "Objets réellement disponibles"
+                    text: root.authoredInventoryPayload.context === "campaign" ?
+                          "Équipement de campagne · Jeanne" : "Objets réellement disponibles"
                     color: root.highContrast ? "#ffffff" : root.ivory
                     Accessible.name: text
                 }
@@ -378,6 +424,35 @@ ApplicationWindow {
                                     player.authoredInventoryUse(modelData.id)
                                     root.authoredInventoryOpen = false
                                 }
+                            }
+                        }
+                        Repeater {
+                            model: root.authoredInventoryPayload.context === "campaign" ?
+                                   (root.authoredInventoryPayload.items || []) : []
+                            Button {
+                                objectName: "r51-equip-" + modelData.id
+                                Layout.fillWidth: true
+                                text: "Équiper " + modelData.name +
+                                      " (" + modelData.slot + " ×" + modelData.count + ")"
+                                enabled: root.authoredInventoryPayload.can_equip &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: player.authoredCampaignEquip(modelData.id)
+                            }
+                        }
+                        Repeater {
+                            model: root.authoredInventoryPayload.context === "campaign" ?
+                                   ["weapon", "armor", "accessory"] : []
+                            Button {
+                                objectName: "r51-unequip-" + modelData
+                                Layout.fillWidth: true
+                                property string equippedId:
+                                    (root.authoredInventoryPayload.equipped || {})[modelData] || ""
+                                text: "Retirer " + modelData + " : " + equippedId
+                                enabled: equippedId.length > 0 &&
+                                         !pausePopup.opened && !optionsPopup.opened
+                                Accessible.name: text
+                                onClicked: player.authoredCampaignUnequip(modelData)
                             }
                         }
                     }
