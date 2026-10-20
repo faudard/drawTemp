@@ -208,6 +208,15 @@ class PreflightQtTests(unittest.TestCase):
             self.assertIsNotNone(dialog.report)
             self.assertTrue(dialog.report["passed"], dialog.report["issues"])
             self.assertEqual(session.snapshot().to_dict(), before)
+            original_revision = dialog.report["revision"]
+            session.apply(session.preview_pair(
+                lambda c, p: (c, dict(p, title="Preflight updated")),
+                kind="test.preflight.nonmodal"))
+            dialog._refresh_if_changed()
+            self.assertEqual(dialog.report["revision"], original_revision + 1)
+            self.assertTrue(dialog.report["passed"], dialog.report["issues"])
+            self.assertEqual(session.snapshot().to_dict()["project"]["title"],
+                             "Preflight updated")
             dialog.reject()
             owner.close()
 
