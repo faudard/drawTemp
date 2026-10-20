@@ -99,11 +99,16 @@ def village_view(session, project, progress, exploration, revision):
             })
     system_envelope = extensions.get(SYSTEMS_EXTENSION)
     if system_envelope:
+        stocks = thaw(session.system_state(expected_revision=revision))["stocks"]
+        limits = {row["id"]: row["capacity"] for row in
+                  system_envelope["data"]["resources"]}
         state["merchants"] = [
             {"id": row["id"], "item": row["resource"],
              "sell_price": row["sell_price"],
              "owned": inventory.get(row["resource"], 0),
-             "can_sell": inventory.get(row["resource"], 0) > 0}
+             "stock": stocks[row["resource"]],
+             "can_sell": (inventory.get(row["resource"], 0) > 0
+                          and stocks[row["resource"]] < limits[row["resource"]])}
             for row in system_envelope["data"]["merchants"]
             if row["scene"] == scene]
     return state
