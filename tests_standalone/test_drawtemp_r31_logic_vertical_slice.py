@@ -239,6 +239,31 @@ class ReferenceJourneyTests(unittest.TestCase):
                 checkpoint_slot.load().recording(), game.content, game.project)
             self.assertEqual(len(checkpoint_game.progress.story_history), 2)
 
+    def test_invalid_quest_objective_cannot_lose_its_chest_contract(self):
+        from sporebound.model import Content, RuleError
+        with TemporaryDirectory() as folder:
+            path, session = author(folder)
+            authored = session.snapshot().to_dict()["content"]
+            mission = next(row for row in authored["missions"]
+                           if row["id"] == MISSION)
+            bad = deepcopy(authored)
+            target = next(row for row in bad["missions"]
+                          if row["id"] == MISSION)
+            target["objects"] = [row for row in target["objects"]
+                                  if row["id"] != CHEST]
+            with self.assertRaises(RuleError):
+                Content.from_dict(bad)
+            bad = deepcopy(authored)
+            target = next(row for row in bad["missions"]
+                          if row["id"] == MISSION)
+            next(row for row in target["objects"]
+                 if row["id"] == CHEST)["used"] = True
+            with self.assertRaises(RuleError):
+                Content.from_dict(bad)
+            self.assertEqual(
+                next(row for row in mission["objects"]
+                     if row["id"] == CHEST).get("used", False), False)
+
     def test_objective_rejects_shortcut_to_exit_without_loot(self):
         from sporebound.engine import Battle
         from sporebound.logic_vertical_objective import achieved
