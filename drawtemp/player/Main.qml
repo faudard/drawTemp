@@ -615,7 +615,7 @@ ApplicationWindow {
         }
 
         RowLayout {
-            visible: ["exploration", "battle", "result"].indexOf(root.playerData.screen) !== -1
+            visible: ["exploration", "platform", "battle", "result"].indexOf(root.playerData.screen) !== -1
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 18
@@ -628,6 +628,7 @@ ApplicationWindow {
                 clip: true
                 TacticalBoard {
                     id: board
+                    visible: root.playerData.screen !== "platform"
                     anchors.fill: parent
                     anchors.margins: 8
                     battle: root.playerData.battle
@@ -648,7 +649,24 @@ ApplicationWindow {
                             player.selectCell(x, y)
                     }
                 }
+                PlatformViewport {
+                    id: platformViewport
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    visible: root.playerData.screen === "platform"
+                    platform: root.playerData.platform || ({})
+                    smokeMode: root.smokeMode
+                    suspended: root.inputLocked
+                    onPulse: function(move, jump, attack) {
+                        player.platformPulse(move, jump, attack)
+                    }
+                    onTravel: function(linkId) {
+                        player.platformTravel(linkId)
+                    }
+                    onResetClock: player.platformClockReset()
+                }
                 Rectangle {
+                    visible: root.playerData.screen !== "platform"
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.margins: 13
@@ -678,7 +696,9 @@ ApplicationWindow {
                         width: 282
                         spacing: 14
                         Label {
-                            text: root.playerData.screen === "exploration" ?
+                            text: root.playerData.screen === "platform" ?
+                                  (root.playerData.exploration.title || "Plateformes") :
+                                  root.playerData.screen === "exploration" ?
                                   (root.playerData.exploration.title || "Exploration") :
                                   (root.playerData.battle.mission_id || "Combat")
                             color: root.gold
@@ -703,7 +723,11 @@ ApplicationWindow {
                             onActivated: player.previewOutfit(renderer.characterId, currentText)
                         }
                         Label {
-                            text: root.playerData.screen === "exploration" ?
+                            text: root.playerData.screen === "platform" ?
+                                  "Plateformes 60 Hz : A/D ou flèches, Espace pour sauter, " +
+                                  "F pour attaquer le boss, Entrée sur un portail. " +
+                                  "Ctrl+S pour sauvegarder. Le double-saut exige la plume." :
+                                  root.playerData.screen === "exploration" ?
                                   "Déplacement : " + root.binding("explore_up") + "/" +
                                   root.binding("explore_left") + "/" +
                                   root.binding("explore_down") + "/" +
