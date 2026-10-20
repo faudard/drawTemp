@@ -14,7 +14,7 @@ from drawtemp.sdk.r38_refactor import (
 class RefactorDialog(QDialog):
     """No writes before explicit apply; uses the originating R1 revision."""
 
-    def __init__(self, owner):
+    def __init__(self, owner, initial=None):
         super().__init__(owner)
         self.owner = owner
         self.session = owner.session
@@ -75,6 +75,17 @@ class RefactorDialog(QDialog):
         self.old_id.currentIndexChanged.connect(self._invalidate)
         self.new_id.textChanged.connect(self._invalidate)
         self._refresh_missions()
+        if initial is not None and len(initial) == 3:
+            family, mid, identifier = initial
+            family_at = self.family.findData(family)
+            mission_at = self.mission.findData(mid)
+            if family_at >= 0 and mission_at >= 0:
+                self.family.setCurrentIndex(family_at)
+                self.mission.setCurrentIndex(mission_at)
+                original_at = self.old_id.findData(identifier)
+                if original_at >= 0:
+                    self.old_id.setCurrentIndex(original_at)
+                    self.new_id.setFocus()
 
     def _invalidate(self, *_args):
         self.review = None
