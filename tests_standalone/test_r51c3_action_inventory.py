@@ -129,8 +129,6 @@ class R51C3PlayerTests(unittest.TestCase):
     def test_typed_r32_binding_rejects_invalid_injection(self):
         content, project = create_starter_pair("r40-metroidvania")
         with_layouts(content, project)
-        player = PlayerController(content, project, "main", "/tmp/r51-c3-unused")
-        # No file is written because we only use the project schema and a GameSession.
         from sporebound.game_session import GameSession
         game = GameSession.new(content, project, "main", seed=3)
         layouts = catalog_from_project(project)
