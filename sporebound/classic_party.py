@@ -34,7 +34,7 @@ def validate_classic_party(data, *, content, project):
     are errors, not migrations. Legacy projects do not need this extension.
     """
     require(type(data) is dict and {"version", "campaigns"} <= set(data)
-            and set(data) <= {"version", "campaigns", "encounters"}
+            and set(data) <= {"version", "campaigns", "encounters", "quest"}
             and type(data["version"]) is int and data["version"] == VERSION,
             "Unsupported R41 party schema")
     campaigns = data["campaigns"]
@@ -69,6 +69,35 @@ def validate_classic_party(data, *, content, project):
     if "encounters" in data:
         from .classic_encounter import validate_encounters
         validate_encounters(data["encounters"], content=content, project=project)
+    if "quest" in data:
+        # A single authored vertical-slice objective is derived exclusively
+        # from Campaign.story_flags; it does not create another quest ledger.
+        from .narrative import _id
+        quest = data["quest"]
+        catalogue = data.get("encounters", {})
+        require(type(quest) is dict and set(quest) == {
+            "title", "encounters", "return_scene", "reward_gold",
+            "reward_item", "reward_quantity"},
+            "Invalid R41 template quest schema")
+        require(type(quest["title"]) is str
+                and 1 <= len(quest["title"].strip()) <= 120,
+                "R41 quest title is required")
+        require(type(quest["encounters"]) is list
+                and 1 <= len(quest["encounters"]) <= 8
+                and len(set(quest["encounters"])) == len(quest["encounters"])
+                and all(type(eid) is str and eid in catalogue
+                        for eid in quest["encounters"]),
+                "R41 quest must reference unique authored encounters")
+        require(type(quest["return_scene"]) is str
+                and quest["return_scene"] in project.exploration
+                and type(quest["reward_gold"]) is int
+                and 0 <= quest["reward_gold"] <= 10000
+                and quest["reward_item"] == "potion"
+                and type(quest["reward_quantity"]) is int
+                and 0 <= quest["reward_quantity"] <= 10,
+                "Invalid R41 quest return/reward")
+        for eid in quest["encounters"]:
+            _id("r41_" + eid, "R41 story flag")
     return deepcopy(data)
 
 
