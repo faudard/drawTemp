@@ -102,7 +102,10 @@ class R75NarrativeTests(unittest.TestCase):
             self.controller.preview(bad)
         self.assertEqual(err.exception.code, "unreachable_ending")
         bad = deepcopy(self.proposal)
-        bad["scenes"][1]["choices"][0]["when"] = {"flag": "unused", "eq": True}
+        bad["scenes"][0]["choices"].append({
+            "id": "dead", "label": "Impossible",
+            "when": {"flag": "unused", "eq": True},
+            "next_scene": "r75_decision", "effects": []})
         with self.assertRaises(NarrativeAssistError) as err:
             self.controller.preview(bad)
         self.assertEqual(err.exception.code, "unreachable_choice")
