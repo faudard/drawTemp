@@ -193,6 +193,30 @@ class Simulation:
         return self._apply("living_world_advance", ticks,
                            expected_revision=expected_revision)
 
+    def living_world_trade(self, shop_id, item_id, action, quantity,
+                           transaction_id, *, expected_revision=None):
+        """R45.C: trade through canonical R35 inventory, stock and receipt."""
+        return self._apply("living_world_trade", shop_id, item_id, action,
+                           quantity, transaction_id,
+                           expected_revision=expected_revision)
+
+    def living_world_craft(self, recipe_id, quantity, transaction_id,
+                           *, expected_revision=None):
+        """R45.C: craft through canonical R45.A recipes and receipt."""
+        return self._apply("living_world_craft", recipe_id, quantity,
+                           transaction_id, expected_revision=expected_revision)
+
+    def living_world_finish_daily_quest(self, quest_id, *,
+                                      expected_revision=None):
+        return self._apply("living_world_finish_daily_quest", quest_id,
+                           expected_revision=expected_revision)
+
+    def living_world_deliver_daily_quest(self, quest_id, *,
+                                        expected_revision=None):
+        """R45.C: consume the daily delivery and award it in one commit."""
+        return self._apply("living_world_deliver_daily_quest", quest_id,
+                           expected_revision=expected_revision)
+
     def roguelite_state(self, *, expected_revision=None):
         """Read-only deterministic R34 run view (not an alternate save schema)."""
         self._check_revision(expected_revision, 'roguelite_state')

@@ -111,6 +111,8 @@ class GameSession:
         # R35.A: optional clock owned by this session, not by the renderer.
         from .living_world import EXTENSION, LivingWorld
         spec = self.project.extensions.get(EXTENSION)
+        if spec is not None:
+            self.progress.gold = spec["data"].get("starting_gold", 0)
         self._living_world = (
             LivingWorld(spec["data"],
                         set(self.project.exploration) | set(self.content.missions),
@@ -303,6 +305,17 @@ class GameSession:
                 and not self.progress.story_pending,
                 "Daily quests require an active exploration session")
         return self._living_world.finish_daily_quest(quest_id, self.progress)
+
+    def living_world_deliver_daily_quest(self, quest_id):
+        """Consume authored R45 goods and award the R35 quest once per day."""
+        require(self._living_world is not None
+                and self.scene_router.enabled
+                and self.route_scene in self.project.exploration
+                and self.mode == "campaign"
+                and not self.progress.story_pending
+                and not self.tactical_story_pending,
+                "R45 delivery requires active exploration")
+        return self._living_world.deliver_daily_quest(quest_id, self.progress)
 
     def living_world_timeline(self, *, scene=None, limit=512):
         """Read-only R35 authoring diagnostics, never advances simulation."""

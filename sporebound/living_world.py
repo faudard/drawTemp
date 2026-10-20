@@ -30,7 +30,8 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
     required = {"version", "start_minute", "ticks_per_minute",
                 "clock_policy", "npcs"}
     require(type(spec) is dict and required <= set(spec)
-            <= required | {"factions", "daily_quests", "shops", "transfers", "recipes"},
+            <= required | {"factions", "daily_quests", "shops", "transfers", "recipes",
+                           "starting_gold"},
             "Malformed living-world document")
     require(type(spec["version"]) is int and spec["version"] == VERSION,
             "Unsupported living-world version; explicit migration required")
@@ -42,6 +43,9 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
             "Living-world ticks_per_minute must be in 1..3600")
     require(spec["clock_policy"] == "exploration_only",
             "Only exploration_only living-world clock policy is supported")
+    require(type(spec.get("starting_gold", 0)) is int
+            and 0 <= spec.get("starting_gold", 0) <= 100000,
+            "Invalid R45 starting gold")
     require(type(spec["npcs"]) is list and len(spec["npcs"]) <= MAX_NPCS,
             "Too many living-world NPCs")
     ids = set()
@@ -95,10 +99,12 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
             "Invalid living-world daily quests")
     quest_ids = set()
     for quest in quests:
-        require(type(quest) is dict and set(quest) ==
-                {"id", "faction", "min_reputation", "start_minute",
-                 "end_minute", "completion_flag", "reward_gold",
-                 "reputation_delta"},
+        common = {"id", "faction", "min_reputation", "start_minute",
+                  "end_minute", "completion_flag", "reward_gold",
+                  "reputation_delta"}
+        delivery = {"delivery_item", "delivery_quantity"}
+        require(type(quest) is dict and
+                (set(quest) == common or set(quest) == common | delivery),
                 "Malformed daily quest")
         require(_identifier(quest["id"]) and quest["id"] not in quest_ids
                 and quest["faction"] in faction_ids
@@ -115,6 +121,15 @@ def validate_living_world(spec, scene_ids, *, exploration=None, item_ids=None):
                 and type(quest["reputation_delta"]) is int
                 and -100 <= quest["reputation_delta"] <= 100,
                 "Daily quest has invalid hours or rewards")
+        if "delivery_item" in quest:
+            known = set(item_ids or ())
+            known.update(item["id"] for shop in spec.get("shops", [])
+                         for item in shop.get("items", []))
+            require(_identifier(quest["delivery_item"])
+                    and quest["delivery_item"] in known
+                    and type(quest["delivery_quantity"]) is int
+                    and 1 <= quest["delivery_quantity"] <= 99,
+                    "R45 delivery requires a known item and bounded quantity")
     from .living_world_commerce import validate_shops
     validate_shops(spec, scene_ids)
     from .living_world_crafting import validate_recipes
@@ -294,6 +309,8 @@ class LivingWorld:
         quest = self._quest(quest_id)
         if self.claimed.get(quest_id) == self.day:
             return False
+        require("delivery_item" not in quest,
+                "R45 delivery quests must consume the required item")
         require(self.quest_ready(quest_id, progress.story_flags),
                 "Daily quest is not completed for the current day")
         reputation = self.reputation[quest["faction"]]
@@ -306,6 +323,39 @@ class LivingWorld:
         # All potential failures are checked before any state is committed.
         progress.gold += quest["reward_gold"]
         self.reputation[quest["faction"]] = reputation + delta
+        self.claimed[quest_id] = self.day
+        return True
+
+    def deliver_daily_quest(self, quest_id, progress):
+        """R45.C: one daily delivery, consumed and rewarded atomically.
+
+        No independent item ledger: Campaign.inventory/gold and the existing
+        R35 quest day marker are the only persisted authorities.
+        """
+        quest = self._quest(quest_id)
+        require("delivery_item" in quest,
+                "Daily quest has no R45 item delivery requirement")
+        if self.claimed.get(quest_id) == self.day:
+            return False
+        item = quest["delivery_item"]
+        count = quest["delivery_quantity"]
+        available = progress.inventory.get(item, 0)
+        before_rep = self.reputation[quest["faction"]]
+        gold = progress.gold
+        require(quest["start_minute"] <= self.minute < quest["end_minute"]
+                and before_rep >= quest["min_reputation"],
+                "R45 delivery is outside the daily quest window")
+        require(type(available) is int and count <= available <= 2 ** 53 - 1,
+                "Insufficient delivery goods")
+        require(type(gold) is int and 0 <= gold
+                and gold + quest["reward_gold"] <= 2 ** 53 - 1
+                and -100 <= before_rep + quest["reputation_delta"] <= 100,
+                "R45 delivery reward exceeds canonical campaign limits")
+        # All requirements have been checked. No operations below can fail.
+        progress.inventory[item] = available - count
+        progress.gold = gold + quest["reward_gold"]
+        self.reputation[quest["faction"]] = before_rep + quest["reputation_delta"]
+        progress.story_flags[quest["completion_flag"]] = self.day
         self.claimed[quest_id] = self.day
         return True
 
@@ -343,7 +393,13 @@ class LivingWorld:
             data["daily_quests"] = [
                 {"id": q["id"],
                  "claimed_today": self.claimed.get(q["id"]) == self.day,
-                 "ready": self.quest_ready(q["id"], story_flags)}
+                 "ready": self.quest_ready(q["id"], story_flags),
+                 **({"delivery_item": q["delivery_item"],
+                     "delivery_quantity": q["delivery_quantity"],
+                     "delivery_open": (
+                         q["start_minute"] <= self.minute < q["end_minute"]
+                         and self.reputation[q["faction"]] >= q["min_reputation"])}
+                    if "delivery_item" in q else {})}
                 for q in self.spec["daily_quests"]]
         if "shops" in self.spec:
             from .living_world_commerce import listing

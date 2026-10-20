@@ -33,6 +33,8 @@ on:
       - 'drawtemp/studio/living_economy_qt.py'
       - 'tests_standalone/test_r45_economy_authoring.py'
       - 'tests_standalone/test_r45_economy_qt.py'
+      - 'drawtemp/sdk/r45_market_village.py'
+      - 'tests_standalone/test_r45_market_village.py'
       - '.github/workflows/r35-living-world.yml'
   push:
     branches: [master]
@@ -67,6 +69,8 @@ on:
       - 'drawtemp/studio/living_economy_qt.py'
       - 'tests_standalone/test_r45_economy_authoring.py'
       - 'tests_standalone/test_r45_economy_qt.py'
+      - 'drawtemp/sdk/r45_market_village.py'
+      - 'tests_standalone/test_r45_market_village.py'
   workflow_dispatch:
 
 permissions:
@@ -101,6 +105,8 @@ jobs:
         run: python -m unittest tests_standalone.test_r45_crafting -v
       - name: R45.B visual draft revision guard and undo history
         run: python -m unittest tests_standalone.test_r45_economy_authoring -v
+      - name: R45.C seven-day village Player save, economy and anti-duplication
+        run: python -m unittest tests_standalone.test_r45_market_village -v
       - name: R35.C1 village schedule editing and world timeline
         run: python -m unittest tests_standalone.test_r35_village -v
       - name: R35.D1 spatial schedule and off-focus pathfinding
@@ -124,3 +130,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest tests_standalone.test_r35_village_qt tests_standalone.test_r35_navigation_qt tests_standalone.test_r35_transfers_qt tests_standalone.test_r45_economy_qt -v
+      - name: R45.C Qt Quick market QML real-scene smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m drawtemp.sdk.r45_market_village --output .r45-market-smoke
+          python -m drawtemp.player.qt_app --smoke --smoke-scene exploration --content .r45-market-smoke/market-r45.json --project .r45-market-smoke/market-r45.game.json --campaign main
