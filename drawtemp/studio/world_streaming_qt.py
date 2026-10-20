@@ -133,7 +133,7 @@ class WorldStreamingDialog(QDialog):
         root.addLayout(footer)
 
         self.timer = QTimer(self)
-        self.timer.setInterval(40)
+        self.timer.setInterval(80)
         self.timer.timeout.connect(self._poll)
         self.reload_from_project()
 
@@ -164,13 +164,15 @@ class WorldStreamingDialog(QDialog):
         if self.document is None:
             return
         # Trusted detached R25 stage geometry, never external files.
-        stages = deepcopy(self._project["exploration"])
+        stages = {
+            ident: (stage["width"], stage["height"],
+                    len(stage.get("blocked", [])))
+            for ident, stage in self._project["exploration"].items()}
 
         def loader(cell):
-            stage = stages[cell["scene"]]
+            width, height, blocked = stages[cell["scene"]]
             return {"id": cell["id"], "scene": cell["scene"],
-                    "size": [stage["width"], stage["height"]],
-                    "blocked": len(stage.get("blocked", []))}
+                    "size": [width, height], "blocked": blocked}
 
         self.cache = WorldCellCache(self.document, loader, workers=2)
 
@@ -352,18 +354,22 @@ class WorldStreamingDialog(QDialog):
         if self.cache is None:
             self.timer.stop()
             return
+        changed = False
         for token in list(self._tickets):
             try:
                 result = self.cache.resolve(token, timeout=0)
             except Exception as exc:
                 self._tickets.pop(token, None)
                 self.diagnostics.setPlainText(str(exc))
+                changed = True
                 continue
             if result is not None:
                 self._tickets.pop(token, None)
+                changed = True
         if not self._tickets:
             self.timer.stop()
-        self.render()
+        if changed:
+            self.render()
 
     def preview_changes(self):
         if self.document is None:
