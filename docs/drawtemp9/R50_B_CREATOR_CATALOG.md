@@ -122,13 +122,41 @@ Ce n'est pas le Player action-aventure complet.
   poursuit jusqu'à la défaite de l'ennemi puis reprend encore la partie.
   Une commande hors ordre et une altération du journal sont refusées.
 
-**Limite volontaire :** les pièces produites par R26 restent pour
-l'instant dans l'inventaire *local de l'ActionRuntime* ; elles ne sont pas
-encore créditées à la campagne et les scènes R26 ne quittent pas leur
-combat par route. La conversion de ces récompenses et le retour action→CT
-nécessitent une décision transactionnelle explicite et d'autres tests.
-L'entrée de genre `action_adventure` reste désactivée. Les contrôles
-onscreen/manette, exports tri-OS et la certification R50.C manquent.
+### Clôture R26, or de campagne et transition CT (tranche suivante)
+
+Le prototype passe maintenant par `route_action_settle("after_action_to_ct")`,
+seulement si **tous les ennemis sont vaincus et que le héros est vivant**.
+L'inventaire R26 ne peut contenir que des pièces gagnées une fois par ennemi :
+les objets arbitraires ou d'autres récompenses ne sont pas convertis.
+
+La transaction unique `PlayerController._apply` effectue dans l'ordre :
+validation de la victoire R26 et du lien R25, attribution des pièces dans
+`Campaign.gold`, enregistrement d'un marqueur et de son montant dans
+`Campaign.story_flags`, archivage du **replay R26 intégral** dans
+`scene_action_history`, démarrage de la vraie mission CT, puis sauvegarde.
+Une exception restaure l'état antérieur ; aucun paiement partiel ne subsiste.
+
+À chaque lecture de checkpoint, le validateur `action_settlement` rejoue
+la victoire avec la scène publiée, vérifie les pièces, les marqueurs, le
+caractère unique de la scène et la route/historique utilisés. Revenir
+ensuite dans cette scène ne permet pas de redémarrer la récompense.
+L'historique R26 est borné à 32 scènes et strictement opt-in ; les
+sauvegardes historiques n'acquièrent pas de champ supplémentaire.
+
+**Limite de confiance :** le ledger prouve l'origine et le caractère
+unique de *l'attribution R26*, mais ne remplace pas un audit exhaustif
+de tous les autres flux économiques qui peuvent modifier l'or de campagne
+(achats, missions, etc.). Le moteur ne prétend pas fournir une protection
+cryptographique contre un utilisateur capable de réécrire l'ensemble
+des sauvegardes et de recalculer tous leurs digests.
+
+L'entrée complète `action_adventure` reste bloquée : pas encore de rendu
+Player onscreen, contrôles manette, portail physique, release bundle ni
+certification R50.C.
+
+```bash
+python -m unittest -v tests_standalone.test_r50b_action tests_standalone.test_action_runtime_r26
+```
 
 ```bash
 python -m unittest -v tests_standalone.test_r50b_action tests_standalone.test_action_runtime_r26
