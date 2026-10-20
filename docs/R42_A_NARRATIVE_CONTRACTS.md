@@ -193,6 +193,12 @@ QT_QPA_PLATFORM=offscreen \
   python -m unittest tests_standalone.test_r42_narrative_qt -v
 ```
 
-**Restant :** inspection ergonomique des quêtes à plusieurs actes, diagnostics
-de branches mortes, localisation et rendu de vrais personnages, preuve de
-toutes les trois fins dans le vertical slice R42.C et CI réelle.
+**R42.C1 livré en code :** `drawtemp.sdk.r42_captain_slice`
+et `drawtemp.sdk.r42_reachability` ajoutent une histoire jouable à trois
+fins, une quête conditionnelle, deux scènes partagées, et une recherche
+bornée de routes impossibles. L'atelier Qt expose le modèle et l'audit.
+Voir [R42.C — Vertical Slice « La loyauté du capitaine »](R42_C_CAPTAIN_VERTICAL_SLICE.md).
+
+**Restant :** vraies quêtes tactiques multi-actes, localisation et rendu
+de personnages, tests sur Player installé/onscreen, export et CI réelle.
+Le code R42.C1 ne constitue pas un gate R42.C certifié.
