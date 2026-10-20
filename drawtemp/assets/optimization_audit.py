@@ -29,17 +29,13 @@ MAX_PNG_DIMENSION = 8192
 CHUNK_BYTES = 1024 * 1024
 
 
-def _check_physical_file(registry: AssetRegistry, root: Path, relative: str) -> Path:
+def _check_physical_file(registry: AssetRegistry, root: Path, relative: str, asset_id: str) -> Path:
     """Refuse symlinks (even intra-root) and ask the canonical resolver to validate."""
     current = root
     for part in relative.split("/"):
         current = current / part
         if current.is_symlink():
             raise ValueError("symbolic_link")
-    asset_id = next(
-        entry["id"] for entry in registry.to_dict()["entries"]
-        if entry["kind"] != "animation" and entry["path"] == relative
-    )
     path = registry.resolve(asset_id, root)
     if not path.is_relative_to(root):
         raise ValueError("path_escape")
@@ -155,7 +151,7 @@ def audit_registry(registry: AssetRegistry, root: Path) -> dict:
                   "kinds": kinds, "bytes": None, "sha256": None,
                   "media_type": None, "rgba_staging_bytes_estimate": None}
         try:
-            path = _check_physical_file(registry, root, relative)
+            path = _check_physical_file(registry, root, relative, owners[0]["id"])
             digest, nbytes, header = _file_fingerprint(path)
             # A file used by multiple registry kinds must satisfy each signature.
             media_types = set()
