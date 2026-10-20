@@ -20,6 +20,7 @@ from drawtemp.quality.r30_scale import collect_profile, validate_report
 from drawtemp.sdk.authoring import AuthoringSession
 from drawtemp.studio.genre_workflow import create_genre_project, genre_preset
 from drawtemp.studio.inspector_model import edit_properties
+from drawtemp.studio.r49_first_scene import FirstSceneRequest, apply_first_scene
 from drawtemp.studio.workspace_model import resources
 
 SCHEMA = "drawtemp-r49c1-creator-slice-v1"
@@ -130,16 +131,36 @@ def _author_canonical_project(folder, genre):
     edited_map = session.snapshot().revision
     edit_properties(session, [actors[0]], {"name": "Personnage du premier auteur"},
                     expected_revision=session.revision)
+    apply_first_scene(session, FirstSceneRequest(
+        mission_id=maps[0].resource_id,
+        event_id="r49_intro_event", scene_id="r49_intro_scene",
+        title="Premier scénario", speaker="Narrateur",
+        dialogue="Bienvenue dans l'aventure.",
+        action_message="La mission commence.", tick=1),
+        expected_revision=session.revision)
     edited = session.snapshot().to_dict()
-    if edited == baseline or session.revision != edited_map + 1:
-        raise CreatorGateError("Typed authoring did not update canonical pair")
+    if edited == baseline or session.revision != edited_map + 2:
+        raise CreatorGateError("Canonical authoring did not update both documents")
+    source_map = next(row for row in edited["content"]["missions"]
+                      if row["id"] == maps[0].resource_id)
+    if not any(row["id"] == "r49_intro_event" and
+               row["actions"] == [{"kind": "message",
+                                   "text": "La mission commence."}]
+               for row in source_map["triggers"]):
+        raise CreatorGateError("First tactical event/action was not persisted")
+    scenes = edited["project"]["story"]["scenes"]
+    if not any(row["id"] == "r49_intro_scene" for row in scenes):
+        raise CreatorGateError("First narrative scene was not persisted")
+    if edited["project"]["story"]["during_tactical_event"].get(
+            maps[0].resource_id + "/r49_intro_event") != "r49_intro_scene":
+        raise CreatorGateError("Canonical story/trigger reference not linked")
     session.undo()
     if session.snapshot().to_dict() == edited:
         raise CreatorGateError("Undo did not revert the authoring transaction")
     session.redo()
     if session.snapshot().to_dict() != edited:
         raise CreatorGateError("Redo did not restore the authored pair")
-    if session.snapshot().revision < 4:
+    if session.snapshot().revision < 5:
         raise CreatorGateError("Missing authoring/undo/redo history")
     session.save()
     reopened = AuthoringSession.open(content_path)
@@ -151,12 +172,14 @@ def _author_canonical_project(folder, genre):
     return {
         "content_path": content_path, "resource_counts": {
             "maps": len(maps), "actors": len(actors),
-            "scenes": sum(r.family == "scenes" for r in catalog),
+            "scenes": sum(r.family == "scenes"
+                          for r in resources(session.snapshot())),
         },
         "checks": {
             "r28_template_created": True,
             "r1_typed_edits": True,
             "r1_undo_redo": True,
+            "r9_scene_trigger_action": True,
             "disk_save_reopen": True,
             "r15_preflight": True,
             "qt_gui_author_journey": False,
