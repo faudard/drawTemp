@@ -96,6 +96,11 @@ class R53HybridVerticalSliceTests(unittest.TestCase):
                 self.assertEqual(session.party_hybrid_state()["phase"],
                                  "EXPLORATION")
                 rpg_end = session.recording()
+                # Crash/restart at the RPG→CT boundary keeps the R25 cursor,
+                # R41 reward flags, R53 formation and Campaign items intact.
+                session = GameSession.from_recording(
+                    rpg_end, self.content, self.project)
+                self.assertEqual(session.recording(), rpg_end)
 
                 session.route_transition("crypt_to_ct")
                 self.assertEqual(session.mode, "battle")
@@ -196,6 +201,45 @@ class R53HybridVerticalSliceTests(unittest.TestCase):
             session.recording(), self.content, self.project).recording(),
             session.recording())
 
+    def test_registered_r53_creator_template_two_file_roundtrip(self):
+        from drawtemp.export.templates import TEMPLATES, create_template
+        from sporebound.game_project import GameProject
+        from sporebound.model import Content
+        self.assertIn("hybrid_r53", TEMPLATES)
+        with TemporaryDirectory() as dirname:
+            folder = Path(dirname) / "hybrid"
+            create_template("hybrid_r53", folder)
+            data = Content.load(folder / "game.json")
+            project = GameProject.load(folder / "game.game.json", data)
+            self.assertEqual(project.to_dict(), self.project.to_dict())
+            self.assertEqual(data.to_dict(), self.content.to_dict())
+            game = GameSession.new(data, project, "main", seed=17)
+            self.assertEqual(game.party_hybrid_state()["phase"], "EXPLORATION")
+            self.assertEqual(game.party_hybrid_state()["scene"], "village")
+            self.assertEqual(game.party_orchestration_state()["leader"], "oren")
+
+    def test_invalid_ct_scene_route_and_r53_journal_with_recomputed_digest(self):
+        session = GameSession.new(self.content, self.project, "main", seed=17)
+        session.route_transition("village_to_woods")
+        _win_rpg(session, "woods")
+        session.route_transition("woods_to_crypt")
+        _win_rpg(session, "crypt")
+        session.route_transition("crypt_to_ct")
+        checkpoint = session.recording()
+        bad = deepcopy(checkpoint)
+        bad["scene_route"]["current"] = "village"
+        bad["digest"] = digest({key: value for key, value in bad.items()
+                                if key != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(bad, self.content, self.project)
+        bad = deepcopy(checkpoint)
+        bad["party_orchestration"]["formation"] = [
+            "front", "front", "support"]
+        bad["digest"] = digest({key: value for key, value in bad.items()
+                                if key != "digest"})
+        with self.assertRaises(RuleError):
+            GameSession.from_recording(bad, self.content, self.project)
+
     def test_player_controls_rpg_combo_routed_ct_and_checkpoint(self):
         with TemporaryDirectory() as dirname:
             folder = Path(dirname)
@@ -204,6 +248,8 @@ class R53HybridVerticalSliceTests(unittest.TestCase):
             state = player.new_game()
             self.assertEqual(state["r53_hybrid"]["phase"], "EXPLORATION")
             self.assertEqual(len(state["r53_hybrid"]["members"]), 3)
+            player.switch_party_leader("elya")
+            self.assertTrue(player.state()["r53_hybrid"]["members"][0]["leader"])
             player.travel_route("village_to_woods")
             player.start_rpg_encounter("woods")
             before = player.state()
