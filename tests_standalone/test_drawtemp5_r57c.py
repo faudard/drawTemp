@@ -211,6 +211,7 @@ class R57CQtTests(unittest.TestCase):
             dialog = TranslationStudioDialog(session, source)
             dialog.show()
             try:
+                self.assertEqual(dialog.preview.textFormat(), Qt.PlainText)
                 items = dialog.keys.findItems(
                     "inventory.items", Qt.MatchExactly)
                 self.assertEqual(len(items), 1)
