@@ -22,6 +22,12 @@ from sporebound.system_design import EXTENSION
 def build_example():
     content, project = reference_project()
     project.story["entry_scenes"] = {}
+    project.story["scenes"].append({
+        "id": "outpost", "title": "Vers l'avant-poste", "speaker": "Marchand",
+        "text": "La route reste ouverte.", "choices": [
+            {"id": "continue", "label": "Continuer"},
+        ],
+    })
     for name, title in (("arrival", "Village des forgerons"),
                         ("outpost", "Avant-poste")):
         project.exploration[name] = {
