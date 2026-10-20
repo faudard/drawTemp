@@ -116,6 +116,9 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # R65.B: validate the known opt-in action-combat catalog on load/save.
+        from .action_combat_catalog_r65 import catalog_from_project
+        catalog_from_project(self)
         from .logic_campaign_bridge import validate_bridge
         validate_bridge(self, content)
         # R38.2: optional authored prefab instance provenance, validated on load.
