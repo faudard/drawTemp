@@ -126,6 +126,7 @@ class R51DesignerDialog(QDialog):
         self.preview.setSource(QUrl.fromLocalFile(str(
             Path(__file__).resolve().parents[1] / "player" / "R51Layout.qml"
         )))
+        self.preview.statusChanged.connect(lambda *_: self._render())
         right_layout.addWidget(self.preview, 1)
         self.report = QLabel("")
         self.report.setObjectName("r51-report")
@@ -386,9 +387,13 @@ class R51DesignerDialog(QDialog):
         try:
             sample = editor_sample(self._draft, self.width_choice.value())
             root = self.preview.rootObject()
-            if root is not None:
-                root.setProperty("projection", sample)
-                root.setProperty("allowActions", False)
+            if root is None:
+                self.report.setText("Qt Quick indisponible : " +
+                                    "; ".join(str(error) for error in self.preview.errors()))
+                return
+            root.setProperty("projection", sample)
+            root.setProperty("allowActions", False)
+            root.setProperty("permittedActions", [])
             self.report.setText(
                 "Aperçu fictif · %d colonnes · aucune commande de jeu déclenchée"
                 % sample["columns"])
