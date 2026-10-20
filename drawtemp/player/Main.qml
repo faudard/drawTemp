@@ -964,13 +964,13 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                             }
                             Label {
-                                visible: (root.playerData.r53_hybrid.members || []).length > 0
+                                visible: ((root.playerData.r53_hybrid || {}).members || []).length > 0
                                 text: "R53 · Leader et formation"
                                 color: root.gold
                                 Accessible.description: text
                             }
                             Repeater {
-                                model: root.playerData.r53_hybrid.members || []
+                                model: (root.playerData.r53_hybrid || {}).members || []
                                 delegate: Button {
                                     Layout.fillWidth: true
                                     objectName: "r53-leader-" + modelData.id
