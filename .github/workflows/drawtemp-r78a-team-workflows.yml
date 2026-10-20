@@ -1,0 +1,36 @@
+name: DrawTemp R78.A Team Workflows
+
+on:
+  pull_request:
+    paths:
+      - 'drawtemp/sdk/team_workflows.py'
+      - 'tests_standalone/test_r78a_team_workflows.py'
+      - 'docs/R78A_TEAM_WORKFLOWS.md'
+      - '.github/workflows/drawtemp-r78a-team-workflows.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  team-workflows-headless:
+    name: R78.A roles/leases/merge / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install headless canonical project
+        run: python -m pip install .
+      - name: R78.A access and concurrency gates
+        run: python -m unittest tests_standalone.test_r78a_team_workflows -v
+      - name: R48 semantic merge regressions
+        run: python -m unittest tests_standalone.test_drawtemp_r48a_collaboration -v
