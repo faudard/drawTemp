@@ -230,6 +230,11 @@ class R55SystemDesignerTests(unittest.TestCase):
 
     def test_multizone_market_quest_roundtrip_without_stock_duplication(self):
         content, project = fixture()
+        project.story["scenes"].append({
+            "id": "outpost", "title": "Avant-poste", "speaker": "Marchand",
+            "text": "La route reste ouverte.",
+            "choices": [{"id": "continue", "label": "Continuer"}],
+        })
         project.exploration["outpost"] = deepcopy(project.exploration["arrival"])
         project.exploration["outpost"]["title"] = "Avant-poste"
         project.game_modes["scenes"]["outpost"] = {"preset": "action"}
