@@ -32,7 +32,8 @@ def validate_squad(spec):
     """One optional group binding per positioned R35 real-time agent."""
     require(type(spec) is dict
             and set(spec) == {"id", "role", "radio_range"}
-            and _ident(spec["id"]) and spec["role"] in ROLES
+            and _ident(spec["id"]) and type(spec["role"]) is str
+            and spec["role"] in ROLES
             and type(spec["radio_range"]) is int
             and 0 <= spec["radio_range"] <= MAX_RADIO_RANGE,
             "Invalid R37 squad: id, role and 0..16 radio range required")
@@ -77,15 +78,30 @@ def coordinate_squad(stage, squad_id, members, *, scene, tick):
             and type(members) is list
             and 1 <= len(members) <= MAX_SQUAD_MEMBERS,
             "Invalid R37 squad preview metadata or member budget")
+    require(type(stage) is dict
+            and type(stage.get("width")) is int
+            and type(stage.get("height")) is int
+            and 1 <= stage["width"] <= 32 and 1 <= stage["height"] <= 32
+            and type(stage.get("blocked")) is list
+            and all(type(cell) is list and len(cell) == 2
+                    and all(type(v) is int for v in cell)
+                    and 0 <= cell[0] < stage["width"]
+                    and 0 <= cell[1] < stage["height"]
+                    for cell in stage["blocked"])
+            and len({tuple(cell) for cell in stage["blocked"]})
+            == len(stage["blocked"]),
+            "Invalid canonical R37 squad grid")
     by_id = {}
     for row in members:
         require(type(row) is dict and set(row) ==
                 {"actor_id", "pos", "role", "radio_range", "signal", "known_pos"}
                 and _ident(row["actor_id"])
                 and row["actor_id"] not in by_id
+                and type(row["role"]) is str
                 and row["role"] in ROLES
                 and type(row["radio_range"]) is int
                 and 0 <= row["radio_range"] <= MAX_RADIO_RANGE
+                and type(row["signal"]) is str
                 and row["signal"] in ("seen", "heard", "memory", "none")
                 and _point(row["pos"], stage)
                 and (row["known_pos"] is None or _point(row["known_pos"], stage))
