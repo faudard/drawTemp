@@ -44,6 +44,14 @@ Module : drawtemp.quality.r56_lab.
 - diff_batches : comparaison de rapports avec même empreinte de suite ;
 - read_suite / read_report / save_json : I/O JSON bornées.
 
+CLI headless (suite R40 mono-starter, rapport identique à l'API Qt) :
+
+    python -m drawtemp.quality.r56_lab --suite scenario-suite.json \
+        --revision "$(git rev-parse HEAD)" --report r56-batch.json
+
+Le CLI retourne 0 seulement lorsque tous les scénarios du lot passent ; il
+retourne 2 pour no-go, source périmée, schéma invalide ou sortie dangereuse.
+
 Exemple API :
 
     from drawtemp.sdk.r40_starters import create_starter_pair
