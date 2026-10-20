@@ -124,7 +124,9 @@ class R74PlayerCertificationTests(unittest.TestCase):
         self.assertFalse(candidate.export_preflight["native_runtime_included"])
         self.assertTrue(candidate.export_preflight["rights_attestations_checked"])
         with TemporaryDirectory() as folder:
-            doc = AuthoringSession.new(candidate.plan.content, candidate.plan.project)
+            from drawtemp.sdk.simulation import thaw
+            doc = AuthoringSession.new(
+                thaw(candidate.plan.content), thaw(candidate.plan.project))
             path = Path(folder) / "r74.json"
             doc.save_as(path)
             report = preflight(path, require_licenses=True)
