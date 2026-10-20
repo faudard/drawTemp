@@ -1,0 +1,37 @@
+name: R76.A Asset Audit
+
+on:
+  push:
+    paths:
+      - "drawtemp/assets/optimization_audit.py"
+      - "tests_standalone/test_r76_asset_audit.py"
+      - "docs/R76A_ASSET_BUILD_AUDIT.md"
+      - ".github/workflows/r76-asset-audit.yml"
+  pull_request:
+    paths:
+      - "drawtemp/assets/optimization_audit.py"
+      - "tests_standalone/test_r76_asset_audit.py"
+      - "docs/R76A_ASSET_BUILD_AUDIT.md"
+      - ".github/workflows/r76-asset-audit.yml"
+  workflow_dispatch:
+
+jobs:
+  audit-headless:
+    name: Audit headless (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Run R76.A tests
+        run: python -m unittest -v tests_standalone.test_r76_asset_audit
+      - name: Regression — canonical assets
+        run: python -m unittest -v tests_standalone.test_assets
