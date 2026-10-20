@@ -181,6 +181,11 @@ class ExplorationLabDialog(QDialog):
         self.findings.setAccessibleName("Constats à qualifier humainement")
         self.findings.currentRowChanged.connect(self.show_finding)
         review_layout.addWidget(self.findings, 2)
+        self.minimize_button = QPushButton("Réduire le reproducteur R26 (si exception)")
+        self.minimize_button.setObjectName("r77-minimize")
+        self.minimize_button.setEnabled(False)
+        self.minimize_button.clicked.connect(self.minimize_selected)
+        review_layout.addWidget(self.minimize_button)
         self.review_type = QComboBox()
         self.review_type.setObjectName("r77-review-decision")
         for choice in REVIEW_CHOICES:
@@ -423,6 +428,9 @@ class ExplorationLabDialog(QDialog):
             return
         finding = self.view["findings"][index]
         self.witness.setPlainText(json.dumps(finding, ensure_ascii=False, indent=2))
+        self.minimize_button.setEnabled(
+            finding["kind"] == "runtime_exception" and
+            isinstance(finding.get("failed_command"), dict))
         annotation = self.reviews.get(finding["id"])
         self.reason.setPlainText(annotation["reason"] if annotation else "")
         if annotation:
@@ -431,6 +439,38 @@ class ExplorationLabDialog(QDialog):
         self.review_status.setText(
             ("Qualification humaine : " + annotation["decision"]
              if annotation else "Constat non qualifié · aucune preuve Player."))
+
+    def minimize_selected(self):
+        """Explicit bounded reduction; a failed reproduction is not hidden."""
+        if (self.view is None or self.report is None or
+                self.findings.currentRow() < 0):
+            return None
+        finding = self.view["findings"][self.findings.currentRow()]
+        if finding["kind"] != "runtime_exception" or (
+                not isinstance(finding.get("failed_command"), dict)):
+            return None
+        run = next((row for row in self.report["runs"]
+                    if row["seed"] == finding["seed"]), None)
+        if run is None:
+            return None
+        error = next((row for row in run["failures"]
+                      if row.get("tick") == finding["tick"] and
+                      row.get("command") == finding["failed_command"]), None)
+        if error is None:
+            return None
+        try:
+            reduced = minimize_runtime_failure(
+                self.scene, run["trace"], finding["failed_command"],
+                error_type=error["error_type"], message=error["message"],
+                max_replays=32)
+        except (ValueError, TypeError) as exc:
+            self.witness.setPlainText("Réduction refusée : " + str(exc))
+            return None
+        self.witness.setPlainText(
+            "Reproducteur R26 (" + reduced["status"] + ") ; "
+            "réduction bornée non nécessairement globale.\\n" +
+            json.dumps(reduced, ensure_ascii=False, indent=2))
+        return reduced
 
     def annotate(self):
         if self.view is None or self.findings.currentRow() < 0:
