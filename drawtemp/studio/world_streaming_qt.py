@@ -298,12 +298,36 @@ class WorldStreamingDialog(QDialog):
                   "outline": "#9ba1ac"}
         for cell in report["cells"]:
             x, y = cell["position"]
+            lod = cell["lod"]
+            if lod == "outline":
+                scene.addEllipse(x + 45, y + 12, 30, 26,
+                                 QPen(QColor("#303845")),
+                                 QBrush(QColor(colors[lod])))
+                label = scene.addText(cell["id"])
+                label.setDefaultTextColor(QColor("#b6becb"))
+                label.setPos(x + 12, y + 44)
+                continue
             scene.addRect(x, y, 120, 50,
                           QPen(QColor("#303845")),
-                          QBrush(QColor(colors[cell["lod"]])))
+                          QBrush(QColor(colors[lod])))
             label = scene.addText(cell["id"])
             label.setDefaultTextColor(QColor("#ffffff"))
-            label.setPos(x + 5, y + 10)
+            label.setPos(x + 4, y - 3)
+            if lod == "overview":
+                caption = scene.addText(
+                    cell["region"] + " • " +
+                    str(cell["map_size"][0]) + "×" +
+                    str(cell["map_size"][1]))
+                caption.setDefaultTextColor(QColor("#ffffff"))
+                caption.setPos(x + 4, y + 22)
+            elif lod == "detail":
+                for line, values in enumerate(cell["tile_preview"]):
+                    for col, value in enumerate(values):
+                        scene.addRect(
+                            x + 8 + col * 9, y + 23 + line * 6, 8, 5,
+                            QPen(Qt.NoPen),
+                            QBrush(QColor(
+                                "#455363" if value == "#" else "#c8e1c2")))
         scene.setSceneRect(scene.itemsBoundingRect())
 
     def prefetch_neighbors(self):
