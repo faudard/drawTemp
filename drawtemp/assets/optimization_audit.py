@@ -210,6 +210,8 @@ def audit_content(content_path: Path) -> dict:
     content_path = Path(content_path).resolve(strict=True)
     pre = preflight(content_path, require_licenses=True)
     project = json.loads(project_path(content_path).read_text(encoding="utf-8"))
+    if not isinstance(project, dict):
+        raise ValueError("GameProject JSON must be an object")
     registry = AssetRegistry(project.get("assets") or None)
     report = audit_registry(registry, content_path.parent)
     report["rights"] = (
@@ -243,12 +245,12 @@ def main(argv=None) -> int:
                   "issues": [{"code": "invalid_project", "detail": str(exc)}]}
     payload = json.dumps(report, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
     if args.report is not None:
+        if args.report.is_symlink():
+            parser.error("symlinked report targets are unsupported")
         destination = args.report.resolve()
         project_root = args.content.resolve().parent
         if destination == project_root or project_root in destination.parents:
             parser.error("--report must be outside the audited project (read-only contract)")
-        if destination.exists() and destination.is_symlink():
-            parser.error("symlinked report targets are unsupported")
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(payload, encoding="utf-8")
     print(payload, end="")
