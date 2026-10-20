@@ -11,9 +11,12 @@ import json
 import os
 from pathlib import Path
 
-from drawtemp.assets.packs import _hash, _id, _path, _version, ResourcePackError
+from drawtemp.assets.packs import (
+    _hash, _id, _path, _version, ResourcePackError,
+    PENDING_UPGRADE_JOURNAL,
+)
 
-JOURNAL_NAME = ".drawtemp-r58-package-upgrade.pending.json"
+JOURNAL_NAME = PENDING_UPGRADE_JOURNAL
 MAX_JOURNAL_BYTES = 64 * 1024
 
 
