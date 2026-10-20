@@ -186,8 +186,20 @@ def main(argv=None):
     # The exact same R3 projection/controller handles Studio, tactical Player
     # and this opt-in action Player. The Qt delegate is projection-specific.
     from drawtemp.render.qt_viewport import make_controller
+    # The R4 resolver/atlas is also the only R36 image path. Missing user
+    # assets become per-actor placeholder diagnostics, not gameplay failure.
+    assets = None
+    if animation_project is not None:
+        from drawtemp.assets.r36_runtime import R36PresentationAssets
+        try:
+            assets = R36PresentationAssets.for_project(
+                animation_project, args.animation_project)
+        except (OSError, RuntimeError, ValueError) as exc:
+            print("R36 asset resolver rejected: " + str(exc), file=sys.stderr)
+            return 2
     renderer = make_controller(scene_from_action(controller.runtime),
-                               atlas_url="", projection_mode="top_down")
+                               atlas_url="", projection_mode="top_down",
+                               assets=assets)
     bridge = create_bridge(controller, renderer)
     engine = QQmlApplicationEngine()
     renderer.attach_engine(engine)
