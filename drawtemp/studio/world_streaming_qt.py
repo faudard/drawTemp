@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPen
+from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFormLayout, QGraphicsScene, QGraphicsView,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
@@ -98,7 +98,7 @@ class WorldStreamingDialog(QDialog):
         self.budget.setObjectName("r54-budget-mib")
         self.budget.setRange(1, 32)
         self.budget.setSuffix(" MiB")
-        self.budget.valueChanged.connect(self._mark_dirty)
+        self.budget.valueChanged.connect(self._budget_changed)
         row.addWidget(self.budget)
         self.prefetch = QPushButton("Précharger autour (métadonnées)")
         self.prefetch.setObjectName("r54-prefetch")
@@ -151,6 +151,13 @@ class WorldStreamingDialog(QDialog):
         if self.cache is not None:
             self.cache.close()
             self.cache = None
+
+    def _budget_changed(self, value):
+        if self.document is not None:
+            self.document["max_cache_bytes"] = value * 1024 * 1024
+            self._cache_metadata()
+        self._mark_dirty()
+        self.render()
 
     def _cache_metadata(self):
         self._close_cache()
@@ -291,7 +298,7 @@ class WorldStreamingDialog(QDialog):
             x, y = cell["position"]
             scene.addRect(x, y, 120, 50,
                           QPen(QColor("#303845")),
-                          QColor(colors[cell["lod"]]))
+                          QBrush(QColor(colors[cell["lod"]])))
             label = scene.addText(cell["id"])
             label.setDefaultTextColor(QColor("#ffffff"))
             label.setPos(x + 5, y + 10)
