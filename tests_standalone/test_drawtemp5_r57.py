@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from drawtemp.localization import (
-    Catalog, LocalizationError, file_revision, localize_view, seeded_for_project, sidecar_path,
+    Catalog, LocalizationError, file_revision, localize_view, rebase_project_sources, seeded_for_project, sidecar_path,
 )
 
 
@@ -41,6 +41,20 @@ class R57CatalogTests(unittest.TestCase):
         reread, drift = seeded_for_project(changed, translated)
         self.assertIsNotNone(reread)
         self.assertEqual(drift, ("project.title",))
+
+    def test_explicit_source_rebase_resets_only_changed_translations(self):
+        old, _ = seeded_for_project(PROJECT)
+        old = old.with_translation("project.title", "en", "Original title")
+        old = old.with_translation("story.intro.text", "en", "Welcome!")
+        changed = dict(PROJECT, title="Titre révisé")
+        unchanged, drift = seeded_for_project(changed, old)
+        self.assertEqual(drift, ("project.title",))
+        self.assertEqual(unchanged.render("project.title", "en",
+                                          source="Titre révisé"), "Titre révisé")
+        fixed, fixed_keys = rebase_project_sources(changed, old)
+        self.assertEqual(fixed_keys, ("project.title",))
+        self.assertEqual(fixed.render("project.title", "en"), "Titre révisé")
+        self.assertEqual(fixed.render("story.intro.text", "en"), "Welcome!")
 
     def test_player_projection_preserves_runtime_and_translates_dialogue(self):
         cat, _ = seeded_for_project(PROJECT)
