@@ -86,16 +86,22 @@ def _platform_room(identifier: str, *, ruin: bool = False,
             _collider("return_portal", [2400, 3200, 500, 700],
                       trigger=True, route="back_to_village"),
         ])
-    if citadel:
-        colliders.append(_collider(
-            "citadel_marker", [2800, 3200, 500, 700], trigger=True))
-    return {
+    scene = {
         "id": identifier, "width": 6000, "height": 5000, "gravity": 40,
         "hero": {"pos": [1000, 3200], "size": [500, 800],
                  "speed": 180, "jump": 250, "max_fall": 800,
                  "coyote": 4},
         "colliders": colliders,
     }
+    if citadel:
+        scene["boss"] = {
+            "id": "r40_warden", "rect": [2850, 3100, 900, 900],
+            "attack_rect": [2050, 3150, 1700, 850],
+            "hp": 4, "phase_at": 2, "hero_hp": 6,
+            "telegraph": [18, 10], "strike": [5, 6],
+            "recover": [20, 16],
+        }
+    return scene
 
 
 def _story_scene(identifier: str, title: str) -> dict:
@@ -166,10 +172,13 @@ def create_starter_pair(kind: str):
         }
 
     if kind == "r40-metroidvania":
-        # Keep the R40.A narrative routes for backward-compatible source
-        # previews; the high_gate is an additional physical-only route.
-        # Unlike the narrative shortcut, it must be reached by actual R32
-        # contact and a verified pickup. Its existence does not certify 8.0.
+        # R40.B.4 removes the former direct ruins->citadel shortcut.
+        # The ONLY path into the guardian's chamber now returns to the
+        # village, collects the feather, and reaches the physical high gate.
+        project.scene_routes["links"] = [
+            row for row in project.scene_routes["links"]
+            if row["id"] in ("to_ruins", "back_to_village")
+        ]
         project.scene_routes["links"].append({
             "id": "high_gate", "source": "arrival",
             "destination": "r40_citadel", "spawn": [1, 1],
