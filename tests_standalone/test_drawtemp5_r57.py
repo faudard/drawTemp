@@ -42,6 +42,13 @@ class R57CatalogTests(unittest.TestCase):
         self.assertIsNotNone(reread)
         self.assertEqual(drift, ("project.title",))
 
+    def test_legacy_optional_subtitle_may_be_empty(self):
+        project = dict(PROJECT, subtitle="")
+        cat, drift = seeded_for_project(project)
+        self.assertEqual(drift, ())
+        self.assertNotIn("project.subtitle", cat.data["entries"])
+        self.assertIn("project.title", cat.data["entries"])
+
     def test_explicit_source_rebase_resets_only_changed_translations(self):
         old, _ = seeded_for_project(PROJECT)
         old = old.with_translation("project.title", "en", "Original title")
