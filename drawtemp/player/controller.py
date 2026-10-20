@@ -10,6 +10,7 @@ from drawtemp.sdk.slots import PlayerSlotStore
 from drawtemp.core import RuleError
 from drawtemp.player.save_manager import SaveManager
 from drawtemp.player.preferences import PlayerPreferences
+from drawtemp.player.r57_accessibility import AccessibilityPreferences
 from sporebound.cinematic_transport import CinematicTransport
 from drawtemp.cinematics.projection import frame_payload
 
@@ -27,6 +28,9 @@ class PlayerController:
         self.autosave_warning = ""
         self._autosaved_key = None
         self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
+        self.accessibility = AccessibilityPreferences(
+            self.save_dir / 'r57-accessibility.json',
+            default_language=self.project.options['language'])
         self.session = None
         self.show_title = True
         self.selected = [0, 0]
@@ -636,6 +640,12 @@ class PlayerController:
         self.message = "Option enregistrée"
         return self.state()
 
+    def set_accessibility(self, name, value):
+        """R57.C UI-only settings; never call checkpoint or touch GameSession."""
+        state = self.accessibility.update(name, value)
+        self.message = "Accessibilité : réglage enregistré"
+        return state
+
     def resolve_key(self, key, context):
         return self.preferences.resolve(key, context)
 
@@ -718,6 +728,7 @@ class PlayerController:
                 "save_manager": self.saves.catalog(),
                 "selected": list(self.selected), "campaign": self.campaign_id,
                 "settings": self.preferences.view(),
+                "accessibility": self.accessibility.view(),
                 "journey": {"enabled": False, "stages": [], "completed": False},
                 "choices": [], "missions": [], "scene": {}, "exploration": {},
                 "routes": [],
