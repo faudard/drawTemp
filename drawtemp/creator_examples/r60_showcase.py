@@ -107,6 +107,15 @@ def author_showcase():
         elif scene["id"] == "crypt":
             scene["title"] = "Les fondations du phare"
 
+    # R53 defaults to GRID_TURN for its classic RPG scenes. R60 adds
+    # genuine fixed-step exploration without changing the native RPG combat
+    # authority. The CT mission keeps its explicit srpg/GRID_CT profile.
+    for scene in CONTENT_REGIONS:
+        project.game_modes["scenes"][scene] = {"profile": {
+            "movement": "FREE_REALTIME", "combat": "RPG_TURN",
+            "camera": "TOP_DOWN", "interaction": "CONTEXTUAL", "ui": "RPG",
+        }}
+
     editor = AuthoringSession(content, project)
     proposal = preview_system_design(
         editor, systems_document(), expected_revision=editor.revision)
