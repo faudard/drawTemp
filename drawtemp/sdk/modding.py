@@ -384,6 +384,9 @@ class ModRegistry:
             if entry["digest"] != expected_sha:
                 errors.append(mod_id + ": manifest_changed")
                 continue
+            if doc["extension"] is None and doc["namespace"] in namespaces:
+                errors.append(mod_id + ": unexpected_namespace")
+                continue
             if doc["extension"] is not None and doc["namespace"] not in namespaces:
                 errors.append(mod_id + ": missing_namespace")
                 continue
