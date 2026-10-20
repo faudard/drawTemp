@@ -1,86 +1,117 @@
-# R55 — System Designer: premier lot exécutable
+# R55 — System Designer : économie, Studio et Player (développement)
 
-Cette livraison commence **R55.A** et fournit une première interface native **R55.B** de la
-[roadmap R51–R80](DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md).
-Elle **ne valide pas encore** le gate R55 ni la release 10.0 : l'éditeur
-Qt nécessite une qualification QTest/UX approfondie, l'intégration au tick
-canonique et la certification de bout en bout restent à livrer.
+Ce lot suit [R55 dans la roadmap R51–R80](DRAWTEMP_10_0_TO_12_0_DETAILED_ROADMAP_R51_R80.md).
+Le **gate R55 reste ouvert** : le présent document distingue les API et tests
+committés des preuves CI, UX, équilibre et certification encore manquantes.
 
-## Propriété et schéma
+## Source unique et contraintes
 
-- Source éditoriale unique : `GameProject.extensions["org.drawtemp.systems"]`,
-  enveloppe standard `{"schema_version": 1, "data": ..., "references": []}`.
-- Schéma `data` v1 : `version`, `resources` (`id`, `initial`,
-  `capacity`), `producers` (`id`, `inputs`, `outputs`, `interval`),
-  `merchants` (`id`, `resource`, `scene`, `buy_price`, `sell_price`),
-  `quests` (`id`, `resource`, `quantity`, `flag`).
-- Aucun script, callback, expression utilisateur ni seconde base de données :
-  l'économie est un composant du `GameSession`; l'inventaire, la monnaie et
-  les flags de quête sont ceux de `Campaign`.
-- `validate_systems(spec, scenes)` rejette références inconnues, booléens
-  à la place d'entiers, doublons, versions futures, recettes sans entrées,
-  dépendances cycliques et capacités hors budget.
-- Ordre de résolution déterministe : ticks entiers; producteurs triés par
-  identifiant; au plus 32 producteurs, 64 ressources, 256 ticks/commande,
-  65 536 ticks/session et 512 commandes de journal. Le `max` de chaque stock
-  borne aussi les productions et achats/ventes.
+- Schéma versionné, opt-in : `GameProject.extensions["org.drawtemp.systems"]`
+  avec enveloppe standard (`schema_version=1`, `data`, `references=[]`).
+- `resources` (stock initial / capacité), `producers` (maps de ressources
+  consommées/produites et intervalle), `merchants` (ressource, scène
+  **d'exploration**, prix achat/vente), `quests` (livraison, flag).
+- Aucun hook Python, exécution dynamique ni nouvelle monnaie/inventaire.
+  `GameSession` possède l'économie ; `Campaign` possède toujours l'or,
+  les objets et les flags de progression.
+- Validation fail-closed : IDs distincts, références connues, montants
+  entiers bornés, graphes de production acycliques, version stricte, budgets
+  explicites. Les producteurs s'exécutent dans l'ordre des identifiants.
+- Limites actuelles : au plus 64 ressources, 32 producteurs, 16 marchands,
+  32 quêtes, 256 ticks par commande, 65 536 ticks par session et 512 entrées
+  de journal. **Ces limites ne sont pas encore certifiées pour une longue
+  campagne** ; l'extension reste expérimentale.
 
-## Runtime (opt-in)
+## Simulation et persistance
 
-`GameSession.system_state()` et `system_preview(ticks)` fournissent des
-copies détachées. `system_advance(ticks)` déclenche les cycles sans horloge
-murale. `system_trade(merchant_id, action, quantity, transaction_id)` réalise
-une transaction atomique dans une scène d'exploration active, avec identifiant
-idempotent; `system_fulfill(quest_id)` livre des objets de l'inventaire de
-campagne et positionne un flag narratif une seule fois.
+`GameSession.system_state()/system_preview()/system_advance()` exposent une
+projection détachée et un pilotage explicite. Les déplacements fixes
+`route_realtime_step()` (R25) et `route_platform_step()` (R32) avancent
+désormais l'économie d'un tick par pas validé ; un mouvement refusé ne doit
+pas modifier l'économie, le journal de déplacement ni la campagne.
 
-`GameSession.recording()` inclut `systems` **uniquement** pour les projets
-qui activent cette extension. `from_recording` rejoue le journal de commandes
-pour reconstruire les stocks; un stock falsifié, une opération inconnue, une
-réception répétée, une sauvegarde R55 manquante ou un flag de quête manquant
-fait échouer le chargement. Les anciens projets/saves n'ont aucun changement
-de format. L'historique R55 ne remplace pas la validation canonique de
-`Campaign`.
+Les ticks successifs sont fusionnés dans une entrée `advance` du journal :
+600 frames de mouvement n'épuisent plus à eux seuls 512 reçus. Le chargement
+rejoue les recettes à partir du stock initial et refuse un checkpoint altéré
+(stock, tick, opération ou reçu invalide), y compris après recomputation du
+checksum JSON. Les anciennes sauvegardes n'ont **aucune clé R55** et gardent
+leurs contrats d'origine.
 
-## Studio headless
+`GameSession.system_trade()` vérifie scène, stock, capacité, monnaie,
+quantité et identifiant idempotent avant un changement atomique de
+`Campaign.inventory` et `Campaign.gold`. `system_fulfill()` retire les
+ressources réellement possédées et n'active le flag de quête qu'une fois.
 
-`preview_system_design(AuthoringSession, document, expected_revision=...)`
-vérifie le graphe et produit un `AuthoringPlan` validé; seul
-`apply_system_design` le commite. Le projet bénéficie du même Undo/Redo et
-du contrôle de révision que les autres ateliers. `forecast_system_design`
-calcule les stocks/deltas et affiche les liaisons du graphe sans modifier le
-projet.
+Le journal R55 démontre la conservation **des stocks gérés par l'économie**.
+Il ne constitue ni une signature cryptographique ni une preuve de tous les
+mouvements d'or et d'inventaire provenant d'autres systèmes de jeu.
 
-## Tests
+## Studio Qt (R55.B)
+
+**Outils → System Designer R55** propose une vue de dépendances et quatre
+onglets : ressources, ateliers, marchands et quêtes. Ajout, modification et
+suppression se font avec des formulaires typés ; les producteurs acceptent
+désormais plusieurs ports `ressource:quantité` séparés par des virgules,
+**sans écrire de JSON**. Le graphe est validé dès la modification et une
+projection affiche les deltas de stocks et manques.
+
+Un clic **Appliquer au projet** passe par
+`preview_system_design(AuthoringSession, ...)` puis
+`apply_system_design(...)` : l'édition est atomique, contrôlée par révision,
+compatible Undo/Redo et ne crée pas de base de projet parallèle.
+
+## Player SDK et interface Qt Quick (R55.C en cours)
+
+`drawtemp.sdk.simulation.Simulation` expose `system_state`,
+`system_preview`, `system_advance`, `system_trade`, `system_fulfill`
+avec projections immuables, contrôle de révision et rollback SDK.
+
+Le contrôleur Player dispose des actions `system_wait`, `system_trade`
+et `system_fulfill`. Pour les projets R55, le HUD Qt Quick affiche un
+panneau de stocks, un bouton d'avance, les offres des marchands de la scène
+et les livraisons de quêtes. Les reçus d'achat/vente créés depuis cette
+interface utilisent un identifiant dérivé de la longueur persistée du
+journal, jamais l'heure locale.
+
+Les modes narratifs, combats CT et autres runtimes n'avancent **pas**
+automatiquement les cycles. L'intégration dans toutes les boucles Player,
+l'UX finale, la gestion des inventaires externes et les performances restent
+à qualifier.
+
+## Vertical slice VS-55 proposé et testable
+
+```sh
+python -m examples.r55_micro_economy
+```
+
+L'exemple construit un projet canonique à deux régions via
+`AuthoringSession`, avance les cycles avec des pas fixes, traverse la
+frontière, achète deux lingots, livre une quête, sauvegarde et recharge.
+Il vérifie que la même transaction et la même quête ne créent aucune
+ressource/récompense supplémentaire après rechargement.
+
+## Tests ajoutés
 
 ```sh
 python -m unittest tests_standalone.test_r55_system_design -v
+python -m unittest tests_standalone.test_r55_player_sdk -v
 QT_QPA_PLATFORM=offscreen python -m unittest tests_standalone.test_r55_system_design_gui -v
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python -m drawtemp.player.qt_app --smoke --reference
 ```
 
-Couvre cycles/typing, ordre stable, projection sans mutation, capacité,
-achats/ventes sans duplication, quête unique, sauvegarde/rechargement, rejet
-de stock forgé même avec checksum recalculé, Undo/Redo et compatibilité
-des sauvegardes sans R55.
+Workflow indépendant : `.github/workflows/r55-system-designer.yml`.
+Les workflows GitHub ont été observés en état **failure avec zéro job** ;
+aucune exécution des assertions n'a pu être confirmée. Aucun résultat
+d'intégration, de performance p95/p99 ni de test GPU humain n'est revendiqué.
 
-## Interface R55.B initiale
+## Restant pour autoriser le gate R55
 
-Dans le Studio Qt, ouvrir **Outils → System Designer R55**. Un graphe
-représente les liens ressources → producteurs → ressources et
-ressources → marchands/contrats; les onglets permettent d'ajouter ou retirer
-des éléments via des formulaires typés. La projection affiche les deltas et
-les stocks insuffisants. **Appliquer au projet** crée une seule transaction
-`AuthoringSession`, compatible avec les commandes générales Undo/Redo.
-Les producteurs à plusieurs ressources restent visibles ; leur édition avancée
-nécessitera un éditeur multi-ports dédié.
-
-## Reste pour le gate R55
-
-- **R55.B** : édition avancée multi-ports, déplacement/nœuds, raccourcis,
-  accessibilité Qt, QTest d'interactions complets et gestion explicite
-  des conflits entre deux fenêtres.
-- **R55.C** : démonstrateur complet réellement assemblé via le Studio,
-  raccord marchand/quête au Player, transition entre régions, simulations
-  longues multi-seeds, balance et rapport GO/NO-GO sur master final.
-- **Runtime** : pilotage explicite des cycles depuis le tick canonique du
-  Player; pas de « cadence automatiquement activée » avec cette PR.
+- Étendre le canvas nodal : déplacement, ports interactifs, clavier, lecteurs
+  d'écran, interactions QTest et preuves UX de création sans JSON.
+- Faire jouer le VS-55 dans le **Player réel** en GUI, y compris marchand,
+  quête et deux zones, sous captures/goldens ; tester les exports propres.
+- Mesurer l'endurance, les limites de ticks/reçus, la consommation CPU/RAM,
+  le p95/p99 multi-seeds et les écarts d'équilibrage ; garantir les migrations
+  et les saves anciennes.
+- Exiger CI fonctionnelle sur le SHA final, validation de master, et décision
+  explicite GO/REDUCE/NO-GO. R50, R55 et la release 10.0 ne sont pas certifiés.
