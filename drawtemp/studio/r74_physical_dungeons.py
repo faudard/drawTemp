@@ -36,6 +36,7 @@ class PhysicalDungeonPreview:
     proofs: tuple[dict, ...]
     plan: object
     controller: object
+    evidence_digest: str
 
     def to_dict(self):
         return {
@@ -44,10 +45,19 @@ class PhysicalDungeonPreview:
             "missions": list(self.mission_ids),
             "campaign": self.campaign_id,
             "proofs": deepcopy(self.proofs),
+            "evidence_digest": self.evidence_digest,
             "applied": False, "physical_puzzle_witness": True,
             "r34_graph_parity": False, "combat_ai_certified": False,
             "player_save_certified": False, "player_export_certified": False,
         }
+
+
+def _evidence_digest(prefix, seeds, mission_ids, proofs):
+    return sha256(json.dumps({
+        "prefix": prefix, "seeds": list(seeds),
+        "missions": list(mission_ids), "proofs": list(proofs),
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+       allow_nan=False).encode("utf-8")).hexdigest()
 
 
 def _proof(dungeon: DungeonStudio, *, mission_id: str, key_id: str,
@@ -175,6 +185,8 @@ def prepare_physical_dungeons(
         proposal_seeds=tuple(p.seed for p in proposals),
         mission_ids=ids, campaign_id=campaign_id,
         proofs=tuple(deepcopy(evidence)), plan=plan, controller=controller,
+        evidence_digest=_evidence_digest(prefix, tuple(p.seed for p in proposals),
+                                         ids, evidence),
     )
 
 
@@ -184,6 +196,11 @@ def apply_physical_dungeons(controller: AssistedDungeonController,
     if (not isinstance(preview, PhysicalDungeonPreview)
             or preview.controller is not controller):
         raise DungeonAssistError("foreign_preview", "Preview belongs to another editor")
+    if preview.evidence_digest != _evidence_digest(
+            preview.prefix, preview.proposal_seeds,
+            preview.mission_ids, preview.proofs):
+        raise DungeonAssistError(
+            "modified_preview", "R27 witness/provenance changed since preview")
     if controller.session.revision != preview.revision:
         raise AuthoringError(
             "stale_revision", "r74-physical-apply",
