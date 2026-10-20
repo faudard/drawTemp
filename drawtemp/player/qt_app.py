@@ -304,6 +304,10 @@ def create_bridge(controller, renderer):
             self.settings_update(self.controller.set_display, "text_scale", value)
 
         @Slot(str)
+        def travelRoute(self, link_id):
+            self.invoke(self.controller.travel_route, link_id)
+
+        @Slot(str)
         def recruitPartyMember(self, hero_id):
             self.invoke(self.controller.recruit_party_member, hero_id)
 
