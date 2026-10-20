@@ -1,6 +1,7 @@
 """R77.A bounded exploratory QA: real R26 ticks, deterministic evidence."""
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
 from drawtemp.quality.r77_exploratory import explore_action_scene
 from sporebound.action_runtime import ActionRuntime
@@ -67,6 +68,17 @@ class ExploratoryQaTests(unittest.TestCase):
         self.assertEqual(result["status"], "inconclusive")
         self.assertFalse(result["static_preflight"]["complete"])
         self.assertFalse(result["release_certified"])
+
+    def test_runtime_exception_retains_reproducer_without_false_coverage(self):
+        with patch.object(ActionRuntime, "step", side_effect=RuntimeError("synthetic-fault")):
+            report = explore_action_scene(scene(), [[3, 2]], seeds=(0,),
+                                          ticks_per_seed=2)
+        self.assertEqual(report["status"], "runtime_exception")
+        self.assertEqual(report["runs"][0]["ticks"], 0)
+        self.assertEqual(report["runs"][0]["actions"], [])
+        self.assertEqual(report["failures"][0]["command"]["tick"], 1)
+        self.assertEqual(report["failures"][0]["error_type"], "RuntimeError")
+        self.assertTrue(report["runtime_replay_verified"])
 
     def test_fail_closed_configuration_and_authoring(self):
         for kwargs in ({"seeds": ()}, {"seeds": (1, 1)},
