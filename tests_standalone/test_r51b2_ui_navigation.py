@@ -1,5 +1,6 @@
 """R51.B2 — typed gauges, keyboard focus order and authentic title menu."""
 from copy import deepcopy
+from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
@@ -145,6 +146,22 @@ class AuthoredMenuTests(unittest.TestCase):
             result = menu_for_player(player, 800)
             self.assertFalse(result["available"])
             self.assertIn("must offer New Game", result["error"])
+
+    def test_qml_menu_and_keyboard_controls_are_wired_without_evaluation(self):
+        player_dir = Path(__file__).parents[1] / "drawtemp" / "player"
+        main = (player_dir / "Main.qml").read_text(encoding="utf-8")
+        component = (player_dir / "R51Layout.qml").read_text(encoding="utf-8")
+        node = (player_dir / "R51Node.qml").read_text(encoding="utf-8")
+        self.assertIn('objectName: "r51-title-menu"', main)
+        self.assertIn('objectName: "r51-classic-menu-toggle"', main)
+        self.assertIn("player.authoredMenuIntent(action)", main)
+        self.assertIn("(!customTitleMenu.menuPayload.available || root.showClassicMenu)",
+                      main)
+        self.assertIn("function shiftFocus(direction)", component)
+        self.assertIn("permittedActions: nodeItem.permittedActions", node)
+        self.assertIn("onWidgetFocused", component)
+        self.assertIn("event.key === Qt.Key_Tab", node)
+        self.assertIn("Text.PlainText", node)
 
     def test_bad_width_rejected_before_looking_at_title(self):
         authored_project(self.project, new_layout("MENU"))
