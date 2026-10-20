@@ -445,3 +445,5 @@ projets et sauvegardes historiques. Les formats non supportés sont refusés,
 jamais convertis silencieusement.
 
 Voir [R16 — guide migration et conditions de retrait](docs/drawtemp5/R16_LEGACY_MIGRATION.md).
+
+- [R55 — System Designer : économie déterministe et Studio Qt](docs/R55_SYSTEM_DESIGNER.md) (développement progressif, gate non certifié).
