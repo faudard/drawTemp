@@ -99,6 +99,22 @@ class R68FeasibilityTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             load_evidence(path, REVISION)
 
+    def test_malformed_unhashable_target_is_rejected(self):
+        path = self.evidence()
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["target"] = ["android"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaises(EvidenceError):
+            load_evidence(path, REVISION)
+
+    def test_missing_source_never_claims_readiness(self):
+        self.evidence("ios")
+        (self.root / "drawtemp/player/qt_app.py").unlink()
+        report = build_report(self.root, revision=REVISION,
+                              evidence=[self.root / "proofs/ios/evidence.json"])
+        self.assertIn("drawtemp/player/qt_app.py", report["missing_sources"])
+        self.assertEqual(report["platforms"]["ios"]["decision"], "NO-GO")
+
     def test_duplicate_platform_dossiers_are_rejected(self):
         path = self.evidence()
         with self.assertRaises(EvidenceError):
