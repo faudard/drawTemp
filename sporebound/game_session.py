@@ -324,6 +324,11 @@ class GameSession:
                 "Invalid free movement input")
         if self._living_world is not None:
             self._living_world.preflight(1)
+        # Preview the canonical systems tick before mutating Campaign position
+        # or movement replay. A rejected economy budget leaves both unchanged.
+        staged_system = deepcopy(self._systems) if self._systems is not None else None
+        if staged_system is not None:
+            staged_system.advance(1)
         scene = current["scene"]
         movement = FreeMovement(self.project.exploration[scene])
         origin = (list(self._rt_origin) if self._rt_origin is not None
@@ -353,6 +358,8 @@ class GameSession:
             origin, snapshot["position"], journal)
         if self._living_world is not None:
             self._living_world.advance(1)
+        if staged_system is not None:
+            self._systems = staged_system
         return self.route_realtime_state()
 
     def _platform_definition(self):
@@ -391,9 +398,14 @@ class GameSession:
 
     def route_platform_step(self, move=0, jump=False, interact=False):
         """Exactly one fixed step; rewards and door flags belong to Campaign."""
-        runtime = self._active_platform()
+        # Stage both models before committing either. Platform collision,
+        # invalid input and economy quota errors cannot half-advance a scene.
+        runtime = deepcopy(self._active_platform())
         if self._living_world is not None:
             self._living_world.preflight(1)
+        staged_system = deepcopy(self._systems) if self._systems is not None else None
+        if staged_system is not None:
+            staged_system.advance(1)
         events = runtime.step({"tick": runtime.tick + 1, "move": move,
                                "jump": jump, "interact": interact})
         for event in events:
@@ -401,6 +413,9 @@ class GameSession:
                 self.progress.story_flags[self._platform_flag(event["collider"])] = True
         if self._living_world is not None:
             self._living_world.advance(1)
+        self._platform = runtime
+        if staged_system is not None:
+            self._systems = staged_system
         return {"state": runtime.snapshot(), "events": events}
 
     def route_platform_travel(self, link_id):
