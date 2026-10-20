@@ -87,6 +87,8 @@ def scene_for_player(controller):
 def create_bridge(controller, renderer):
     """Share the real QML bridge with the R14 GUI driver, without a mock runtime."""
     from PySide6.QtCore import QObject, Property, Signal, Slot
+    from drawtemp.player.action_clock import ActionStepClock
+    from time import monotonic_ns
 
     class PlayerBridge(QObject):
         stateChanged = Signal()
@@ -98,6 +100,12 @@ def create_bridge(controller, renderer):
             self.animator = AnimationDirector()
             self._pending_recovery = None  # ephemeral confirmation, never gameplay
             self._recovery_notice = {}
+            self._platform_clock = ActionStepClock(hz=60, max_catchup=6)
+            self._platform_last_ns = None
+            self._platform_last_jump = False
+            self._platform_last_attack = False
+            self._platform_buffer_jump = False
+            self._platform_buffer_attack = False
 
         @Property("QVariantMap", notify=stateChanged)
         def view(self):
@@ -233,6 +241,7 @@ def create_bridge(controller, renderer):
                          {"new_game", "load", "load_autosave", "continue_game",
                           "restore_backup", "restore_autosave_backup", "title"})
                 if reset or self.controller.show_title:
+                    self.platformClockReset()
                     self.animator.cancel()
                 elif (before is not None and after is not None and
                       after.revision != before.revision):
@@ -359,6 +368,76 @@ def create_bridge(controller, renderer):
         @Slot(str)
         def startMission(self, mission):
             self.invoke(self.controller.start_mission, mission)
+
+        @Slot()
+        def platformClockReset(self):
+            """Drop UI wall-time and input edges; gameplay state is untouched."""
+            self._platform_clock.reset()
+            self._platform_last_ns = None
+            self._platform_last_jump = False
+            self._platform_last_attack = False
+            self._platform_buffer_jump = False
+            self._platform_buffer_attack = False
+
+        @Slot(int, bool, bool)
+        def platformStep(self, move, jump, attack):
+            """One explicit canonical R32 tick for accessible/test controls."""
+            self.platformClockReset()
+            self.invoke(self.controller.platform_step, move, jump, attack)
+
+        @Slot(str)
+        def platformTravel(self, link_id):
+            self.platformClockReset()
+            self.invoke(self.controller.platform_travel, link_id)
+
+        @Slot(int, bool, bool)
+        def platformPulse(self, move, jump, attack):
+            """60 Hz logical steps from monotonic wall time, not Qt render FPS.
+
+            The view samples held controls, but jump and attack are edge
+            commands; a midair jump cannot auto-fire each rendering refresh.
+            """
+            if (type(move) is not int or move not in (-1, 0, 1)
+                    or type(jump) is not bool or type(attack) is not bool):
+                self._display_error(ValueError("Invalid platform controller input"))
+                self.stateChanged.emit()
+                return
+            state = self.controller.state()
+            if (state["screen"] != "platform" or
+                    state["platform"]["state"].get("boss", {}).get(
+                        "player_defeated", False)):
+                self.platformClockReset()
+                return
+            self._platform_buffer_jump |= jump and not self._platform_last_jump
+            self._platform_buffer_attack |= attack and not self._platform_last_attack
+            self._platform_last_jump = jump
+            self._platform_last_attack = attack
+            now = monotonic_ns()
+            if self._platform_last_ns is None:
+                self._platform_last_ns = now
+                return
+            steps = self._platform_clock.advance(
+                max(0, now - self._platform_last_ns))
+            self._platform_last_ns = now
+            if not steps:
+                return
+            try:
+                for i in range(steps):
+                    self.controller.platform_step(
+                        move,
+                        self._platform_buffer_jump if i == 0 else False,
+                        self._platform_buffer_attack if i == 0 else False)
+                    if i == 0:
+                        self._platform_buffer_jump = False
+                        self._platform_buffer_attack = False
+                    status = self.controller.session.platform_state()["state"].get("boss", {})
+                    if status.get("defeated") or status.get("player_defeated"):
+                        self.platformClockReset()
+                        break
+            except Exception as exc:
+                self.platformClockReset()
+                self._display_error(exc)
+            self.stateChanged.emit()
 
         @Slot(str)
         def routeTransition(self, link_id):
