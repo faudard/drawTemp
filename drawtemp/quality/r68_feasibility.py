@@ -96,7 +96,7 @@ def load_evidence(path, revision):
             set(data) != {"schema", "kind", "revision", "target", "environment", "checks"} or
             type(data["schema"]) is not int or data["schema"] != SCHEMA or
             data["kind"] != KIND or data["revision"] != revision or
-            data["target"] not in REQUIREMENTS or
+            (type(data["target"]) is not str or data["target"] not in REQUIREMENTS) or
             data["environment"] != ENVIRONMENTS[data["target"]] or
             type(data["checks"]) is not dict):
         raise EvidenceError("Malformed or inconsistent R68 manifest")
