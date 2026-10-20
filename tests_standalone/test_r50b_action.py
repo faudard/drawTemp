@@ -201,6 +201,28 @@ class R50BActionCombatTests(unittest.TestCase):
             player.route_action_step({"tick": tick, "guard": True})
         player.route_action_step({"tick": 13, "attack": True})
 
+    def test_ct_startup_failure_rolls_back_paid_gold_and_evidence(self):
+        path = author_action_prototype(self.root / "project")
+        content, project = self._pair(path)
+        player = PlayerController(content, project, self.root / "p.json")
+        player.new_game("main", 1, seed=50)
+        self._defeat_enemy(player)
+        before = player.session.recording()
+        saved = player.path_for("main", 1).read_bytes()
+        with patch.object(
+                player.session, "start_mission",
+                side_effect=RuleError("Simulated CT startup failure")):
+            with self.assertRaisesRegex(RuleError, "Simulated CT startup"):
+                player.route_action_settle("after_action_to_ct")
+        self.assertEqual(player.session.recording(), before)
+        self.assertEqual(player.path_for("main", 1).read_bytes(), saved)
+        self.assertNotIn("scene_action_history", player.session.recording())
+        # Retrying on the restored slot pays once and transitions normally.
+        result = player.route_action_settle("after_action_to_ct")
+        self.assertEqual(result["coins_awarded"], 1)
+        self.assertEqual(player.session.mode, "battle")
+        self.assertEqual(len(player.session.recording()["scene_action_history"]), 1)
+
     def test_tampered_settlement_fails_even_with_matching_outer_digest(self):
         path = author_action_prototype(self.root / "project")
         content, project = self._pair(path)
