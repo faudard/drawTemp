@@ -78,7 +78,13 @@ def build_relais_du_village():
             "objective": "eliminate", "reward": 0,
             "next_missions": [], "triggers": [],
         }],
-        "jobs": {}, "equipment": {},
+        "jobs": {},
+        "equipment": {
+            "lame_relais": {"name": "Lame du relais", "slot": "weapon",
+                           "bonuses": {"attack": 3}, "price": 30},
+            "cape_relais": {"name": "Cape du relais", "slot": "armor",
+                           "bonuses": {"max_hp": 6, "defense": 1}, "price": 24},
+        },
         "tactic_unlocks": [],
     }
     content = Content.from_dict(data)
@@ -137,6 +143,9 @@ def build_relais_du_village():
                           "reward_gold": 12},
                 "crypt": {"scene": "crypt", "enemies": ["gardien"],
                           "reward_gold": 24},
+            },
+            "starting_inventory": {
+                "lame_relais": 1, "cape_relais": 1, "potion": 1,
             },
             "quest": {
                 "title": "Rallumer la lanterne du relais",
