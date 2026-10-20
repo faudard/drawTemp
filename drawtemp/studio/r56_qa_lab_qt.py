@@ -211,9 +211,7 @@ class GameplayQALabDialog(QDialog):
                     "equals": json.loads(self.expected.text()),
                 }]
             step = {"operation": operation, "args": args, "expect": expectation}
-            # Validate the exact R56.A contract without touching the engine.
-            from drawtemp.quality.r56_scenarios import validate_scenario
-            # Store steps only; validate the full scenario once its SHA is set.
+            # Validate the full R56.A contract when the capture is committed.
             if len(self._draft) >= 256:
                 raise ValueError("Maximum 256 actions")
             self._draft.append(step)
@@ -240,7 +238,6 @@ class GameplayQALabDialog(QDialog):
             self._cases.append(case)
             self._draft, self._draft_links = [], []
             self._batch = None
-            self._source_path = None
             self.status.setText("Scénario capturé : " + case["scenario"]["id"]
                                 + " (exécution non encore prouvée)")
             self.refresh_cases()
@@ -331,6 +328,9 @@ class GameplayQALabDialog(QDialog):
             suite = read_suite(path)
             self._cases = suite["cases"]
             self._source_path = path
+            pins = {case["scenario"]["revision"] for case in self._cases}
+            if len(pins) == 1:
+                self.revision.setText(next(iter(pins)))
             self._batch = None
             self.status.setText(str(len(self._cases)) + " scénarios importés, non validés")
             self.refresh_cases()
