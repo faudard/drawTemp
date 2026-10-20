@@ -210,6 +210,7 @@ def serve_private_probe(*, host, port, server_context, pins, tickets,
     service = _make_session(tickets, seed)
     gateway = PinnedPeerGateway(service, pins)
     admitted_players = set()
+    connection_attempts = 0
     received_bytes = sent_bytes = 0
     start_wall, start_cpu = time.perf_counter(), time.process_time()
     tracemalloc.start()
@@ -218,12 +219,13 @@ def serve_private_probe(*, host, port, server_context, pins, tickets,
             listener.settimeout(READ_TIMEOUT_SECONDS)
             port_bound = listener.getsockname()[1]
             while len(admitted_players) < 2:
-                require(gateway.diagnostics()["counts"]["admitted"] <
-                        MAX_ACCEPT_ATTEMPTS, "Too many TLS probe connections")
+                require(connection_attempts < MAX_ACCEPT_ATTEMPTS,
+                        "Too many TLS probe connection attempts")
                 try:
                     conn, _ = listener.accept()
                 except socket.timeout as exc:
                     raise TimeoutError("Missing second TLS private client") from exc
+                connection_attempts += 1
                 with conn:
                     conn.settimeout(READ_TIMEOUT_SECONDS)
                     peer = None
