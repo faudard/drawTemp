@@ -526,6 +526,27 @@ def create_bridge(controller, renderer):
         def worldWait(self, ticks):
             self.invoke(self.controller.world_wait, ticks)
 
+        @Slot(str, str, str, int)
+        def marketTrade(self, shop_id, item_id, action, quantity):
+            self.invoke(self.controller.market_trade,
+                        shop_id, item_id, action, quantity)
+
+        @Slot(str, int)
+        def marketCraft(self, recipe_id, quantity):
+            self.invoke(self.controller.market_craft, recipe_id, quantity)
+
+        @Slot(str)
+        def marketDeliver(self, quest_id):
+            self.invoke(self.controller.market_deliver, quest_id)
+
+        @Slot(str)
+        def marketClaim(self, quest_id):
+            self.invoke(self.controller.market_claim, quest_id)
+
+        @Slot()
+        def marketNextMorning(self):
+            self.invoke(self.controller.market_next_morning)
+
         @Slot(int)
         def systemWait(self, ticks):
             self.invoke(self.controller.system_wait, ticks)

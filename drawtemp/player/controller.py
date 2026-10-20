@@ -325,6 +325,93 @@ class PlayerController:
                                           expected_revision=state.revision)
         return self._changed()
 
+    def _market_context(self):
+        self._require_cinematic_completed()
+        snap = self._current()
+        if (snap.mode != "campaign" or snap.scene is not None
+                or not snap.exploration or snap.exploration["completed"]):
+            raise ValueError("Le marché est accessible uniquement en exploration")
+        world = self.session.living_world_state(
+            scene=snap.exploration["scene_id"])
+        if world is None:
+            raise ValueError("Ce projet ne contient pas de monde vivant")
+        return snap, thaw(world)
+
+    def _market_receipt(self, kind):
+        """A deterministic, load-safe receipt name from the canonical save.
+
+        UI revisions restart on load and must never be used as transaction IDs.
+        """
+        if kind not in ("trades", "crafts"):
+            raise ValueError("Unknown transaction ledger")
+        recorded = self.session.recording().get("living_world", {})
+        ledger = recorded.get(kind, {})
+        seq = len(ledger)
+        while True:
+            token = "r45_player_" + kind + "_" + str(seq)
+            if token not in ledger:
+                return token
+            seq += 1
+
+    def market_trade(self, shop_id, item_id, action, quantity=1):
+        snap, _world = self._market_context()
+        if type(quantity) is not int or not 1 <= quantity <= 99:
+            raise ValueError("Invalid merchant quantity")
+        self.session.living_world_trade(
+            shop_id, item_id, action, quantity, self._market_receipt("trades"),
+            expected_revision=snap.revision)
+        self.message = ("Achat" if action == "buy" else "Vente") + " : " + item_id
+        return self._changed(keep_message=True)
+
+    def market_craft(self, recipe_id, quantity=1):
+        snap, _world = self._market_context()
+        if type(quantity) is not int or not 1 <= quantity <= 99:
+            raise ValueError("Invalid crafting quantity")
+        self.session.living_world_craft(
+            recipe_id, quantity, self._market_receipt("crafts"),
+            expected_revision=snap.revision)
+        self.message = "Fabrication : " + recipe_id
+        return self._changed(keep_message=True)
+
+    def market_deliver(self, quest_id):
+        snap, world = self._market_context()
+        quest = next((row for row in world.get("daily_quests", [])
+                      if row["id"] == quest_id), None)
+        have = thaw(snap.progress).get("inventory", {})
+        if (quest is None or "delivery_item" not in quest
+                or quest["claimed_today"] or not quest["delivery_open"]
+                or have.get(quest["delivery_item"], 0) <
+                   quest["delivery_quantity"]):
+            raise ValueError("Livraison impossible ou déjà effectuée aujourd'hui")
+        self.session.living_world_deliver_daily_quest(
+            quest_id, expected_revision=snap.revision)
+        self.message = "Livraison : " + quest_id
+        return self._changed(keep_message=True)
+
+    def market_claim(self, quest_id):
+        snap, world = self._market_context()
+        quest = next((row for row in world.get("daily_quests", [])
+                      if row["id"] == quest_id), None)
+        if (quest is None or "delivery_item" in quest
+                or not quest["ready"]):
+            raise ValueError("Récompense indisponible ou déjà récupérée")
+        self.session.living_world_finish_daily_quest(
+            quest_id, expected_revision=snap.revision)
+        self.message = "Quête : " + quest_id
+        return self._changed(keep_message=True)
+
+    def market_next_morning(self):
+        snap, world = self._market_context()
+        # Project-owned logical tick rate; never tie world time to render FPS.
+        minute = world["minute"]
+        elapsed = (480 - minute if minute < 480
+                   else 1440 - minute + 480)
+        self.session.living_world_advance(
+            elapsed * world["ticks_per_minute"],
+            expected_revision=snap.revision)
+        self.message = "Le marché ouvre à 08:00."
+        return self._changed(keep_message=True)
+
     def explore_interact(self, point_id):
         state = self._current()
         if self.session.platform_state(expected_revision=state.revision) is not None:
@@ -724,7 +811,7 @@ class PlayerController:
                 "platform": {"enabled": False},
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
-                "living_world": None, "systems": None, "cinematic": {}, "revision": 0,
+                "living_world": None, "economy": {"enabled": False}, "systems": None, "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []}}
         if self.campaign_id.endswith("_journey"):
@@ -840,6 +927,56 @@ class PlayerController:
             base["living_world"] = thaw(self.session.living_world_state(
                 scene=current)) if current is not None else thaw(
                     self.session.living_world_state())
+            world = base["living_world"]
+            stock = progress.get("inventory", {})
+            spec = (self.project.extensions.get("org.drawtemp.livingworld", {})
+                    .get("data", {}))
+            authored_stocks = {
+                (shop["id"], item["id"]): item["daily_stock"]
+                for shop in spec.get("shops", [])
+                for item in shop["items"]}
+            shops = []
+            for shop in world.get("shops", []):
+                items = []
+                for item in shop["items"]:
+                    count = stock.get(item["id"], 0)
+                    items.append({
+                        **item, "owned": count,
+                        "can_buy": (shop["open"] and item["stock"] > 0
+                                    and progress["gold"] >= item["buy_price"]),
+                        "can_sell": (shop["open"] and count > 0
+                                     and item["stock"] < authored_stocks[
+                                         (shop["id"], item["id"])]),
+                    })
+                shops.append({**shop, "items": items})
+            recipes = []
+            for recipe in world.get("recipes", []):
+                recipes.append({
+                    **recipe,
+                    "can_craft": (recipe["available"]
+                                  and recipe["remaining_today"] > 0
+                                  and progress["gold"] >= recipe["gold_cost"]
+                                  and all(stock.get(row["item"], 0) >= row["quantity"]
+                                          for row in recipe["inputs"])),
+                })
+            quests = []
+            for quest in world.get("daily_quests", []):
+                deliverable = ("delivery_item" in quest and
+                               quest.get("delivery_open", False) and
+                               not quest["claimed_today"] and
+                               stock.get(quest["delivery_item"], 0) >=
+                               quest["delivery_quantity"])
+                quests.append({**quest, "can_deliver": deliverable})
+            base["economy"] = {
+                "enabled": bool(shops or recipes or quests),
+                "day": world["day"], "week_complete": world["day"] >= 7,
+                "gold": progress["gold"],
+                "inventory": [
+                    {"id": item_id, "count": count}
+                    for item_id, count in sorted(stock.items()) if count > 0],
+                "shops": shops, "recipes": recipes,
+                "daily_quests": quests,
+            }
         if snapshot.battle:
             # Selection is a UI concern and can outlive a previous mission.
             width, height = snapshot.battle["width"], snapshot.battle["height"]

@@ -954,6 +954,134 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ColumnLayout {
+                            objectName: "r45EconomyPanel"
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.economy &&
+                                     root.playerData.economy.enabled
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: "MARCHÉ DU VILLAGE · R45"
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                Accessible.name: "Atelier marchand accessible"
+                            }
+                            Label {
+                                text: "Or : " + (root.playerData.economy.gold || 0) +
+                                      " · Jour " + ((root.playerData.economy.day || 0) + 1)
+                                color: root.ivory
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                objectName: "r45NextMorning"
+                                text: "Prochain matin · 08:00"
+                                Layout.fillWidth: true
+                                enabled: !root.inputLocked
+                                Accessible.name: "Avancer le calendrier au prochain matin"
+                                onClicked: player.marketNextMorning()
+                            }
+                            Repeater {
+                                model: root.playerData.economy.shops || []
+                                ColumnLayout {
+                                    property var shopRecord: modelData
+                                    Layout.fillWidth: true
+                                    Label {
+                                        Layout.fillWidth: true
+                                        font.bold: true
+                                        color: root.gold
+                                        text: shopRecord.id + (shopRecord.open ? " · ouvert" : " · fermé")
+                                    }
+                                    Repeater {
+                                        model: shopRecord.items || []
+                                        ColumnLayout {
+                                            property var stockRecord: modelData
+                                            Layout.fillWidth: true
+                                            Label {
+                                                Layout.fillWidth: true
+                                                color: root.ivory
+                                                wrapMode: Text.WordWrap
+                                                text: stockRecord.id + " · stock " + stockRecord.stock +
+                                                      " · sac " + stockRecord.owned
+                                            }
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: "Acheter · " + stockRecord.buy_price + " or"
+                                                    enabled: !root.inputLocked && stockRecord.can_buy
+                                                    onClicked: player.marketTrade(
+                                                        shopRecord.id, stockRecord.id, "buy", 1)
+                                                }
+                                                Button {
+                                                    Layout.fillWidth: true
+                                                    text: "Vendre · " + stockRecord.sell_price + " or"
+                                                    enabled: !root.inputLocked && stockRecord.can_sell
+                                                    onClicked: player.marketTrade(
+                                                        shopRecord.id, stockRecord.id, "sell", 1)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.economy.recipes || []
+                                RowLayout {
+                                    property var recipeRecord: modelData
+                                    Layout.fillWidth: true
+                                    Label {
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                        wrapMode: Text.WordWrap
+                                        text: recipeRecord.id + " · coût " + recipeRecord.gold_cost +
+                                              " · quota " + recipeRecord.remaining_today
+                                    }
+                                    Button {
+                                        text: "Fabriquer"
+                                        enabled: !root.inputLocked && recipeRecord.can_craft
+                                        onClicked: player.marketCraft(recipeRecord.id, 1)
+                                        Accessible.name: "Fabriquer " + recipeRecord.id
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: root.playerData.economy.daily_quests || []
+                                RowLayout {
+                                    property var questRecord: modelData
+                                    Layout.fillWidth: true
+                                    Label {
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                        text: questRecord.id +
+                                              (questRecord.claimed_today ? " · livrée" : "")
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Button {
+                                        visible: !!questRecord.delivery_item
+                                        text: "Livrer " + (questRecord.delivery_quantity || 0) +
+                                              " " + (questRecord.delivery_item || "")
+                                        enabled: !root.inputLocked && !!questRecord.can_deliver
+                                        onClicked: player.marketDeliver(questRecord.id)
+                                    }
+                                    Button {
+                                        visible: !questRecord.delivery_item
+                                        text: "Récompense"
+                                        enabled: !root.inputLocked && questRecord.ready
+                                        onClicked: player.marketClaim(questRecord.id)
+                                    }
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: root.muted
+                                text: "Sac : " + (root.playerData.economy.inventory || [])
+                                      .map(function(i) { return i.id + " ×" + i.count }).join(", ")
+                            }
+                        }
                         Label {
                             visible: root.playerData.screen !== "exploration"
                             text: "CT · tour " + (root.playerData.battle.tick || 0) +
