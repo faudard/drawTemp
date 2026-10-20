@@ -12,7 +12,7 @@ import re
 PROFILE_VERSION = 1
 MAX_LAYERS = 8
 MAX_LAYER_SIDE = 2048
-PROJECTIONS = ("isometric", "top_down")
+PROJECTIONS = ("isometric", "top_down", "side")
 _COLOR = re.compile(r"#[0-9a-fA-F]{6}\Z")
 _ID = re.compile(r"[a-z][a-z0-9_-]{0,47}\Z")
 
