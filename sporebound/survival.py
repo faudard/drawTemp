@@ -33,7 +33,7 @@ def _materials(rows, items):
                 "Unknown or invalid survival item quantity")
 
 
-def validate_survival(spec, scenes):
+def validate_survival(spec, scenes, *, exploration=None):
     """Fail closed on schema, references, bounds and self-crafting."""
     require(type(spec) is dict and set(spec) == {
         "version", "needs", "items", "tools", "nodes", "recipes", "shelters", "foods"},
@@ -63,12 +63,29 @@ def validate_survival(spec, scenes):
                 and row["id"] not in tools and _int(row["durability"], 1, 1000),
                 "Invalid survival tool")
         tools.add(row["id"])
+    def check_position(row):
+        if "pos" not in row:
+            return
+        pos = row["pos"]
+        require(type(pos) is list and len(pos) == 2
+                and all(_int(n, 0, 1_000_000) for n in pos),
+                "Survival placement must be a two-integer grid cell")
+        if exploration is not None:
+            scene = exploration.get(row["scene"])
+            require(type(scene) is dict
+                    and _int(scene.get("width"), 1, 1_000_000)
+                    and _int(scene.get("height"), 1, 1_000_000)
+                    and pos[0] < scene["width"] and pos[1] < scene["height"]
+                    and pos not in scene.get("blocked", []),
+                    "Survival placement outside map or on blocked cell")
+
     require(type(spec["nodes"]) is list and len(spec["nodes"]) <= 128,
             "Too many harvest nodes")
     nodes = set()
     for row in spec["nodes"]:
-        require(type(row) is dict and set(row) == {
-            "id", "scene", "item", "stock", "yield", "tool", "wear", "energy_cost", "cold"}
+        require(type(row) is dict and
+            {"id", "scene", "item", "stock", "yield", "tool", "wear", "energy_cost", "cold"} <= set(row)
+            <= {"id", "scene", "item", "stock", "yield", "tool", "wear", "energy_cost", "cold", "pos"}
             and _id(row["id"]) and row["id"] not in nodes
             and type(row["scene"]) is str and row["scene"] in scenes
             and type(row["item"]) is str and row["item"] in items
@@ -81,6 +98,7 @@ def validate_survival(spec, scenes):
             and _int(row["energy_cost"], 1, 100)
             and _int(row["cold"], 0, 100),
             "Invalid survival harvest node")
+        check_position(row)
         nodes.add(row["id"])
     require(type(spec["recipes"]) is list and len(spec["recipes"]) <= 128,
             "Too many survival recipes")
@@ -129,14 +147,16 @@ def validate_survival(spec, scenes):
             "Too many shelters")
     shelters = set()
     for row in spec["shelters"]:
-        require(type(row) is dict and set(row) == {
-            "id", "scene", "fuel", "energy_restore", "warmth"}
+        require(type(row) is dict and
+            {"id", "scene", "fuel", "energy_restore", "warmth"} <= set(row)
+            <= {"id", "scene", "fuel", "energy_restore", "warmth", "pos"}
             and _id(row["id"]) and row["id"] not in shelters
             and type(row["scene"]) is str and row["scene"] in scenes
             and _int(row["energy_restore"], 1, 100)
             and _int(row["warmth"], 0, 100),
             "Invalid survival shelter")
         _materials(row["fuel"], items)
+        check_position(row)
         shelters.add(row["id"])
     return deepcopy(spec)
 
@@ -144,9 +164,10 @@ def validate_survival(spec, scenes):
 class SurvivalRuntime:
     """Integer-time survival with atomic canonical inventory transfers."""
 
-    def __init__(self, spec, scenes):
-        self.spec = validate_survival(spec, scenes)
+    def __init__(self, spec, scenes, *, exploration=None):
+        self.spec = validate_survival(spec, scenes, exploration=exploration)
         self.scenes = frozenset(scenes)
+        self.exploration = deepcopy(exploration) if exploration is not None else None
         self.nodes = {row["id"]: row for row in self.spec["nodes"]}
         self.recipes = {row["id"]: row for row in self.spec["recipes"]}
         self.shelters = {row["id"]: row for row in self.spec["shelters"]}
@@ -294,7 +315,7 @@ class SurvivalRuntime:
             and type(snapshot["journal"]) is list
             and len(snapshot["journal"]) <= MAX_JOURNAL,
             "Malformed R63 checkpoint")
-        replay = SurvivalRuntime(self.spec, self.scenes)
+        replay = SurvivalRuntime(self.spec, self.scenes, exploration=self.exploration)
         for event in snapshot["journal"]:
             require(type(event) is dict and "kind" in event,
                     "Invalid survival replay event")
