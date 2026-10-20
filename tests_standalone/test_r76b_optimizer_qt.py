@@ -66,6 +66,21 @@ class OptimizerStudioQtSmoke(unittest.TestCase):
         self.assertTrue((self.root / "a.png").is_file())
         self.assertTrue((self.root / "b.png").is_file())
 
+    def test_r76b2_requires_separate_project_approval_and_strict_rights(self):
+        dialog = OptimizerDialog(self.session, self.content_path)
+        self.addCleanup(dialog.close)
+        output = self.root.parent / "r15-preview"
+        dialog.project_output.setText(str(output))
+        self.assertFalse(dialog.project_button.isEnabled())
+        dialog.project_approve.setChecked(True)
+        self.assertTrue(dialog.project_button.isEnabled())
+        # The test fixture has no on-disk canonical GameProject/rights index.
+        # The new R15 workflow must not silently use in-memory editor data.
+        self.assertFalse(dialog.stage_project())
+        self.assertIsNone(dialog.staged_project)
+        self.assertFalse(output.exists())
+        self.assertEqual(dialog.project_undo_button.isEnabled(), False)
+
     def test_dirty_revision_refuses_stale_preview(self):
         dialog = OptimizerDialog(self.session, self.content_path)
         self.addCleanup(dialog.close)
