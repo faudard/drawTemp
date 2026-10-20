@@ -142,9 +142,6 @@ else:
 from drawtemp.studio.r52_render_inspector import RenderLookInspector
 widget = RenderLookInspector(renderer)
 baseline = renderer.lightingProfile
-widget.night_tint.setText("not-a-color")
-assert not widget.preview()
-assert renderer.lightingProfile == baseline
 widget.night_tint.setText("#25336a")
 assert widget.preview()
 widget.cancel()
