@@ -93,6 +93,11 @@ class GameSession:
         config = (party["data"]["campaigns"].get(campaign_id)
                   if party is not None else None)
         self._classic_party = ClassicParty(config) if config is not None else None
+        # Only initial new-game construction seeds these items. Loaded saves
+        # replace Campaign through verified replay, never replenish stock.
+        if config is not None:
+            self.progress.inventory.update(
+                deepcopy(party["data"].get("starting_inventory", {})))
         self._rpg_encounter = None  # R41.B2 opt-in, GameSession owns combat
         if self._classic_party is not None:
             for hero_id in self._classic_party.members:
