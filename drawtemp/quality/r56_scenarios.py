@@ -118,9 +118,13 @@ def _expect(recording, checks, index):
 
 
 def _execute(doc, content, project, rules, interval):
-    session = GameSession.new(content, project, doc["campaign"],
-                              seed=doc["seed"], rules=rules)
-    record = session.recording()
+    try:
+        session = GameSession.new(content, project, doc["campaign"],
+                                  seed=doc["seed"], rules=rules)
+        record = session.recording()
+    except Exception as exc:
+        raise ScenarioFailure(0, "initialization",
+                              "%s: %s" % (type(exc).__name__, exc)) from exc
     if (record["content_digest"] != doc["content_digest"] or
             record["project_digest"] != doc["project_digest"]):
         raise ScenarioFailure(0, "source_drift", "Content/GameProject changed")
@@ -141,11 +145,14 @@ def _execute(doc, content, project, rules, interval):
             trace.append({"step": i, "operation": step["operation"],
                           "digest": record["digest"], "mode": record["mode"],
                           "checkpoint": checkpoint})
-        except ScenarioFailure:
+        except ScenarioFailure as exc:
+            exc.trace = deepcopy(trace)
             raise
         except Exception as exc:
-            raise ScenarioFailure(i, "runtime", "%s: %s" %
-                                  (type(exc).__name__, exc)) from exc
+            failure = ScenarioFailure(i, "runtime", "%s: %s" %
+                                      (type(exc).__name__, exc))
+            failure.trace = deepcopy(trace)
+            raise failure from exc
     return trace
 
 
@@ -181,11 +188,14 @@ def run_scenario(document, content, project, *, revision, rules=None,
         second = _execute(doc, content, project, rules, checkpoint_every)
         for a, b in zip(first, second):
             if a != b:
-                raise ScenarioFailure(a["step"], "nondeterministic",
-                                      "Independent replay digests differ")
+                failure = ScenarioFailure(a["step"], "nondeterministic",
+                                          "Independent replay digests differ")
+                failure.trace = deepcopy(first[:a["step"] + 1])
+                raise failure
         report.update(status="passed", replay_verified=True,
                       steps_executed=len(doc["steps"]), trace=first)
     except ScenarioFailure as exc:
+        report["trace"] = deepcopy(getattr(exc, "trace", []))
         report["status"] = "blocked" if exc.step == 0 else "failed"
         report["steps_executed"] = max(0, exc.step - 1)
         report["counterexample"] = {
