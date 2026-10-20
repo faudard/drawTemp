@@ -14,6 +14,8 @@ from .tile_chunks import TileChunkIndex
 from .visual_compositor import actor_visual_position, automatic_cutaway
 from .building_geometry import pick_surface
 from .texture_batches import TerrainTextureBatches, make_image_provider
+from .depth_pipeline import (effect_capabilities, normalize_depth_profile,
+                             projected_depth_layers)
 
 
 def default_atlas_url():
@@ -25,7 +27,7 @@ def default_atlas_url():
 
 def make_controller(scene, atlas_url=None, *, assets=None,
                     character_pack=None, character_variant=None,
-                    character_packs=None, projection_mode="isometric"):
+                    character_packs=None, projection_mode="isometric", depth_profile=None):
     """Shared R3 renderer with optional R7 character pack, no gameplay changes."""
     if projection_mode not in ("isometric", "top_down"):
         raise ValueError("Unsupported R3 projection mode")
@@ -46,6 +48,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self.projection = (TopDownProjection() if projection_mode == "top_down"
                                else IsoProjection())
             self.projection_mode = projection_mode
+            self._depth_profile = normalize_depth_profile(
+                depth_profile, projection_mode=projection_mode)
             self.selection = None
             self._building_level = 0
             self._building_cutaway = False
@@ -320,6 +324,25 @@ def make_controller(scene, atlas_url=None, *, assets=None,
         def projectionMode(self):
             return self.projection_mode
 
+        @Property("QVariantList", notify=sceneChanged)
+        def depthLayers(self):
+            """Opt-in decorative layers; no influence on picking or gameplay."""
+            return projected_depth_layers(self._depth_profile, self.projection)
+
+        @Property("QVariantMap", notify=sceneChanged)
+        def depthCapabilities(self):
+            """Explicit fallback for unavailable R52.B lighting passes."""
+            return effect_capabilities(self._depth_profile)
+
+        @Slot("QVariantMap")
+        def setDepthProfile(self, profile):
+            """Validate the whole draft before replacing active visual state."""
+            candidate = normalize_depth_profile(
+                profile, projection_mode=self.projection_mode)
+            if candidate != self._depth_profile:
+                self._depth_profile = candidate
+                self.sceneChanged.emit()
+
         @Property("QVariantMap", notify=cameraChanged)
         def cameraState(self):
             return {"zoom": self.camera.zoom, "panX": self.camera.pan_x,
@@ -564,7 +587,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
 
 def create_view(scene, parent=None, *, assets=None,
                 character_pack=None, character_variant=None,
-                character_packs=None):
+                character_packs=None, depth_profile=None):
     """Return (QQuickView, controller); caller retains both references.
 
     Studio can wrap the QQuickView with QWidget.createWindowContainer(view).
@@ -575,7 +598,8 @@ def create_view(scene, parent=None, *, assets=None,
     controller = make_controller(scene, assets=assets,
                                  character_pack=character_pack,
                                  character_variant=character_variant,
-                                 character_packs=character_packs)
+                                 character_packs=character_packs,
+                                 depth_profile=depth_profile)
     view = QQuickView(parent)
     controller.attach_engine(view.engine())
     view.rootContext().setContextProperty("renderer", controller)
