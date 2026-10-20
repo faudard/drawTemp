@@ -163,6 +163,13 @@ def preflight(content_path, *, require_licenses=False):
         elif require_licenses:
             # Empty projects have no third-party material to license.
             result["rights_attestations_checked"] = True
+        # R36.C2: strictly audit sprites actually used by authored R36
+        # controllers, while preserving R15 rights as the export authority.
+        from drawtemp.quality.r36_release import audit_r36_rights
+        result["r36_animation"] = audit_r36_rights(
+            project, source.parent, require_licenses=require_licenses)
+        result["errors"].extend(result["r36_animation"]["errors"])
+        result["warnings"].extend(result["r36_animation"]["warnings"])
     except (ValueError, OSError, TypeError, KeyError) as exc:
         result["errors"].append(str(exc))
     result["passed"] = not result["errors"]
