@@ -389,6 +389,8 @@ Avant tout tag 10.0 :
 
 **Vertical slice :** VS-69 — Échange contrôlé de trois packs.
 
+**Implémentation en revue :** [PR #426](https://github.com/faudard/drawTemp/pull/426) — catalogue local opt-in, packs R30 inertes, tombstones, tests headless VS-69 et [contrat R69](drawtemp5/R69_COMMUNITY_CREATOR_HUB.md). Le gate complet et la CI restent **non validés** tant qu'aucun job n'a exécuté les tests.
+
 ## R70 — Genre Expansion Certification (11.0)
 
 **Objectif :** Livrer de vrais jeux de nouveaux genres sans dégrader les classiques.
