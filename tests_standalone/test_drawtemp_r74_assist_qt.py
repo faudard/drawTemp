@@ -227,6 +227,33 @@ class AssistedDungeonQtTests(unittest.TestCase):
                          after["content"])
         self.assertEqual(self.document.read_bytes(), self.bytes_before)
 
+    def test_player_gate_preview_is_read_only_and_refuses_without_approval(self):
+        self.dialog.preview_generation()
+        report = self.dialog.prepare_player_generation()
+        self.assertIsNotNone(report)
+        self.assertTrue(report.gameplay["completed"])
+        self.assertTrue(self.dialog.player_apply_button.isEnabled())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            self.assertIsNone(self.dialog.apply_player_generation())
+        self.assertEqual(self.session.snapshot().to_dict(), self.before)
+        self.dialog.physical_prefix.setText("another")
+        self.assertFalse(self.dialog.player_apply_button.isEnabled())
+
+    def test_player_gate_confirmation_and_single_undo(self):
+        self.dialog.preview_generation()
+        self.assertIsNotNone(self.dialog.prepare_player_generation())
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            transaction = self.dialog.apply_player_generation()
+        self.assertIsNotNone(transaction)
+        self.assertEqual(self.session.snapshot().revision,
+                         self.before["revision"] + 1)
+        self.assertEqual(self.document.read_bytes(), self.bytes_before)
+        restored = self.dialog.undo_application().snapshot.to_dict()
+        self.assertEqual(restored["content"], self.before["content"])
+        self.assertTrue(self.dialog.redo_button.isEnabled())
+
     def test_studio_command_palette_and_tools_action(self):
         from drawtemp.studio.qt_shell import StudioWindow
         settings = QSettings(str(self.root / "settings.ini"), QSettings.IniFormat)

@@ -482,6 +482,8 @@ class StudioWindow(QMainWindow):
         self._action("r78_team_reviews", "R78 • Revues et tâches d’équipe locales…",
                      self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r76_bench", "R76.C • Benchmarks et preuves de bundle…",
+                     self.open_r76_bench)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r77_lab", "R77 • Exploration Lab (R26)…", self.open_exploration_lab)
         self._action("r49_references", "Vérifier les références du projet…",
@@ -582,6 +584,7 @@ class StudioWindow(QMainWindow):
         vcs_menu.addAction(self.commands["r78_team_reviews"])
         tools_menu.addAction(self.commands["r30_creator"])
         tools_menu.addAction(self.commands["r30_scale"])
+        tools_menu.addAction(self.commands["r76_bench"])
         tools_menu.addAction(self.commands["r49_metrics"])
         tools_menu.addAction(self.commands["r77_lab"])
         tools_menu.addAction(self.commands["r49_references"])
@@ -609,6 +612,9 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_squad"])
         tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
+        qa_action = tools_menu.addAction("R56 • QA Lab du gameplay…")
+        qa_action.setObjectName("r56-qa-lab-action")
+        qa_action.triggered.connect(self.open_gameplay_qa_lab)
         tools_menu.addAction(self.commands["r63_survival"])
         tools_menu.addAction(self.commands["r54_stream"])
         tools_menu.addAction(self.commands["r51_hud"])
@@ -736,6 +742,11 @@ class StudioWindow(QMainWindow):
         """R38.4 read-only preflight on the current canonical editor revision."""
         from drawtemp.studio.r38_preflight_qt import PreflightDialog
         PreflightDialog(self).exec()
+
+    def open_gameplay_qa_lab(self):
+        """R56.B captures and replays a detached authoring snapshot, no edits."""
+        from drawtemp.studio.r56_qa_lab_qt import GameplayQALabDialog
+        GameplayQALabDialog(self).exec()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
@@ -1002,6 +1013,11 @@ class StudioWindow(QMainWindow):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
         R30ScaleDashboard(self).exec()
+
+    def open_r76_bench(self):
+        """R76.C read-only benchmark dashboard; never blocks GUI with probes."""
+        from drawtemp.studio.r76_bench_qt import R76BenchmarkDialog
+        R76BenchmarkDialog(self).exec()
 
     def open_assist_generation(self):
         """R30.G deterministic, optional Content v1 assistant; shared session."""

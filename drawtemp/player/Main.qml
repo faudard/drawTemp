@@ -1772,6 +1772,177 @@ ApplicationWindow {
                             }
                         }
                         ColumnLayout {
+                            id: r62VillageHud
+                            objectName: "r62-village-hud"
+                            visible: root.playerData.screen === "exploration" &&
+                                     root.playerData.village.enabled
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Label {
+                                text: "FERME & VILLAGE · JOUR " +
+                                      (root.playerData.village.day + 1)
+                                color: root.gold
+                                font.bold: true
+                                Layout.fillWidth: true
+                                Accessible.name: text
+                            }
+                            Label {
+                                visible: root.playerData.village.season !== ""
+                                text: "Saison : " + root.playerData.village.season +
+                                      (root.playerData.village.weather ?
+                                       " · météo : " + root.playerData.village.weather : "")
+                                color: root.ivory
+                                Layout.fillWidth: true
+                            }
+                            Button {
+                                objectName: "r62WaitNextDay"
+                                text: "Attendre jusqu'au prochain jour"
+                                visible: root.playerData.village.season !== ""
+                                enabled: !root.inputLocked
+                                Layout.fillWidth: true
+                                onClicked: player.farmWaitDay(1)
+                                Accessible.description: "Avance uniquement l'horloge R35"
+                            }
+
+                            Label {
+                                text: "PARCELLES"
+                                visible: root.playerData.village.plots.length > 0
+                                color: root.gold
+                                font.bold: true
+                            }
+                            Repeater {
+                                model: root.playerData.village.plots || []
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    property string plotId: modelData.id
+                                    Label {
+                                        color: root.ivory
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        text: modelData.id + " · " + modelData.soil + " · " +
+                                              (modelData.crop ?
+                                               modelData.crop + (modelData.ready ? " ✓ prêt" : " en pousse") :
+                                               "terre libre")
+                                    }
+                                    Button {
+                                        objectName: "r62Harvest-" + modelData.id
+                                        text: "Récolter · " + modelData.id
+                                        Layout.fillWidth: true
+                                        enabled: !root.inputLocked && modelData.can_harvest
+                                        visible: modelData.crop !== ""
+                                        onClicked: player.farmHarvest(modelData.id)
+                                    }
+                                    Repeater {
+                                        model: modelData.crops || []
+                                        Button {
+                                            objectName: "r62Plant-" + parent.plotId + "-" + modelData.id
+                                            text: "Semer " + modelData.id + " (" +
+                                                  modelData.seed + " : " + modelData.seed_owned +
+                                                  ", pousse " + modelData.days + " j)"
+                                            Layout.fillWidth: true
+                                            enabled: !root.inputLocked && modelData.available
+                                            onClicked: {
+                                                player.farmPlant(parent.plotId, modelData.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "ÉLEVAGE"
+                                color: root.gold
+                                font.bold: true
+                                visible: root.playerData.village.animals.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.village.animals || []
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: modelData.id + " · faim " + modelData.hunger +
+                                              " · produit : " + modelData.product
+                                        color: root.ivory
+                                        Layout.fillWidth: true
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Button {
+                                            objectName: "r62Feed-" + modelData.id
+                                            text: "Nourrir (" + modelData.feed_item +
+                                                  " : " + modelData.feed_owned + ")"
+                                            enabled: !root.inputLocked && modelData.can_feed
+                                            onClicked: player.farmFeed(modelData.id)
+                                        }
+                                        Button {
+                                            objectName: "r62Collect-" + modelData.id
+                                            text: "Collecter"
+                                            enabled: !root.inputLocked && modelData.ready
+                                            onClicked: player.farmCollect(modelData.id)
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "HABITANTS · AFFINITÉS"
+                                color: root.gold
+                                font.bold: true
+                                visible: root.playerData.village.people.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.village.people || []
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    property string npcId: modelData.id
+                                    Label {
+                                        Layout.fillWidth: true
+                                        color: root.ivory
+                                        text: modelData.id + " · " + modelData.activity +
+                                              " · affinité " + modelData.score
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Button {
+                                        objectName: "r62Talk-" + modelData.id
+                                        text: modelData.talked_today ? "Déjà parlé aujourd'hui" :
+                                               "Parler à " + modelData.id
+                                        Layout.fillWidth: true
+                                        enabled: !root.inputLocked && modelData.can_talk
+                                        onClicked: player.relationshipTalk(modelData.id)
+                                    }
+                                    Repeater {
+                                        model: modelData.gifts || []
+                                        Button {
+                                            objectName: "r62Gift-" + parent.npcId + "-" + modelData.item
+                                            text: "Offrir " + modelData.item + " (" +
+                                                  modelData.owned + ") · affinité " +
+                                                  (modelData.gain >= 0 ? "+" : "") + modelData.gain
+                                            Layout.fillWidth: true
+                                            enabled: !root.inputLocked && modelData.available
+                                            onClicked: player.relationshipGift(parent.npcId, modelData.item)
+                                        }
+                                    }
+                                }
+                            }
+                            Label {
+                                text: "VENDRE SA RÉCOLTE"
+                                color: root.gold
+                                font.bold: true
+                                visible: root.playerData.village.merchants.length > 0
+                            }
+                            Repeater {
+                                model: root.playerData.village.merchants || []
+                                Button {
+                                    objectName: "r62Sell-" + modelData.id
+                                    Layout.fillWidth: true
+                                    text: "Vendre 1 " + modelData.item + " (" +
+                                          modelData.owned + ") · +" +
+                                          modelData.sell_price + " or"
+                                    enabled: !root.inputLocked && modelData.can_sell
+                                    onClicked: player.systemTrade(modelData.id, "sell", 1)
+                                }
+                            }
+                        }
+                        ColumnLayout {
                             // R55 opt-in canonical economy; never display journals
                             // or run simulation on a render frame.
                             visible: root.playerData.screen === "exploration" &&

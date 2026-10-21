@@ -6,11 +6,13 @@ on:
       - 'drawtemp/studio/r74_assist_qt.py'
       - 'drawtemp/studio/r74_physical_dungeons.py'
       - 'drawtemp/studio/r74_spatial_dungeons.py'
+      - 'drawtemp/studio/r74_player_validation.py'
       - 'drawtemp/studio/qt_shell.py'
       - 'tests_standalone/test_drawtemp_r74_assisted_dungeons.py'
       - 'tests_standalone/test_drawtemp_r74_assist_qt.py'
       - 'tests_standalone/test_drawtemp_r74_physical_dungeons.py'
       - 'tests_standalone/test_drawtemp_r74_spatial_dungeons.py'
+      - 'tests_standalone/test_drawtemp_r74_player_validation.py'
       - 'docs/R74_ASSISTED_DUNGEONS.md'
       - '.github/workflows/drawtemp-r74-assist.yml'
   workflow_dispatch:
@@ -44,16 +46,19 @@ jobs:
           drawtemp/studio/r74_assist_qt.py
           drawtemp/studio/r74_physical_dungeons.py
           drawtemp/studio/r74_spatial_dungeons.py
+          drawtemp/studio/r74_player_validation.py
           tests_standalone/test_drawtemp_r74_assisted_dungeons.py
           tests_standalone/test_drawtemp_r74_assist_qt.py
           tests_standalone/test_drawtemp_r74_physical_dungeons.py
           tests_standalone/test_drawtemp_r74_spatial_dungeons.py
+          tests_standalone/test_drawtemp_r74_player_validation.py
       - name: R74 headless and R34 regression
         run: >-
           python -m unittest
           tests_standalone.test_drawtemp_r74_assisted_dungeons
           tests_standalone.test_drawtemp_r74_physical_dungeons
           tests_standalone.test_drawtemp_r74_spatial_dungeons
+          tests_standalone.test_drawtemp_r74_player_validation
           tests_standalone.test_drawtemp5_r27_dungeon
           tests_standalone.test_drawtemp5_r27d_journey
           tests_standalone.test_procgen_r34

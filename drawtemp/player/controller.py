@@ -420,6 +420,70 @@ class PlayerController:
         self.session.system_fulfill(quest_id, expected_revision=state.revision)
         return self._changed()
 
+    def _r62_exploration(self):
+        self._require_cinematic_completed()
+        snapshot = self._current()
+        if (snapshot.mode != "campaign" or not snapshot.exploration
+                or snapshot.exploration.get("completed")
+                or snapshot.scene is not None):
+            raise ValueError("R62 requires active village exploration")
+        return snapshot
+
+    def _r62_command(self, operation, *args, receipt_id=None):
+        snapshot = self._r62_exploration()
+        is_social = operation.startswith("relationship_")
+        key = "relationships" if is_social else "farming"
+        recorded = self.session.recording()
+        if key not in recorded:
+            raise ValueError("R62 component is not authored for this project")
+        if receipt_id is None:
+            # A persisted journal sequence is stable across save/load. UI
+            # never supplies a random or frame-time receipt identifier.
+            prefix = "r62-social-" if is_social else "r62-farm-"
+            receipt_id = prefix + str(len(recorded[key]["journal"]))
+        getattr(self.session, operation)(
+            *args, receipt_id, expected_revision=snapshot.revision)
+        self.message = ("Interaction PNJ enregistrée." if is_social else
+                        "Travail agricole enregistré.")
+        return self._changed(keep_message=True)
+
+    def farm_plant(self, plot_id, crop_id, receipt_id=None):
+        return self._r62_command("farming_plant", plot_id, crop_id,
+                                 receipt_id=receipt_id)
+
+    def farm_harvest(self, plot_id, receipt_id=None):
+        return self._r62_command("farming_harvest", plot_id,
+                                 receipt_id=receipt_id)
+
+    def farm_feed(self, animal_id, receipt_id=None):
+        return self._r62_command("farming_feed", animal_id,
+                                 receipt_id=receipt_id)
+
+    def farm_collect(self, animal_id, receipt_id=None):
+        return self._r62_command("farming_collect", animal_id,
+                                 receipt_id=receipt_id)
+
+    def relationship_talk(self, npc_id, receipt_id=None):
+        return self._r62_command("relationship_talk", npc_id,
+                                 receipt_id=receipt_id)
+
+    def relationship_gift(self, npc_id, item_id, receipt_id=None):
+        return self._r62_command("relationship_gift", npc_id, item_id,
+                                 receipt_id=receipt_id)
+
+    def farm_wait_day(self, days=1):
+        """Explicit R35 day boundary; no wall-clock or separate farm timer."""
+        if type(days) is not int or not 1 <= days <= 7:
+            raise ValueError("R62 wait must be 1–7 whole days")
+        snapshot = self._r62_exploration()
+        if "org.drawtemp.farming" not in self.project.extensions:
+            raise ValueError("Farm calendar is not authored")
+        clock = thaw(self.session.living_world_state())
+        ticks = ((1440 - clock["minute"]) + 1440 * (days - 1)) * clock["ticks_per_minute"]
+        self.session.living_world_advance(ticks, expected_revision=snapshot.revision)
+        self.message = "Calendrier agricole : jour " + str(clock["day"] + days + 1)
+        return self._changed(keep_message=True)
+
     def world_interact(self, object_id):
         """R44 persistent object activation through the R1 GameSession owner."""
         self._require_cinematic_completed()
@@ -913,6 +977,9 @@ class PlayerController:
                 "roguelite": {"enabled": False, "moves": [], "can_claim": False},
                 "battle": {}, "tactical": {}, "puzzle": {"enabled": False, "actions": [], "status": []},
                 "living_world": None, "systems": None, "survival": None,
+                "village": {"enabled": False, "day": 0, "season": "",
+                            "weather": "", "plots": [], "animals": [],
+                            "people": [], "merchants": []},
                 "cinematic": {}, "revision": 0,
                 "pending_target": {},
                 "gear": {"equipped": {}, "inventory": []},
@@ -1052,6 +1119,12 @@ class PlayerController:
                     for row in system_spec["quests"]
                 ],
             }
+        # R62.C farm/social/merchant HUD is read-only. All changes still go
+        # through revision-checked SDK commands and autosave the one session.
+        from drawtemp.player.r62_village import village_view
+        base["village"] = village_view(
+            self.session, self.project, progress, base["exploration"],
+            snapshot.revision)
         # R63 needs/recipe HUD is a detached projection. Player never owns
         # item balances, changes the survival journal or runs a render-frame tick.
         survival_snapshot = self.session.survival_state(
