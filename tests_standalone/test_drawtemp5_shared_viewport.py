@@ -105,6 +105,15 @@ class SharedRendererContractTests(unittest.TestCase):
                 self.assertEqual(projection.pick(wx, wy, scene["width"],
                                                  scene["height"], heights), cell)
 
+    def test_qml_depth_delegates_do_not_override_final_layer_property(self):
+        # QQuickItem.layer is FINAL in Qt 6.8; a custom QML property with
+        # that name prevents the map and player viewports from loading.
+        for filename in ("IsoViewport.qml", "TopDownViewport.qml"):
+            source = (ROOT / "drawtemp/render" / filename).read_text("utf-8")
+            self.assertIn("readonly property var depthLayer: modelData", source)
+            self.assertNotIn("readonly property var layer: modelData", source)
+            self.assertIn("depthLayer.depthIndex", source)
+
     def test_no_parallel_qml_canvas_or_hidden_second_scene(self):
         renderer = (ROOT / "drawtemp/render/IsoViewport.qml").read_text("utf-8")
         board = (ROOT / "drawtemp/render/TacticalBoard.qml").read_text("utf-8")
