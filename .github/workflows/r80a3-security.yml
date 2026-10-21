@@ -1,0 +1,63 @@
+name: R80.A3 SDK and asset security (NO-GO)
+
+on:
+  push:
+    paths:
+      - "drawtemp/export/safe_inputs.py"
+      - "drawtemp/export/creator_packs.py"
+      - "drawtemp/export/pack_import.py"
+      - "drawtemp/quality/r80_security.py"
+      - "tests_standalone/test_r80a3_security.py"
+      - "docs/R80A3_SECURITY_COMPATIBILITY.md"
+      - ".github/workflows/r80a3-security.yml"
+  pull_request:
+    paths:
+      - "drawtemp/export/safe_inputs.py"
+      - "drawtemp/export/creator_packs.py"
+      - "drawtemp/export/pack_import.py"
+      - "drawtemp/quality/r80_security.py"
+      - "tests_standalone/test_r80a3_security.py"
+      - "docs/R80A3_SECURITY_COMPATIBILITY.md"
+      - ".github/workflows/r80a3-security.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Security / ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: "3.10"
+          - os: ubuntu-24.04
+            python: "3.12"
+          - os: windows-2022
+            python: "3.12"
+          - os: macos-15
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Exercise importer, plugin and SDK adversarial regressions
+        run: >-
+          python -m unittest -v
+          tests_standalone.test_r80a3_security
+          tests_standalone.test_drawtemp_r30b_pack_import
+          tests_standalone.test_drawtemp_r47a_modding
+          tests_standalone.test_drawtemp_r47f_project_preflight
+      - name: Produce explicit headless NO-GO audit
+        run: python -m drawtemp.quality.r80_security --output r80a3-security.json
+      - name: Assert no release approval is issued
+        run: python -c "import json; r=json.load(open('r80a3-security.json', encoding='utf-8')); assert r['result']=='passed' and r['decision']=='NO-GO' and not r['release_certified'] and not r['tag_allowed'] and not r['sdk']['native_abi_verified']"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r80a3-no-go-${{ matrix.os }}-py${{ matrix.python }}
+          path: r80a3-security.json
+          if-no-files-found: ignore

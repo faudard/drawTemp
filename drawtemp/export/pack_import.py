@@ -24,6 +24,7 @@ from drawtemp.export.creator_packs import (
     MAX_TOTAL_BYTES, MAX_MANIFEST_BYTES, PackError, _read_and_verify,
 )
 from drawtemp.export.r15 import preflight, project_path
+from drawtemp.export.safe_inputs import UnsafeSnapshotError, read_regular_snapshot
 from drawtemp.quality.r14 import safe_asset_path
 from drawtemp.sdk.authoring import AuthoringSession
 from sporebound.assets import AssetRegistry, EXTENSIONS
@@ -32,6 +33,7 @@ from sporebound.studio_transaction import validate_pair
 _ASSET_KINDS = frozenset({"sprite", "portrait", "sound"})
 _LOCAL_ID = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _COMPRESSED_BUDGET = MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024
+_DOCUMENT_BUDGET = 32 * 1024 * 1024
 
 
 class PackImportError(ValueError):
@@ -91,18 +93,43 @@ def _filehash(path: Path) -> str:
     return h.hexdigest()
 
 
+def _unique_json(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise PackImportError("invalid_source", "Duplicate project JSON key: " + key)
+        result[key] = value
+    return result
+
+
+def _reject_constant(value):
+    raise PackImportError("invalid_source", "Non-finite project number: " + value)
+
+
+def _read_project_document(path: Path):
+    try:
+        raw = read_regular_snapshot(path, limit=_DOCUMENT_BUDGET)
+        parsed = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json,
+                            parse_constant=_reject_constant)
+        if type(parsed) is not dict:
+            raise PackImportError("invalid_source", "Project document must be an object")
+        return parsed, _hash(raw)
+    except (UnsafeSnapshotError, UnicodeError, ValueError, RecursionError) as exc:
+        if isinstance(exc, PackImportError):
+            raise
+        raise PackImportError("invalid_source", str(exc)) from exc
+
+
 def _archive(path: Path):
     if path.is_symlink() or not path.is_file():
         raise PackImportError("missing_pack", "Require a regular, non-symlink ZIP")
     try:
-        if path.stat().st_size > _COMPRESSED_BUDGET:
-            raise PackImportError("oversized_pack", "Compressed ZIP too large")
-        data = path.read_bytes()
-        if len(data) > _COMPRESSED_BUDGET:
-            raise PackImportError("oversized_pack", "Compressed ZIP too large")
+        data = read_regular_snapshot(path, limit=_COMPRESSED_BUDGET)
         with zipfile.ZipFile(BytesIO(data), "r") as archive:
             checked = _read_and_verify(archive)
         return data, checked["manifest"]
+    except UnsafeSnapshotError as exc:
+        raise PackImportError("invalid_pack", str(exc)) from exc
     except (OSError, zipfile.BadZipFile, RuntimeError,
             NotImplementedError, EOFError, zlib.error, PackError) as exc:
         raise PackImportError("invalid_pack", str(exc)) from exc
@@ -117,16 +144,17 @@ def _source_snapshot(content_path: Path):
     result = preflight(content_path)
     if not result["passed"]:
         raise PackImportError("invalid_source", "; ".join(result["errors"]))
-    content_data, project_data = validate_pair(
-        json.loads(content_path.read_text(encoding="utf-8")),
-        json.loads(game_path.read_text(encoding="utf-8")),
-    )
+    # Validate exactly the bytes used to build the candidate. Duplicate
+    # keys and NaN must never be interpreted differently by later readers.
+    source_doc, source_hash = _read_project_document(content_path)
+    project_doc, project_hash = _read_project_document(game_path)
+    content_data, project_data = validate_pair(source_doc, project_doc)
     hashes = []
     for relative in result["assets"]:
         asset_path = safe_asset_path(content_path.parent, relative)
         hashes.append((relative, _filehash(asset_path)))
-    return (content_data, project_data, _filehash(content_path),
-            _filehash(game_path), tuple(sorted(hashes)))
+    return (content_data, project_data, source_hash,
+            project_hash, tuple(sorted(hashes)))
 
 
 def _select(document: dict, bindings, project: dict):

@@ -119,7 +119,7 @@ class PackageUpgradeTests(unittest.TestCase):
         ))
         with self.assertRaises(PackageUpgradeError) as dep:
             self.preview(path2, pack2)
-        self.assertEqual(dep.exception.code, "dependency_unknown")
+        self.assertEqual(dep.exception.code, "dependency_migration_required")
 
     def test_existing_bad_version_directory_is_never_overwritten(self):
         path, pack = self.make_pack("1.1.0")
@@ -175,15 +175,18 @@ class PackageUpgradeTests(unittest.TestCase):
                          self.old_snapshot["project"])
         self.assertFalse((self.root / "assets/packs/forest-pack/1.1.0").exists())
 
-    def test_other_installed_pack_blocks_nonprovable_reverse_dependencies(self):
+    def test_other_proven_independent_package_allows_leaf_upgrade(self):
         source = make_source(self.root / "source-second", make_manifest("second-pack"))
         second = publish_pack(source, self.root / "second.rpack")
         install_pack(second, self.editor, self.root)
         path, pack = self.make_pack("1.1.0")
-        with self.assertRaises(PackageUpgradeError) as blocked:
-            self.preview(path, pack)
-        self.assertEqual(blocked.exception.code, "dependency_unknown")
-        self.assertEqual(self.editor.revision, 2)
+        plan = self.preview(path, pack)
+        apply_package_upgrade(plan, self.editor, self.root)
+        self.assertEqual(self.version(), "1.1.0")
+        self.assertEqual(self.editor.revision, 3)
+        self.assertEqual(verify_installed_packs(
+            self.root, self.editor.snapshot().to_dict()["project"]), [])
+
 
 
 if __name__ == "__main__":

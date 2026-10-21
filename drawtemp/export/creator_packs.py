@@ -17,6 +17,7 @@ import zipfile
 import zlib
 
 from drawtemp.sdk.capability_contracts import CapabilityError, require_sdk
+from drawtemp.export.safe_inputs import UnsafeSnapshotError, read_regular_snapshot
 
 PACK_SCHEMA = 1
 MAX_FILES = 256
@@ -189,16 +190,15 @@ def inspect_pack(path: str | Path) -> PackInspection:
     """Verify an inert pack on disk; never unpack it or grant asset rights."""
     path = Path(path)
     try:
-        if path.stat().st_size > MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024:
-            raise PackError("pack_too_large", "Compressed pack budget exceeded")
-        # Read one bounded snapshot: a modified ZIP cannot borrow validation
-        # from old bytes while reporting the checksum of new bytes.
-        archive_bytes = path.read_bytes()
-        if len(archive_bytes) > MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024:
-            raise PackError("pack_too_large", "Compressed pack budget exceeded")
+        # The descriptor is checked before/after reading. Do not trust a
+        # symlinked ZIP or a separately reopened, potentially replaced file.
+        archive_bytes = read_regular_snapshot(
+            path, limit=MAX_TOTAL_BYTES + MAX_MANIFEST_BYTES + 2 * 1024 * 1024)
         with zipfile.ZipFile(BytesIO(archive_bytes), "r") as archive:
             checked = _read_and_verify(archive)
         digest = hashlib.sha256(archive_bytes).hexdigest()
+    except UnsafeSnapshotError as exc:
+        raise PackError("unsafe_archive", str(exc)) from exc
     except (OSError, zipfile.BadZipFile, RuntimeError, EOFError,
             NotImplementedError, zlib.error) as exc:
         raise PackError("invalid_archive", str(exc)) from exc

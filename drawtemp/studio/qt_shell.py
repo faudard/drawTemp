@@ -492,6 +492,8 @@ class StudioWindow(QMainWindow):
         self._action("r78_team_reviews", "R78 • Revues et tâches d’équipe locales…",
                      self.open_team_reviews)
         self._action("r30_scale", "Performance CPU et budgets…", self.open_scale_dashboard)
+        self._action("r76_bench", "R76.C • Benchmarks et preuves de bundle…",
+                     self.open_r76_bench)
         self._action("r49_metrics", "Mesures UX locales R49…", self.open_r49_metrics)
         self._action("r77_lab", "R77 • Exploration Lab (R26)…", self.open_exploration_lab)
         self._action("r49_references", "Vérifier les références du projet…",
@@ -619,6 +621,7 @@ class StudioWindow(QMainWindow):
             "r38_refactor": "Renommer des références…",
             "r38_preflight": "Préflight du projet…",
             "r76_optimizer": "Optimisation des assets…",
+            "r76_bench": "Benchmarks et preuves de bundle…",
             "r49_metrics": "Mesures UX locales…",
             "r30_scale": "Performances et budgets…",
             "r57_translation": "Localisation et traductions…",
@@ -652,13 +655,17 @@ class StudioWindow(QMainWindow):
                 "r45_economy", "r51_hud")),
             ("Projet, qualité et diagnostic", (
                 "r49_references", "r38_prefabs", "r38_refactor",
-                "r38_preflight", "r76_optimizer", "r49_metrics",
+                "r38_preflight", "r76_optimizer", "r76_bench", "r49_metrics",
                 "r30_scale", "r57_translation")),
         )
         for title, keys in tool_groups:
             submenu = tools_menu.addMenu(title)
             for key in keys:
                 submenu.addAction(self.commands[key])
+            if title == "Projet, qualité et diagnostic":
+                qa_action = submenu.addAction("R56 • QA Lab du gameplay…")
+                qa_action.setObjectName("r56-qa-lab-action")
+                qa_action.triggered.connect(self.open_gameplay_qa_lab)
         collab_menu = tools_menu.addMenu("Publication et collaboration")
         vcs_menu = collab_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
@@ -817,6 +824,11 @@ class StudioWindow(QMainWindow):
         """R38.4 read-only preflight on the current canonical editor revision."""
         from drawtemp.studio.r38_preflight_qt import PreflightDialog
         PreflightDialog(self).exec()
+
+    def open_gameplay_qa_lab(self):
+        """R56.B captures and replays a detached authoring snapshot, no edits."""
+        from drawtemp.studio.r56_qa_lab_qt import GameplayQALabDialog
+        GameplayQALabDialog(self).exec()
 
     def open_creator_review(self):
         """One shared editor session; packs are always exported as new copies."""
@@ -1083,6 +1095,11 @@ class StudioWindow(QMainWindow):
         """Read-only CPU evidence viewer; profiling itself runs headless."""
         from drawtemp.studio.r30_scale_qt import R30ScaleDashboard
         R30ScaleDashboard(self).exec()
+
+    def open_r76_bench(self):
+        """R76.C read-only benchmark dashboard; never blocks GUI with probes."""
+        from drawtemp.studio.r76_bench_qt import R76BenchmarkDialog
+        R76BenchmarkDialog(self).exec()
 
     def open_assist_generation(self):
         """R30.G deterministic, optional Content v1 assistant; shared session."""

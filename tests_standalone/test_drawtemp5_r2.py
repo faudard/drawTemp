@@ -169,8 +169,12 @@ class QtShellTests(unittest.TestCase):
                     return found
                 all_actions = included(tools_menu)
                 for key in ("r31_logic", "r38_preflight", "r43_ability",
-                            "r77_lab", "r30_creator", "r57_translation"):
+                            "r77_lab", "r30_creator", "r57_translation",
+                            "r76_bench"):
                     self.assertIn(window.commands[key], all_actions)
+                self.assertTrue(any(
+                    action.objectName() == "r56-qa-lab-action"
+                    for action in all_actions))
                 self.assertEqual(
                     window.commands["r31_logic"].text(),
                     "Logique visuelle et événements…")

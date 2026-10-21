@@ -665,6 +665,36 @@ def create_bridge(controller, renderer):
         def systemFulfill(self, quest_id):
             self.invoke(self.controller.system_fulfill, quest_id)
 
+        # R62.C Player intents are finite, typed actions on the canonical
+        # Simulation; no QML-owned farm clock, inventory or receipt store.
+        @Slot(int)
+        def farmWaitDay(self, days):
+            self.invoke(self.controller.farm_wait_day, days)
+
+        @Slot(str, str)
+        def farmPlant(self, plot_id, crop_id):
+            self.invoke(self.controller.farm_plant, plot_id, crop_id)
+
+        @Slot(str)
+        def farmHarvest(self, plot_id):
+            self.invoke(self.controller.farm_harvest, plot_id)
+
+        @Slot(str)
+        def farmFeed(self, animal_id):
+            self.invoke(self.controller.farm_feed, animal_id)
+
+        @Slot(str)
+        def farmCollect(self, animal_id):
+            self.invoke(self.controller.farm_collect, animal_id)
+
+        @Slot(str)
+        def relationshipTalk(self, npc_id):
+            self.invoke(self.controller.relationship_talk, npc_id)
+
+        @Slot(str, str)
+        def relationshipGift(self, npc_id, item_id):
+            self.invoke(self.controller.relationship_gift, npc_id, item_id)
+
         @Slot(int)
         def survivalWait(self, ticks):
             self.invoke(self.controller.survival_wait, ticks)
