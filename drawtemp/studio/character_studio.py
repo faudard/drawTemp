@@ -17,6 +17,10 @@ from drawtemp.assets.character_library import (
     discover_character_library, search_characters,
 )
 from drawtemp.assets.character_looks import available_looks, apply_look
+from drawtemp.assets.storybook_art import (
+    build as build_storybook_assets, storybook_starter,
+    available_storybook_looks, apply_storybook_look,
+)
 from drawtemp.assets.character_parts import (
     PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
     active_part, available_parts, ensure_profile, part_paths,
@@ -31,7 +35,7 @@ def main(argv=None):
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--open", type=Path, help="Open an R7 character recipe JSON")
-    parser.add_argument("--template", default="modular_hero",
+    parser.add_argument("--template", default="storybook_hero",
                         help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
     args = parser.parse_args(argv)
@@ -56,7 +60,14 @@ def main(argv=None):
                      str(exc) + ")")
 
     root = args.root.resolve()
+    # The source collection is versioned and deterministically materialized
+    # as genuine four-direction PNG art; never overwrite existing work.
+    try:
+        build_storybook_assets(root)
+    except OSError as exc:
+        parser.error("Unable to prepare original sprite library: " + str(exc))
     templates = starter_library()
+    templates["storybook_hero"] = storybook_starter()
     if not args.open and args.template not in templates:
         parser.error("Unknown character template: " + args.template)
     if args.open:
@@ -582,7 +593,7 @@ def main(argv=None):
                 QMessageBox.warning(
                     self, "Character name", "Name needs at least one Latin letter.")
                 return
-            doc = templates["modular_hero"].copy()
+            doc = templates["storybook_hero"].copy()
             doc["id"] = identifier
             doc["name"] = name.strip()
             self.stop()
@@ -592,13 +603,29 @@ def main(argv=None):
             self.saved_revision = 0
             self.refresh()
 
+        def _uses_storybook(self):
+            doc = self.session.document
+            if doc["id"] == "storybook_hero":
+                return True
+            return any(
+                "storybook_v1_" in path
+                for variant in doc["variants"].values()
+                for layer in variant["layers"]
+                for path in layer["paths"].values()
+            )
+
         def _look_icon(self, look):
-            key = ("look", look["id"])
+            storybook = self._uses_storybook()
+            key = ("look", storybook, look["id"])
             if key not in self._gallery_cache:
                 from copy import deepcopy
-                doc = deepcopy(templates["modular_hero"])
+                doc = deepcopy(templates[
+                    "storybook_hero" if storybook else "modular_hero"])
                 try:
-                    apply_look(doc, look["profile"], look["id"], root)
+                    if storybook:
+                        apply_storybook_look(doc, look["profile"], look["id"])
+                    else:
+                        apply_look(doc, look["profile"], look["id"], root)
                     self._gallery_cache[key] = self._character_icon(
                         doc, look["profile"])
                 except (CharacterError, ValueError, OSError):
@@ -613,7 +640,9 @@ def main(argv=None):
             self.look_grid.setEnabled(enabled)
             profile = self.active_variant()
             if enabled:
-                looks = available_looks(
+                catalog = (available_storybook_looks if self._uses_storybook()
+                           else available_looks)
+                looks = catalog(
                     profile if profile in PROFILE_PRESETS else None)
                 for look in looks:
                     icon = self._look_icon(look)
@@ -624,6 +653,9 @@ def main(argv=None):
                         "\nUses existing sprites with editable defaults")
                     self.look_grid.addItem(item)
                 self.look_hint.setText(
+                    f"{len(looks)} original illustrated looks. "
+                    "Select to apply; Ctrl+Z undoes the change."
+                    if self._uses_storybook() else
                     f"{len(looks)} curated looks using existing parts. "
                     "Select to apply; Ctrl+Z undoes the change.")
             else:
@@ -639,8 +671,12 @@ def main(argv=None):
             look_label = item.text()
             variant = self.active_variant()
             try:
-                self.session.edit(
-                    lambda document: apply_look(document, variant, look_id, root))
+                if self._uses_storybook():
+                    self.session.edit(lambda document:
+                                      apply_storybook_look(document, variant, look_id))
+                else:
+                    self.session.edit(
+                        lambda document: apply_look(document, variant, look_id, root))
                 self.refresh()
                 self.statusBar().showMessage(
                     "Applied " + look_label + " to " + variant +
@@ -829,7 +865,8 @@ def main(argv=None):
                         except (OSError, ValueError):
                             pass
                     item = QListWidgetItem(icon,
-                                           name.replace("_", " ").title())
+                                           name.removeprefix("storybook_v1_")
+                                               .replace("_", " ").title())
                     item.setData(Qt.UserRole, name)
                     self.part_grid.addItem(item)
                 selected_name = None
@@ -1429,7 +1466,7 @@ def main(argv=None):
     if args.smoke:
         def verify_smoke():
             try:
-                if window.session.document["id"] == "modular_hero":
+                if window.session.document["id"] in ("modular_hero", "storybook_hero"):
                     # Exercise actual Qt tab selection, not only construction.
                     assert window.profile_tabs.count() == len(PROFILE_PRESETS)
                     for index, name in enumerate(PROFILE_PRESETS):
@@ -1446,7 +1483,8 @@ def main(argv=None):
                         "Main overview should always be visible")
                     assert not window.timeline_dock.isVisible(), (
                         "Advanced animation tools must start collapsed")
-                    assert window.look_grid.count() >= 5, (
+                    expected_looks = (4 if window._uses_storybook() else 5)
+                    assert window.look_grid.count() >= expected_looks, (
                         "Starting looks must be visible")
                     assert not hasattr(window, "generate_outfits"), (
                         "Jeanne-specific outfit UI must not return")
