@@ -71,6 +71,31 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
             finally:
                 app.close()
 
+    def test_authored_title_screen_applies_to_real_player_menu(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        from sporebound.title_screen_settings import NAMESPACE, extension_for
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            try:
+                app.project.extensions[NAMESPACE] = extension_for({
+                    "background": "solid", "accent": "#aabbcc",
+                    "panel": "#123456", "show_campaign": False,
+                    "labels": {"new": "Start a Quest"}})
+                app.title_screen()
+                app.root.update()
+                menu = app._title_menu
+                self.assertEqual(menu._accent, "#aabbcc")
+                self.assertEqual(menu._panel_color, "#123456")
+                self.assertEqual(len(menu._hitboxes), 9)
+                texts = [menu.canvas.itemcget(item, "text")
+                         for item in menu.canvas.find_withtag("title_card_new")
+                         if menu.canvas.type(item) == "text"]
+                self.assertIn("Start a Quest", texts)
+            finally:
+                app.close()
+
     def test_jeanne_art_and_high_contrast_survive_resize(self):
         from sporebound.player_app import PlayerApplication
         root = Path(__file__).resolve().parents[1]
