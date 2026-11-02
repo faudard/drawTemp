@@ -406,8 +406,12 @@ def export_pack(document, root, destination, *, strict=False):
     """
     from PIL import Image
     data = validate(document)
+    # Authoring previews can export truthful, partial sprite packs.
+    # Missing actions remain explicit QA errors in metadata; release/strict
+    # export still rejects them. Never invent fallback frames.
     errors = [issue for issue in diagnostics(data, require_outfits=strict)
-              if issue["severity"] == "error"]
+              if issue["severity"] == "error" and
+              (strict or issue["code"] != "missing_animation")]
     if errors:
         raise CharacterError("Art QA failed: " + json.dumps(errors, ensure_ascii=False))
     root, destination = Path(root).resolve(), Path(destination).resolve()
