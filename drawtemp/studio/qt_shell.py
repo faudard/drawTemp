@@ -24,6 +24,11 @@ from drawtemp.localization.ui import DEFAULT_LANGUAGE, language_choices, normali
 from drawtemp.studio.ads_docking import DockHost
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
+from drawtemp.addons import AddonManager, AddonError, read_addon_manifest
+from drawtemp.studio.addon_points import (
+    PROJECT_FIELDS, STUDIO_POINTS, project_field_values,
+    studio_contributions, validate_studio_contribution,
+)
 from drawtemp.sdk.reference import reference_project
 from drawtemp.studio.workspace_model import FAMILY_LABELS, resources
 from drawtemp.studio.inspector_model import (
@@ -211,6 +216,10 @@ class StudioWindow(QMainWindow):
         })
         self.plugins = StudioPluginRegistry()
         self.mods = ModRegistry()  # R47 grants never persist across projects.
+        self.addons = AddonManager()  # V3 consent is session-only.
+        self._addon_docks = {}
+        self._addon_fields = {}
+        self._addon_actions = []
         self._plugin_docks = {}
         self._plugin_fields = {}
         self._active_workspace = "project"
@@ -704,6 +713,13 @@ class StudioWindow(QMainWindow):
         mod_manager = mod_menu.addAction(ui_text("tool.mods_inspect"))
         self._localized_actions["tool.mods_inspect"] = mod_manager
         mod_manager.triggered.connect(self.open_mod_manager)
+        # V3 Studio extensions: a single native entry, no huge toolbar.
+        addons_action = tools_menu.addAction(ui_text("tool.addons_manage"))
+        addons_action.setObjectName("studio-addon-manager-action")
+        addons_action.triggered.connect(self.open_addon_manager)
+        self._localized_actions["tool.addons_manage"] = addons_action
+        self._addon_actions_menu = tools_menu.addMenu(ui_text("menu.addon_actions"))
+        self._addon_actions_menu.setObjectName("studio-addon-actions-menu")
 
         tools_menu.addSeparator()
         tools_menu.addAction(self.commands["preferences"])
@@ -744,6 +760,7 @@ class StudioWindow(QMainWindow):
             "menu.mods": mod_menu, "menu.game": game_menu,
             "menu.help": help_menu, "menu.advanced_project": advanced_project,
             "menu.collaboration": collab_menu,
+            "menu.addon_actions": self._addon_actions_menu,
         }
         # A permanent, keyboard-accessible selector always exposes all
         # workspaces; the old 13-item toolbar overflow was easily missed.
@@ -1361,6 +1378,7 @@ class StudioWindow(QMainWindow):
         selection.blockSignals(False)
         self.last_revision = snapshot.revision
         self._refresh_plugins(snapshot)
+        self._refresh_addon_fields(snapshot)
         for name in ("profiles", "gameplay", "events"):
             if name in self._models:
                 self._models[name].refresh()
@@ -1911,6 +1929,7 @@ class StudioWindow(QMainWindow):
             from drawtemp.studio.map_authoring import MapStudio
             from drawtemp.studio.map_editor import MapWindow
             child = MapWindow(MapStudio(self.session))
+            child.set_addon_brush_presets(self._addon_brush_presets())
         elif identifier in ("database", "actors"):
             from drawtemp.studio.rpg_database_qt import DatabaseWindow
             child = self._models.get("database")
@@ -2233,6 +2252,106 @@ class StudioWindow(QMainWindow):
             self._unmount_plugin(selected)
             self.statusBar().showMessage("Plugin désactivé : " + selected)
 
+
+    # V3 extension points: host-owned menus, docks and native map brush presets.
+    # No third-party code or arbitrary Qt widget is instantiated.
+    def install_addon_manifest(self, path):
+        descriptor = read_addon_manifest(path)
+        if type(descriptor) is dict and descriptor.get("schema_version") == 3:
+            for contribution in descriptor.get("contributions", []):
+                if contribution.get("point") in STUDIO_POINTS:
+                    validate_studio_contribution(contribution)
+        return self.addons.register(descriptor)
+
+    def enable_addon(self, addon_id, grants):
+        self.addons.enable(addon_id, grants=list(grants))
+        try:
+            self._sync_addon_ui()
+        except Exception:
+            # Host construction failure must never leave a half-active add-on.
+            self.addons.disable(addon_id)
+            self._sync_addon_ui()
+            raise
+        return self.addons.status(addon_id)
+
+    def disable_addon(self, addon_id):
+        state = self.addons.disable(addon_id)
+        self._sync_addon_ui()
+        return state
+
+    def open_addon_manager(self):
+        from drawtemp.studio.addon_manager_qt import AddonManagerDialog
+        return AddonManagerDialog(self).exec()
+
+    def _addon_brush_presets(self):
+        return [
+            dict(contribution["config"], addon_id=contribution["addon_id"],
+                 id=contribution["id"])
+            for contribution in studio_contributions(self.addons)
+            if contribution["point"] == "studio.tool"
+        ]
+
+    def _unmount_addon_ui(self):
+        for action in self._addon_actions:
+            self._addon_actions_menu.removeAction(action)
+            self.removeAction(action)
+            action.deleteLater()
+        self._addon_actions.clear()
+        for dock in self._addon_docks.values():
+            self.docking.remove(dock)
+            dock.hide()
+            dock.deleteLater()
+        self._addon_docks.clear()
+        self._addon_fields.clear()
+        child = self._models.get("maps")
+        if child is not None:
+            child.set_addon_brush_presets([])
+
+    def _sync_addon_ui(self):
+        contributions = studio_contributions(self.addons)
+        self._unmount_addon_ui()
+        for item in contributions:
+            config = item["config"]
+            key = (item["addon_id"], item["id"])
+            if item["point"] == "studio.menu":
+                command = config["command"]  # strict host allowlist
+                action = QAction(config["label"], self)
+                action.setObjectName("addon-action-" + item["addon_id"] + "-" + item["id"])
+                action.triggered.connect(
+                    lambda _checked=False, name=command: self.commands[name].trigger())
+                self._addon_actions_menu.addAction(action)
+                self.addAction(action)
+                self._addon_actions.append(action)
+            elif item["point"] == "studio.dock":
+                host = QWidget()
+                layout = QVBoxLayout(host)
+                for field in config["fields"]:
+                    label = QLabel(host)
+                    label.setObjectName("addon-field-" + field.replace(".", "-"))
+                    label.setTextFormat(Qt.PlainText)
+                    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                    layout.addWidget(label)
+                    self._addon_fields[(key, field)] = label
+                layout.addStretch()
+                dock = self._dock(
+                    config["title"],
+                    "addon-" + item["addon_id"] + "-" + item["id"],
+                    host, Qt.RightDockWidgetArea)
+                self._addon_docks[key] = dock
+                dock.show()
+        self._addon_actions_menu.menuAction().setVisible(bool(self._addon_actions))
+        self._refresh_addon_fields(self.session.snapshot())
+        child = self._models.get("maps")
+        if child is not None:
+            child.set_addon_brush_presets(self._addon_brush_presets())
+
+    def _refresh_addon_fields(self, snapshot):
+        if not self._addon_fields:
+            return
+        values = project_field_values(snapshot)
+        for (_key, field), label in self._addon_fields.items():
+            label.setText(field + ": " + str(values[field]))
+
     def open_package_manager(self):
         """R58.B1 native manager shares the canonical Studio session and Undo."""
         from drawtemp.studio.package_manager_qt import PackageManagerDialog
@@ -2414,7 +2533,9 @@ class StudioWindow(QMainWindow):
         self._selected = ()
         self._reference_anchor = ()
         self.reference_filter.setCurrentIndex(0)
-        # Project switch invalidates every R47 consent and installed descriptor.
+        # Project switch invalidates all R47/v3 grants and descriptors.
+        self._unmount_addon_ui()
+        self.addons = AddonManager()
         self.mods = ModRegistry()
         self.session = fresh
         self.content_path = Path(path) if path is not None else None
