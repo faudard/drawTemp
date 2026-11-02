@@ -15,7 +15,8 @@ from drawtemp.assets.characters import (
 )
 from drawtemp.assets.jeanne_art import build_jeanne_art
 from drawtemp.assets.character_parts import (
-    PART_CATEGORIES, active_part, available_parts, part_paths,
+    PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
+    active_part, available_parts, ensure_profile, part_paths,
     set_part, set_part_style,
 )
 
@@ -36,7 +37,7 @@ def main(argv=None):
         from PySide6.QtWidgets import (
             QApplication, QCheckBox, QComboBox, QColorDialog, QDockWidget, QFileDialog, QFormLayout,
             QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
-            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QToolButton,
+            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QTabBar, QToolButton,
             QVBoxLayout, QWidget,
         )
     except ImportError as exc:
@@ -80,6 +81,15 @@ def main(argv=None):
             self.templates.currentIndexChanged.connect(self.use_template)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
+            self.profile_tabs = QTabBar()
+            self.profile_tabs.setExpanding(True)
+            self.profile_tabs.setToolTip(
+                "Editable starting appearances. All parts remain available "
+                "to Male, Female and Kid; profiles are independent.")
+            for profile in PROFILE_PRESETS:
+                index = self.profile_tabs.addTab(PROFILE_LABELS[profile])
+                self.profile_tabs.setTabData(index, profile)
+            self.profile_tabs.currentChanged.connect(self.profile_changed)
             self.add_variant = QPushButton("Dupliquer la tenue")
             self.add_variant.clicked.connect(self.duplicate_variant)
             self.generate_outfits = QPushButton("Créer les 4 tenues de Jeanne…")
@@ -180,6 +190,7 @@ def main(argv=None):
             left = QVBoxLayout(library_box)
             left.addWidget(QLabel("Modèles existants"))
             left.addWidget(self.templates)
+            left.addWidget(self.profile_tabs)
             left.addWidget(QLabel("Tenues / variantes"))
             left.addWidget(self.variants, 1)
             left.addWidget(self.add_variant)
@@ -296,6 +307,40 @@ def main(argv=None):
                 action.triggered.connect(handler)
                 edit_menu.addAction(action)
             self.statusBar().showMessage("R7 | Le rendu Player Qt sera raccordé par R3/R12.")
+
+        def sync_profile_tabs(self):
+            """Tabs are only for Modular Hero, not arbitrary RPG actors."""
+            doc = self.session.document
+            visible = doc["id"] == "modular_hero" and doc["size"] == [192, 192]
+            self.profile_tabs.setVisible(visible)
+            self.profile_tabs.blockSignals(True)
+            active = self.active_variant() if visible else None
+            index = (PROFILE_PRESETS.index(active)
+                     if active in PROFILE_PRESETS else -1)
+            self.profile_tabs.setCurrentIndex(index)
+            self.profile_tabs.blockSignals(False)
+
+        def profile_changed(self, index):
+            if index < 0:
+                return
+            doc = self.session.document
+            if doc["id"] != "modular_hero" or doc["size"] != [192, 192]:
+                return
+            profile = self.profile_tabs.tabData(index)
+            if profile not in PROFILE_PRESETS:
+                return
+            try:
+                if profile not in doc["variants"]:
+                    # Non-destructive migration of old 'default' characters.
+                    self.session.edit(lambda candidate: ensure_profile(
+                        candidate, profile))
+                    self.refresh()
+                ids = list(self.session.document["variants"])
+                if profile in ids:
+                    self.variants.setCurrentRow(ids.index(profile))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+                self.sync_profile_tabs()
 
         def selected_part_slot(self):
             item = self.part_category.currentItem()
@@ -483,6 +528,7 @@ def main(argv=None):
             keys = list(document["variants"])
             self.variants.setCurrentRow(keys.index(selected) if selected in keys else 0)
             self.variants.blockSignals(False)
+            self.sync_profile_tabs()
             self.refresh_timeline()
             self.refresh_expressions()
             self.refresh_parts()
@@ -510,6 +556,7 @@ def main(argv=None):
             self.expression.blockSignals(False)
 
         def variant_changed(self, _):
+            self.sync_profile_tabs()
             self.stop()
             self.frame_index = 0
             self.refresh_timeline()
