@@ -142,6 +142,15 @@ class TitleScreenStudio:
                     text=self.text.get(), show_campaign=self.show_campaign.get(),
                     labels=labels)
 
+    def pending(self):
+        if self.owner.project is None:
+            return False
+        current = settings_for(self.owner.project)
+        edited = self._settings()
+        return (self.title.get() != self.owner.project.title
+                or self.subtitle.get() != self.owner.project.subtitle
+                or any(edited[key] != current[key] for key in DEFAULTS))
+
     def apply(self):
         data = deepcopy(self.owner.project.to_dict())
         data["title"] = self.title.get()
