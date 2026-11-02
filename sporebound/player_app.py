@@ -26,6 +26,8 @@ from .visual_motion import MotionDirector
 from .player_ux import (KeyBindings, PresentationState, combat_hud,
                         clamp_selection, zoom_to, ZOOM_PRESETS)
 from .player_preferences import load_preferences, save_preferences
+from .player_ui_language import load_ui_language, save_ui_language
+from drawtemp.localization.ui import ui_text, language_choices
 from .player_guidance import combat_guidance
 from .player_action_preview import action_preview, preview_screen_geometry
 from .player_hud_layout import combat_hud_sections
@@ -59,6 +61,7 @@ class PlayerApplication(JeanneChapterUiMixin):
                    else default_profile_path(profile_source))
         self.chapter_one = chapter_one
         preferences, self.preferences_error = load_preferences(profile)
+        self.ui_language, self.language_warning = load_ui_language(profile)
         self.keymap = KeyBindings(preferences["keybindings"])
         self.player = PlayerController(content, project, profile)
         # Local playtest capture is opt-in, separate from savegames.
@@ -165,6 +168,10 @@ class PlayerApplication(JeanneChapterUiMixin):
         self.root.bind("<F3>", lambda event: self._game_shortcut(
             self._campaign_flow_inspector, campaign_only=True))
         self.title_screen()
+
+    def _t(self, key):
+        """Shared EN/FR JSON UI catalog. Does not affect authored game text."""
+        return ui_text(key, self.ui_language)
 
     def _style(self):
         """Use one accessible, Jeanne-themed skin across all Player views."""
@@ -833,7 +840,7 @@ class PlayerApplication(JeanneChapterUiMixin):
 
         self._clear()
         self.presentation.transition("options")
-        self._heading("Options", "Affichage, son et commandes sur une seule page")
+        self._heading(self._t("player.options"), self._t("tk.options.subtitle"))
 
         # Fixed footer keeps navigation accessible on smaller window sizes.
         footer = self.ttk.Frame(self.view)
@@ -876,19 +883,38 @@ class PlayerApplication(JeanneChapterUiMixin):
             scroll_surface(panel)
             return panel
 
+        # Keep the selection staged: Cancel must not change preferences.
+        locales = language_choices()
+        name_by_code = dict(locales)
+        code_by_name = {name: code for code, name in locales}
+        selected_language = self.tk.StringVar(value=name_by_code[self.ui_language])
+        language_section = section(self._t("tk.options.language_section"))
+        lang_row = self.ttk.Frame(language_section)
+        lang_row.pack(fill="x", pady=4)
+        self.ttk.Label(lang_row, text=self._t("tk.options.language_label")).pack(
+            side="left", padx=(0, 12))
+        self.language_select = self.ttk.Combobox(
+            lang_row, state="readonly", textvariable=selected_language,
+            values=tuple(name_by_code.values()), width=19)
+        self.language_select.pack(side="left")
+        self.ttk.Label(
+            language_section, text=self._t("tk.options.language_hint"),
+            wraplength=820).pack(anchor="w", pady=(4, 0))
+
         full = self.tk.BooleanVar(value=bool(self.root.attributes("-fullscreen")))
-        graphics = section("Affichage")
-        self.ttk.Checkbutton(graphics, text="Plein écran", variable=full).pack(
+        graphics = section(self._t("tk.options.display"))
+        self.ttk.Checkbutton(graphics, text=self._t("player.fullscreen"), variable=full).pack(
             anchor="w", pady=4)
         label = self.ttk.Label(
-            graphics, text="En mode fenêtré, ajustez la taille depuis les bords de la fenêtre.")
+            graphics, text=self._t("tk.options.resize_hint"))
         label.pack(anchor="w", pady=(2, 4))
         scroll_surface(label)
 
         effects = self.tk.IntVar(value=round(self.audio.effects_volume * 100))
         music = self.tk.IntVar(value=round(self.audio.music_volume * 100))
-        audio = section("Son")
-        for title, variable in (("Effets sonores", effects), ("Musique", music)):
+        audio = section(self._t("tk.options.audio"))
+        for title, variable in ((self._t("tk.options.sound_effects"), effects),
+                                (self._t("tk.options.music"), music)):
             line = self.ttk.Frame(audio)
             line.pack(fill="x", pady=(0, 8))
             scroll_surface(line)
@@ -907,10 +933,9 @@ class PlayerApplication(JeanneChapterUiMixin):
                 command=lambda value, output=percentage:
                     output.set(f"{round(float(value))} %")).pack(fill="x", pady=(5, 0))
 
-        controls = section("Commandes")
+        controls = section(self._t("tk.options.controls"))
         note = self.ttk.Label(
-            controls, text="Touches modifiables : flèches, A à Z, chiffres et fonctions. "
-                           "Les raccourcis tactiques agissent lorsque la carte a le focus.",
+            controls, text=self._t("tk.options.controls_help"),
             wraplength=850)
         note.pack(anchor="w", pady=(0, 10))
         scroll_surface(note)
@@ -930,7 +955,7 @@ class PlayerApplication(JeanneChapterUiMixin):
                        sticky="ew", padx=(0, 16), pady=4)
             field.columnconfigure(0, weight=1)
             scroll_surface(field)
-            name = self.ttk.Label(field, text=ACTION_LABELS.get(action, action))
+            name = self.ttk.Label(field, text=self._t("tk.options.action." + action))
             name.grid(row=0, column=0, sticky="w", padx=(0, 8))
             scroll_surface(name)
             self.ttk.Combobox(
@@ -941,38 +966,41 @@ class PlayerApplication(JeanneChapterUiMixin):
             for action, sequence in DEFAULT_KEYS.items():
                 key_vars[action].set(KEY_LABELS.get(sequence, sequence))
 
-        self._button(controls, "Réinitialiser les touches", reset_keys).pack(
+        self._button(controls, self._t("tk.options.reset_keys"), reset_keys).pack(
             anchor="e", pady=(10, 0))
 
-        access = section("Accessibilité")
+        access = section(self._t("tk.options.accessibility"))
         contrast = self.tk.BooleanVar(value=self.high_contrast.get())
         compact = self.tk.BooleanVar(value=self.compact_hud.get())
         scale = self.tk.IntVar(value=self.text_scale.get())
-        self.ttk.Checkbutton(access, text="Contraste renforcé",
+        self.ttk.Checkbutton(access, text=self._t("player.high_contrast"),
                              variable=contrast).pack(anchor="w", pady=3)
-        self.ttk.Checkbutton(access, text="HUD compact",
+        self.ttk.Checkbutton(access, text=self._t("tk.options.compact_hud"),
                              variable=compact).pack(anchor="w", pady=3)
         line = self.ttk.Frame(access)
         line.pack(anchor="w", pady=(7, 0))
-        self.ttk.Label(line, text="Taille des textes").pack(side="left", padx=(0, 12))
+        self.ttk.Label(line, text=self._t("player.text_size")).pack(side="left", padx=(0, 12))
         self.ttk.Combobox(line, state="readonly", textvariable=scale,
                           values=(100, 125, 150), width=9).pack(side="left")
         self.ttk.Label(line, text="%").pack(side="left", padx=(5, 0))
 
         # QA recording stays available without exposing JSON/dev jargon to players.
         if os.environ.get("DRAWTEMP_DEVELOPER_OPTIONS") == "1":
-            dev = section("Outils de développement")
+            dev = section(self._t("tk.options.dev_tools"))
             self.ttk.Checkbutton(
-                dev, text="Enregistrer les playtests (activation volontaire)",
+                dev, text=self._t("tk.options.record_playtests"),
                 variable=self.playtest_optin,
                 command=self._toggle_playtest).pack(anchor="w", pady=4)
-            self._button(dev, "Exporter rapport playtest JSON",
+            self._button(dev, self._t("tk.options.export_playtest"),
                          self._export_playtest).pack(anchor="w", pady=4)
             if self.preferences_error:
                 self.ttk.Label(dev, text=self.preferences_error,
                                wraplength=750).pack(anchor="w")
 
         def apply():
+            target_language = code_by_name.get(selected_language.get())
+            if target_language is None:
+                raise ValueError("Unsupported language selection")
             assignments = {}
             for action, variable in key_vars.items():
                 label = variable.get()
@@ -996,7 +1024,10 @@ class PlayerApplication(JeanneChapterUiMixin):
                 "compact_hud": compact.get(),
             }
             # Retain the existing atomic sidecar and schema; cancel changes nothing.
+            save_ui_language(self.player.profile, target_language)
             save_preferences(self.player.profile, settings)
+            self.ui_language = target_language
+            self.language_warning = None
             self.keymap = proposed_keys
             self.preferences_error = None
             self.text_scale.set(scale.get())
@@ -1008,8 +1039,8 @@ class PlayerApplication(JeanneChapterUiMixin):
             self.root.attributes("-fullscreen", full.get())
             self.show() if return_to_game else self.title_screen()
 
-        self._button(footer, "Appliquer", apply).pack(side="right", padx=(8, 0))
-        self._button(footer, "Retour sans enregistrer",
+        self._button(footer, self._t("tk.options.apply"), apply).pack(side="right", padx=(8, 0))
+        self._button(footer, self._t("tk.options.cancel"),
                      self.show if return_to_game else self.title_screen).pack(side="right")
 
     def show(self):
