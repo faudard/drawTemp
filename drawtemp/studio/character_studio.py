@@ -17,7 +17,7 @@ from drawtemp.assets.jeanne_art import build_jeanne_art
 from drawtemp.assets.character_parts import (
     PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
     active_part, available_parts, ensure_profile, part_paths,
-    set_part, set_part_style, upgrade_legacy_hair,
+    set_part, set_part_style, split_legacy_hair_front, upgrade_legacy_hair,
 )
 
 
@@ -399,7 +399,22 @@ def main(argv=None):
                     variants = ()
                 for name in variants:
                     icon_path = root / part_paths(slot, name, root)["south"]
-                    item = QListWidgetItem(QIcon(str(icon_path)),
+                    icon = QIcon(str(icon_path))
+                    # Preview exactly the same legacy fringe mask used in
+                    # render_frame/export_pack, never the unsplit source art.
+                    if slot == "front_hair" and icon_path.parent.name == "hair":
+                        try:
+                            with Image.open(icon_path) as source_image:
+                                split = split_legacy_hair_front(
+                                    source_image.convert("RGBA"))
+                            memory = io.BytesIO()
+                            split.save(memory, format="PNG")
+                            thumbnail = QPixmap()
+                            if thumbnail.loadFromData(memory.getvalue(), "PNG"):
+                                icon = QIcon(thumbnail)
+                        except (OSError, ValueError):
+                            pass
+                    item = QListWidgetItem(icon,
                                            name.replace("_", " ").title())
                     item.setData(Qt.UserRole, name)
                     self.part_grid.addItem(item)
