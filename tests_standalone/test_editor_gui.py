@@ -40,6 +40,18 @@ class EditorGUITests(unittest.TestCase):
                     self.assertTrue(output.exists())
                     data = json.loads(output.read_text(encoding='utf-8'))
                     self.assertTrue(next(t for t in data['missions'][0]['board']['tiles'] if t['pos']==[0,0])['blocked'])
+                    # Clicking outside 2D/iso terrain must not poison the
+                    # shared selection used on the next Playtest refresh.
+                    canvas.event_generate('<Button-1>', x=-1000, y=-1000)
+                    root.update()
+                    iso_toggle = next(w for w in widgets if
+                                      w.winfo_class() == 'TCheckbutton' and
+                                      w.cget('text') == 'Vue iso 2.5D')
+                    if 'selected' not in iso_toggle.state():
+                        iso_toggle.invoke()
+                    root.update()
+                    canvas.event_generate('<Button-1>', x=-10000, y=-10000)
+                    root.update()
                     playtest_button = buttons['▶ Playtest']
                     playtest_button.invoke()
                     root.update()
