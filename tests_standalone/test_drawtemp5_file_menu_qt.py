@@ -78,14 +78,21 @@ class FileMenuQtTests(unittest.TestCase):
     def test_advanced_project_commands_and_game_actions_remain_available(self):
         titles = [action.menu().title() for action in
                   self.window.menuBar().actions() if action.menu() is not None]
+        self.assertEqual(
+            titles, ["&File", "&Edit", "&Display", "&Workspaces", "&Tools", "&Game"])
         self.assertIn("&Game", titles)
         tools = next(action.menu() for action in self.window.menuBar().actions()
-                     if action.menu() and action.menu().title() == "&Outils")
+                     if action.menu() and action.menu().title() == "&Tools")
         advanced = next(action.menu() for action in tools.actions()
-                        if action.menu() and action.menu().title() == "Projet avancé")
+                        if action.menu() and action.menu().title() == "Advanced Project")
         self.assertIn(self.window.commands["new"], advanced.actions())
         self.assertIn(self.window.commands["new_template"], advanced.actions())
         self.assertIn(self.window.commands["save_as"], advanced.actions())
+        self.assertEqual(self.window.recent_menu.title(), "Recent Projects")
+        display = next(action.menu() for action in self.window.menuBar().actions()
+                       if action.menu() and action.menu().title() == "&Display")
+        self.assertIn("Theme", [action.menu().title() for action in
+                                display.actions() if action.menu()])
         self.assertIsNotNone(self.window.recent_menu)
 
 
