@@ -1,0 +1,40 @@
+name: Add-on foundation (headless)
+
+on:
+  push:
+    paths:
+      - "drawtemp/addons.py"
+      - "drawtemp/sdk/**"
+      - "tests_standalone/test_drawtemp_addons_foundation.py"
+      - "examples/addons/**"
+      - ".github/workflows/addon-foundation.yml"
+  pull_request:
+    paths:
+      - "drawtemp/addons.py"
+      - "drawtemp/sdk/**"
+      - "tests_standalone/test_drawtemp_addons_foundation.py"
+      - "examples/addons/**"
+      - ".github/workflows/addon-foundation.yml"
+
+jobs:
+  headless:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+          - os: macos-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test headless add-on foundation
+        run: python -m unittest tests_standalone.test_drawtemp_addons_foundation -v

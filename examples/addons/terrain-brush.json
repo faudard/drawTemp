@@ -1,0 +1,22 @@
+{
+  "schema_version": 3,
+  "id": "terrain-brush",
+  "name": "Terrain Brush Example",
+  "namespace": "org.drawtemp.examples.terrain",
+  "version": "1.0.0",
+  "kind": "editor",
+  "sdk": {
+    "min_api": "1.0.0",
+    "max_api": "2.0.0",
+    "required_features": ["addons-foundation.v1"]
+  },
+  "capabilities": ["studio.tool"],
+  "permissions": ["project.read", "map.tiles.write"],
+  "dependencies": [],
+  "contributions": [
+    {"id": "terrain-brush", "point": "studio.tool",
+     "config": {"algorithm": "builtin.autotile-v1"}}
+  ],
+  "rights": {"license": "MIT", "origin": "DrawTemp sample metadata",
+             "redistributable": true}
+}
