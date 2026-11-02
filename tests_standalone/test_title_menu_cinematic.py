@@ -193,7 +193,8 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                     app.root.update()
                     menu = app._title_menu
                     for action in menu.ACTIONS:
-                        key, label = action[:2]
+                        key, fallback = action[:2]
+                        label = menu._appearance["labels"].get(key) or app._t("tk.title." + key)
                         right = menu._hitboxes[key][2]
                         for item in menu.canvas.find_withtag("title_card_" + key):
                             if menu.canvas.type(item) != "text":
@@ -255,7 +256,8 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                     with self.subTest(size=size):
                         app.root.geometry(size)
                         app.root.update()
-                        for key, label, *_ in menu.ACTIONS:
+                        for key, fallback, *_ in menu.ACTIONS:
+                            label = menu._appearance["labels"].get(key) or app._t("tk.title." + key)
                             rect = menu._hitboxes[key]
                             titles = [
                                 item for item in menu.canvas.find_withtag("title_card_" + key)
