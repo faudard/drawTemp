@@ -1,0 +1,148 @@
+"""Shared, presentation-only UI labels for Studio and Player.
+
+UI language is a user preference, not the source language of authored content
+or a value in canonical GameSession/replay state. Missing translations fall
+back to English; unsupported locales do not depend on the host OS locale.
+"""
+from __future__ import annotations
+
+DEFAULT_LANGUAGE = "en"
+LANGUAGES = ("en", "fr")
+
+# Stable semantic keys allow adding locales without changing widgets or QML.
+UI_STRINGS = {
+    "en": {
+        "menu.file": "&File",
+        "menu.edit": "&Edit",
+        "menu.display": "&Display",
+        "menu.workspaces": "&Workspaces",
+        "menu.tools": "&Tools",
+        "menu.recent": "Recent projects",
+        "menu.theme": "Theme",
+        "menu.language": "Language",
+        "command.new": "New project…",
+        "command.new_project": "New multi-genre project…",
+        "command.new_template": "New from template…",
+        "command.open": "Open project…",
+        "command.save": "Save project",
+        "command.save_as": "Save as…",
+        "command.playtest": "Play / Playtest",
+        "command.stop_playtest": "Stop playtest",
+        "command.return_playtest": "Return to editor",
+        "command.playtest_report": "Last playtest diagnostics…",
+        "command.export": "Export Player…",
+        "command.preferences": "Preferences…",
+        "command.undo": "Undo",
+        "command.redo": "Redo",
+        "command.palette": "Command palette…",
+        "command.guide": "First project walkthrough",
+        "command.r57_translation": "Translation Studio…",
+        "command.focus_resources": "Find resources",
+        "command.focus_inspector": "Inspect selection",
+        "command.focus_workspace": "Focus workspace",
+        "studio.workspace_prefix": "Workspace: {name}",
+        "studio.language_changed": "Studio language: {language}",
+        "player.options": "Options",
+        "player.pause": "PAUSE",
+        "player.resume": "Resume",
+        "player.save": "Save",
+        "player.main_menu": "Main menu",
+        "player.quit": "Quit",
+        "player.options_title": "PLAYER OPTIONS",
+        "player.options_description": "Preferences are stored separately from your game saves.",
+        "player.options_hint": "F10: options · Tab / Shift+Tab: navigate · Esc: close",
+        "player.display_accessibility": "DISPLAY & ACCESSIBILITY",
+        "player.language": "Language",
+        "player.text_size": "Text size",
+        "player.subtitle_description": "Narrative and cinematic subtitles remain readable.",
+        "player.subtitle_size": "Subtitle size",
+        "player.reduce_motion": "Reduce animations",
+        "player.reduce_flashes": "Reduce cinematic flashes and fades",
+        "player.high_contrast": "High contrast",
+        "player.fullscreen": "Fullscreen",
+        "player.show_grid": "Show map grid",
+        "player.show_heights": "Show elevations",
+        "player.controls": "CONTROLS",
+        "player.keyboard_layout": "Keyboard layout",
+        "player.keyboard_help": "Arrow keys remain available for movement. A shortcut cannot be used twice in the same context.",
+        "player.reset_bindings": "Reset this profile's keys",
+        "player.close": "Close",
+        "player.campaign_journal": "Campaign journal",
+        "player.decision": "YOUR DECISION",
+        "player.next_dialogue": "Continue conversation",
+        "player.narrator": "Narrator",
+    },
+    "fr": {
+        "menu.file": "&Fichier",
+        "menu.edit": "&Édition",
+        "menu.display": "&Affichage",
+        "menu.workspaces": "&Ateliers",
+        "menu.tools": "&Outils",
+        "menu.recent": "Projets récents",
+        "menu.theme": "Thème",
+        "menu.language": "Langue",
+        "command.new": "Nouveau projet…",
+        "command.new_project": "Nouveau projet multi-genres…",
+        "command.new_template": "Projet depuis un modèle rapide…",
+        "command.open": "Ouvrir un projet…",
+        "command.save": "Enregistrer le projet",
+        "command.save_as": "Enregistrer sous…",
+        "command.playtest": "Jouer / Playtest",
+        "command.stop_playtest": "Arrêter le playtest",
+        "command.return_playtest": "Revenir à l'édition testée",
+        "command.playtest_report": "Diagnostics du dernier playtest…",
+        "command.export": "Exporter le Player…",
+        "command.preferences": "Préférences…",
+        "command.undo": "Annuler",
+        "command.redo": "Rétablir",
+        "command.palette": "Palette de commandes…",
+        "command.guide": "Visite guidée du premier projet",
+        "command.r57_translation": "Translation Studio R57…",
+        "command.focus_resources": "Rechercher les ressources",
+        "command.focus_inspector": "Inspecter la sélection",
+        "command.focus_workspace": "Revenir au contenu de l’atelier",
+        "studio.workspace_prefix": "Atelier : {name}",
+        "studio.language_changed": "Langue du Studio : {language}",
+        "player.options": "Options",
+        "player.pause": "PAUSE",
+        "player.resume": "Reprendre",
+        "player.save": "Sauvegarder",
+        "player.main_menu": "Menu principal",
+        "player.quit": "Quitter",
+        "player.options_title": "OPTIONS DU PLAYER",
+        "player.options_description": "Préférences conservées indépendamment de vos sauvegardes.",
+        "player.options_hint": "F10 : ouvrir les options · Tab / Maj+Tab : parcourir · Échap : fermer",
+        "player.display_accessibility": "AFFICHAGE ET ACCESSIBILITÉ",
+        "player.language": "Langue",
+        "player.text_size": "Taille des textes",
+        "player.subtitle_description": "Les sous-titres narratifs et cinématiques restent lisibles.",
+        "player.subtitle_size": "Taille des sous-titres",
+        "player.reduce_motion": "Réduire les mouvements animés",
+        "player.reduce_flashes": "Réduire les flashs et fondus cinématiques",
+        "player.high_contrast": "Contraste renforcé",
+        "player.fullscreen": "Plein écran",
+        "player.show_grid": "Quadrillage de la carte",
+        "player.show_heights": "Afficher les hauteurs",
+        "player.controls": "COMMANDES",
+        "player.keyboard_layout": "Disposition du clavier",
+        "player.keyboard_help": "Les flèches restent disponibles pour les déplacements. Un raccourci ne peut pas être utilisé deux fois dans le même contexte.",
+        "player.reset_bindings": "Réinitialiser les touches de ce profil",
+        "player.close": "Fermer",
+        "player.campaign_journal": "Carnet de campagne",
+        "player.decision": "VOTRE DÉCISION",
+        "player.next_dialogue": "Suite de la conversation",
+        "player.narrator": "Narrateur",
+    },
+}
+
+def normalize_language(language):
+    """Only supported UI codes are accepted; default is always English."""
+    return language if isinstance(language, str) and language in LANGUAGES else DEFAULT_LANGUAGE
+
+
+def ui_text(key, language=DEFAULT_LANGUAGE, **values):
+    """Translate a stable UI key; fall back to English for absent translations."""
+    code = normalize_language(language)
+    source = UI_STRINGS[DEFAULT_LANGUAGE].get(key, key)
+    template = UI_STRINGS[code].get(key) or source
+    return template.format(**values)

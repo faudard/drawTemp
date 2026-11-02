@@ -5,6 +5,7 @@ from importlib.resources import files
 from pathlib import Path
 import sys
 
+from drawtemp.localization.ui import ui_text
 from drawtemp.core import Content, GameProject
 from drawtemp.assets.runtime import PresentationAssets
 from drawtemp.player.controller import PlayerController
@@ -161,6 +162,10 @@ def create_bridge(controller, renderer):
                 result["cinematic"]["frame"] = filtered_cinematic_frame(
                     cinematic["frame"], access)
             return result
+
+        @Slot(str, str, result=str)
+        def uiText(self, key, language):
+            return ui_text(key, language)
 
         @Slot(str)
         def selectLanguage(self, language):

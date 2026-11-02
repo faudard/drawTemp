@@ -45,6 +45,7 @@ ApplicationWindow {
     property bool inputLocked: pausePopup.opened || optionsPopup.opened || Boolean(playerData.cinematic.id) ||
                                recoveryPopup.opened || recoveryErrorPopup.opened || authoredInventoryOpen
     function binding(action) { return playerData.settings.bindings[action] || "" }
+    function ui(key) { return player.uiText(key, playerData.language) }
     onPlayerDataChanged: {
         if (playerData.screen !== "battle" && playerData.screen !== "campaign")
             authoredInventoryOpen = false
@@ -498,7 +499,7 @@ ApplicationWindow {
             Button {
                 id: playerOptionsButton
                 objectName: "r57-open-options"
-                text: "Options"
+                text: root.ui("player.options")
                 Accessible.name: "Ouvrir les options et réglages d’accessibilité"
                 onClicked: optionsPopup.open()
             }
@@ -608,7 +609,7 @@ ApplicationWindow {
                 }
             }
             Button {
-                text: "Quitter"
+                text: root.ui("player.quit")
                 Layout.alignment: Qt.AlignHCenter
                 onClicked: Qt.quit()
             }
@@ -674,7 +675,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                     }
                     Label {
-                        text: root.playerData.scene.speaker || "Narrateur"
+                        text: root.playerData.scene.speaker || root.ui("player.narrator")
                         textFormat: Text.PlainText
                         color: root.gold
                         font.bold: true
@@ -698,7 +699,7 @@ ApplicationWindow {
                     }
                     Button {
                         objectName: "r42NextDialogueLine"
-                        text: "Suite de la conversation →"
+                        text: root.ui("player.next_dialogue") + " →"
                         visible: root.playerData.dialogue_line.count > 1 &&
                                  !root.playerData.dialogue_line.complete
                         onClicked: player.nextDialogueLine()
@@ -709,7 +710,7 @@ ApplicationWindow {
                 Layout.preferredWidth: 330
                 Layout.fillHeight: true
                 Label {
-                    text: "VOTRE DÉCISION"
+                    text: root.ui("player.decision")
                     color: root.muted
                     font.bold: true
                     font.letterSpacing: 2
@@ -744,7 +745,7 @@ ApplicationWindow {
             spacing: 18
             Item { Layout.fillHeight: true }
             Label {
-                text: "Carnet de campagne"
+                text: root.ui("player.campaign_journal")
                 color: root.gold
                 font.family: "serif"
                 font.pixelSize: 40 * root.textScale
@@ -2792,25 +2793,25 @@ ApplicationWindow {
         padding: 22
         ColumnLayout {
             anchors.fill: parent
-            Label { text: "PAUSE"; font.pixelSize: 26; font.bold: true }
-            Button { text: "Reprendre"; Layout.fillWidth: true; onClicked: pausePopup.close() }
+            Label { text: root.ui("player.pause"); font.pixelSize: 26; font.bold: true }
+            Button { text: root.ui("player.resume"); Layout.fillWidth: true; onClicked: pausePopup.close() }
             Button {
-                text: "Sauvegarder"
+                text: root.ui("player.save")
                 Layout.fillWidth: true
                 onClicked: { player.saveGame(root.currentSlot); pausePopup.close() }
             }
             Button {
-                text: "Options"
+                text: root.ui("player.options")
                 Layout.fillWidth: true
                 onClicked: { pausePopup.close(); optionsPopup.open() }
             }
             Button {
                 objectName: "r14TitleFromPause"
-                text: "Menu principal"
+                text: root.ui("player.main_menu")
                 Layout.fillWidth: true
                 onClicked: { pausePopup.close(); player.titleScreen() }
             }
-            Button { text: "Quitter"; Layout.fillWidth: true; onClicked: Qt.quit() }
+            Button { text: root.ui("player.quit"); Layout.fillWidth: true; onClicked: Qt.quit() }
         }
     }
 
@@ -2844,19 +2845,19 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 10
             Label {
-                text: "OPTIONS DU PLAYER"
+                text: root.ui("player.options_title")
                 color: root.gold
                 font.bold: true
                 font.pixelSize: 23 * root.textScale
             }
             Label {
-                text: "Préférences conservées indépendamment de vos sauvegardes."
+                text: root.ui("player.options_description")
                 color: root.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
             Label {
-                text: "F10 : ouvrir les options · Tab / Maj+Tab : parcourir · Échap : fermer"
+                text: root.ui("player.options_hint")
                 color: root.muted
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -2870,7 +2871,7 @@ ApplicationWindow {
                     width: parent.width
                     spacing: 10
                     Label {
-                        text: "AFFICHAGE ET ACCESSIBILITÉ"
+                        text: root.ui("player.display_accessibility")
                         color: root.gold
                         font.bold: true
                         font.letterSpacing: 1
@@ -2878,22 +2879,22 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "Langue et pseudo-localisation"
+                            text: root.ui("player.language")
                             color: root.ivory
                             Layout.fillWidth: true
                         }
                         ComboBox {
                             id: languageSelect
                             objectName: "r57-player-language"
-                            Accessible.name: "Langue du Player"
+                            Accessible.name: root.ui("player.language")
                             model: ["Français", "English", "Pseudo accents", "Pseudo RTL"]
                             currentIndex: ["fr", "en", "qps-ploc", "qps-plocm"].indexOf(root.playerData.language)
                             onActivated: player.selectLanguage(["fr", "en", "qps-ploc", "qps-plocm"][currentIndex])
                         }
                     }
-                    Label { text: "Taille des textes"; color: root.ivory }
+                    Label { text: root.ui("player.text_size"); color: root.ivory }
                     Label {
-                        text: "Les sous-titres narratifs et cinématiques restent lisibles."
+                        text: root.ui("player.subtitle_description")
                         color: root.muted
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -2901,7 +2902,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "Taille des sous-titres"
+                            text: root.ui("player.subtitle_size")
                             color: root.ivory
                             Layout.fillWidth: true
                         }
@@ -2923,14 +2924,14 @@ ApplicationWindow {
                     }
                     CheckBox {
                         objectName: "r57-reduce-motion"
-                        text: "Réduire les mouvements animés"
+                        text: root.ui("player.reduce_motion")
                         Accessible.name: "Réduire les animations de combat et secousses"
                         checked: root.reduceMotion
                         onClicked: player.setAccessibilityBool("reduce_motion", checked)
                     }
                     CheckBox {
                         objectName: "r57-reduce-flashes"
-                        text: "Réduire les flashs et fondus cinématiques"
+                        text: root.ui("player.reduce_flashes")
                         Accessible.name: "Réduire les effets lumineux et les fondus"
                         checked: root.reduceFlashes
                         onClicked: player.setAccessibilityBool("reduce_flashes", checked)
@@ -2948,22 +2949,22 @@ ApplicationWindow {
                     CheckBox {
                         objectName: "r57-high-contrast"
                         Accessible.name: "Contraste élevé dans le Player"
-                        text: "Contraste renforcé"
+                        text: root.ui("player.high_contrast")
                         checked: root.highContrast
                         onClicked: player.setDisplayBool("high_contrast", checked)
                     }
                     CheckBox {
-                        text: "Plein écran"
+                        text: root.ui("player.fullscreen")
                         checked: root.playerData.settings.display.fullscreen
                         onClicked: player.setDisplayBool("fullscreen", checked)
                     }
                     CheckBox {
-                        text: "Quadrillage de la carte"
+                        text: root.ui("player.show_grid")
                         checked: root.playerData.settings.display.show_grid
                         onClicked: player.setDisplayBool("show_grid", checked)
                     }
                     CheckBox {
-                        text: "Afficher les hauteurs"
+                        text: root.ui("player.show_heights")
                         checked: root.playerData.settings.display.show_heights
                         onClicked: player.setDisplayBool("show_heights", checked)
                     }
@@ -2971,7 +2972,7 @@ ApplicationWindow {
                         Layout.fillWidth: true; height: 1; color: "#556d6c"
                     }
                     Label {
-                        text: "COMMANDES"
+                        text: root.ui("player.controls")
                         color: root.gold
                         font.bold: true
                         font.letterSpacing: 1
@@ -2979,7 +2980,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "Disposition du clavier"
+                            text: root.ui("player.keyboard_layout")
                             color: root.ivory
                             Layout.fillWidth: true
                         }
@@ -2990,7 +2991,7 @@ ApplicationWindow {
                         }
                     }
                     Label {
-                        text: "Les flèches restent disponibles pour les déplacements. Un raccourci ne peut pas être utilisé deux fois dans le même contexte."
+                        text: root.ui("player.keyboard_help")
                         color: root.muted
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -3015,7 +3016,7 @@ ApplicationWindow {
                         }
                     }
                     Button {
-                        text: "Réinitialiser les touches de ce profil"
+                        text: root.ui("player.reset_bindings")
                         Layout.fillWidth: true
                         onClicked: player.resetBindings()
                     }
@@ -3030,8 +3031,8 @@ ApplicationWindow {
             }
             Button {
                 objectName: "r57-options-close"
-                text: "Fermer"
-                Accessible.name: "Fermer les options du Player"
+                text: root.ui("player.close")
+                Accessible.name: root.ui("player.close")
                 Layout.alignment: Qt.AlignRight
                 onClicked: optionsPopup.close()
             }

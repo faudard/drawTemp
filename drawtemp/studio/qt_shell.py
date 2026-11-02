@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
+from drawtemp.localization.ui import DEFAULT_LANGUAGE, normalize_language, ui_text
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
 from drawtemp.sdk.reference import reference_project
@@ -228,7 +229,7 @@ class StudioWindow(QMainWindow):
         self._make_problems_dock()
         self._build_commands()
         self._build_menus()
-        self.set_language(str(self.settings.value("language", "fr")))
+        self.set_language(str(self.settings.value("language", DEFAULT_LANGUAGE)))
         self._refresh_recent_menu()
         self._activate("project")
 
@@ -543,10 +544,10 @@ class StudioWindow(QMainWindow):
             self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
-        file_menu = self.menuBar().addMenu("&Fichier")
+        file_menu = self.menuBar().addMenu("&File")
         for key in ("new_project", "new", "new_template", "open"):
             file_menu.addAction(self.commands[key])
-        self.recent_menu = file_menu.addMenu("Projets récents")
+        self.recent_menu = file_menu.addMenu("Recent projects")
         self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
         for key in ("save", "save_as"):
             file_menu.addAction(self.commands[key])
@@ -555,11 +556,11 @@ class StudioWindow(QMainWindow):
                     "playtest_report", "export"):
             file_menu.addAction(self.commands[key])
         self._sync_playtest_commands()
-        edit_menu = self.menuBar().addMenu("&Édition")
+        edit_menu = self.menuBar().addMenu("&Edit")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
-        view_menu = self.menuBar().addMenu("&Affichage")
-        self.workspaces_menu = self.menuBar().addMenu("&Ateliers")
+        view_menu = self.menuBar().addMenu("&Display")
+        self.workspaces_menu = self.menuBar().addMenu("&Workspaces")
         for identifier in WORKSPACES:
             self.workspaces_menu.addAction(self.commands["go_" + identifier])
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
@@ -569,14 +570,14 @@ class StudioWindow(QMainWindow):
                             ("Disposition compacte", "compact")):
             action = view_menu.addAction(title)
             action.triggered.connect(lambda _=False, p=name: self.layout_preset(p))
-        theme_menu = view_menu.addMenu("Thème")
+        theme_menu = view_menu.addMenu("Theme")
         for title, key in (("Sombre", "dark"), ("Clair", "light")):
             action = theme_menu.addAction(title)
             action.triggered.connect(lambda _=False, value=key: self.set_theme(value))
         for scale in (90, 100, 115, 130):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
-        tools_menu = self.menuBar().addMenu("&Outils")
+        tools_menu = self.menuBar().addMenu("&Tools")
         vcs_menu = tools_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
@@ -639,12 +640,20 @@ class StudioWindow(QMainWindow):
         mod_manager.triggered.connect(self.open_mod_manager)
         shortcuts = tools_menu.addAction("Configurer un raccourci…")
         shortcuts.triggered.connect(self.configure_shortcut)
-        # Localization applies to global workspace labels; legacy editors
-        # maintain their own FR labels while they are being migrated.
-        locale_menu = tools_menu.addMenu("Langue")
-        for lang in ("fr", "en"):
-            action = locale_menu.addAction(lang.upper())
+        # Presentation-only language selection: does not mutate authored content.
+        locale_menu = tools_menu.addMenu("Language")
+        self._locale_actions = {}
+        for lang, name in (("en", "English"), ("fr", "Français")):
+            action = locale_menu.addAction(name)
+            action.setCheckable(True)
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+            self._locale_actions[lang] = action
+        self._localized_menus = {
+            "menu.file": file_menu, "menu.edit": edit_menu,
+            "menu.display": view_menu, "menu.workspaces": self.workspaces_menu,
+            "menu.tools": tools_menu, "menu.recent": self.recent_menu,
+            "menu.theme": theme_menu, "menu.language": locale_menu,
+        }
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
         self.addToolBar(self.toolbar)
@@ -684,13 +693,26 @@ class StudioWindow(QMainWindow):
         apply_theme(QApplication.instance(), self.settings.value("theme", "dark"), scale)
 
     def set_language(self, language):
+        language = normalize_language(language)
         self.settings.setValue("language", language)
+        for key, menu in self._localized_menus.items():
+            menu.setTitle(ui_text(key, language))
+        for code, action in self._locale_actions.items():
+            action.setChecked(code == language)
         labels = EN if language == "en" else LABELS
         for identifier in WORKSPACES:
-            self.commands["go_" + identifier].setText("Workspace: " + labels[identifier]
-                                                      if language == "en" else
-                                                      "Atelier : " + labels[identifier])
-        self.statusBar().showMessage("Langue du shell : " + language.upper())
+            self.commands["go_" + identifier].setText(ui_text(
+                "studio.workspace_prefix", language, name=labels[identifier]))
+        for key in (
+            "new", "new_project", "new_template", "open", "save", "save_as",
+            "playtest", "stop_playtest", "return_playtest", "playtest_report",
+            "export", "preferences", "undo", "redo", "palette", "guide",
+            "r57_translation", "focus_resources", "focus_inspector",
+            "focus_workspace",
+        ):
+            self.commands[key].setText(ui_text("command." + key, language))
+        self.statusBar().showMessage(ui_text(
+            "studio.language_changed", language, language=language.upper()))
         self._update_guide()
 
     def configure_shortcut(self):
