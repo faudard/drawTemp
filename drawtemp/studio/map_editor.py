@@ -17,6 +17,7 @@ from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
 from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
+from .visual_layer_authoring import VisualLayerStudio
 
 try:
     from PySide6.QtCore import QObject, Property, Signal, Slot, Qt, QUrl
@@ -44,6 +45,7 @@ class MapWindow(QMainWindow):
                  character_pack=None, character_variant=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
+        self.visual_layers_editor = VisualLayerStudio(self.studio)
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
         self.resize(1400, 820)
         self.stroke = []
@@ -228,7 +230,16 @@ class MapWindow(QMainWindow):
         # Editor-only layers share the canonical mission, not the Player save.
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
-        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        self.functional_layers_dock = self._dock(
+            "Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        from .visual_layers_dock import VisualLayersDock
+        self.visual_layers_panel = VisualLayersDock(
+            self.visual_layers_editor, self.refresh, self)
+        self.visual_layers_dock = self._dock(
+            "Graphic Layers 2D", self.visual_layers_panel, Qt.RightDockWidgetArea)
+        self.tabifyDockWidget(self.functional_layers_dock, self.visual_layers_dock)
+        self.functional_layers_dock.raise_()
+        self.visual_layers_dock.hide()
         self._make_generator_dock()
         self._make_prefab_dock()
 
@@ -350,6 +361,11 @@ class MapWindow(QMainWindow):
             return
         self._connect_viewport_inputs(self.viewport.rootObject())
         self.tileset_dock.setVisible(mode == "top_down")
+        self.visual_layers_dock.setVisible(mode == "top_down")
+        if mode == "top_down":
+            self.visual_layers_dock.raise_()
+        else:
+            self.functional_layers_dock.raise_()
         if mode == "top_down":
             self.tileset_dock.raise_()
         else:
@@ -506,6 +522,8 @@ class MapWindow(QMainWindow):
         loaded = MapStudio.open(path)
         self.studio = loaded
         self.layers_panel.set_workspace(loaded.layers)
+        self.visual_layers_editor = VisualLayerStudio(loaded)
+        self.visual_layers_panel.set_editor(self.visual_layers_editor)
         self.selection = []
         self.cancel_transform()
         self.refresh_maps()
@@ -1086,9 +1104,12 @@ class MapWindow(QMainWindow):
         }.get(self._tool(), "surface:" + self.material.currentText())
 
     def _render_scene(self):
-        """Render exactly the Content mission edited by R5, with R3 projection."""
-        content = Content.from_dict(self.studio.snapshot()["content"])
-        return scene_from_mission(content.missions[self.studio.mission_id])
+        """Same validated R3 scene and optional GameProject graphic layers."""
+        from sporebound.visual_layers import attach_visual_layers
+        snapshot = self.studio.snapshot()
+        content = Content.from_dict(snapshot["content"])
+        scene = scene_from_mission(content.missions[self.studio.mission_id])
+        return attach_visual_layers(scene, snapshot["project"].get("extensions", {}))
 
     def cancel_stroke(self):
         self.stroke = []
@@ -1120,6 +1141,19 @@ class MapWindow(QMainWindow):
             self.dungeon.set_position(x, y)
             self.statusBar().showMessage(
                 "R27 : interaction positionnée en ({}, {}). Valider dans le panneau.".format(x, y))
+            return
+        if (self.renderer.projection_mode == "top_down" and
+                self.visual_layers_panel.editing()):
+            layer_id = self.visual_layers_panel.selected_id()
+            if not layer_id:
+                self.statusBar().showMessage("Choose or create a graphic layer first.")
+                return
+            choice = self.visual_layers_panel.mode.currentText()
+            operation = {"Layer Paint": "paint", "Mask Paint": "mask",
+                         "Layer Erase": "erase"}[choice]
+            self._safe(lambda: self.visual_layers_editor.paint(
+                layer_id, cells, material=self.material.currentText(),
+                mask=self.visual_layers_panel.mask_values(), operation=operation))
             return
         tool = self._tool()
         first, last = cells[0], cells[-1]
@@ -1172,6 +1206,7 @@ class MapWindow(QMainWindow):
                 self.pending_generation.revision != self.studio.authoring.revision):
             self.cancel_generation()
         self.layers_panel.set_mission(self.studio.mission_id)
+        self.visual_layers_panel.refresh()
         if hasattr(self, "construction"):
             workspace = self.construction.workspace
             if (workspace.authoring is not self.studio.authoring or

@@ -116,6 +116,11 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # Opt-in 2D visual layers are in the canonical project envelope and
+        # must be validated on every Studio/Player load, not only during edits.
+        from .visual_layers import VISUAL_NS, validate_visual_layers
+        if VISUAL_NS in self.extensions:
+            validate_visual_layers(self.extensions[VISUAL_NS]["data"], content)
         # R65.B: legacy projects bypass the optional combat validation entirely.
         if "org.drawtemp.actioncombat" in self.extensions:
             from .action_combat_catalog_r65 import catalog_from_project
