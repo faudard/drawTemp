@@ -44,9 +44,14 @@ class CharacterPartsTests(unittest.TestCase):
             opacity=145, offset=[-3, 5]))
         doc = session.document
         self.assertEqual(active_part(doc, "default", "hair")["offset"], [-3, 5])
-        for direction in ("south", "north", "east", "west"):
-            rendered = render_frame(doc, "default", "idle", direction, 0, ROOT)
-            self.assertEqual(rendered.size, (192, 192))
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            pass  # Pillow is optional for recipe-only standalone installs.
+        else:
+            for direction in ("south", "north", "east", "west"):
+                rendered = render_frame(doc, "default", "idle", direction, 0, ROOT)
+                self.assertEqual(rendered.size, (192, 192))
         session.edit(lambda doc: set_part(doc, "default", "hair", "bob", ROOT))
         self.assertEqual(
             active_part(session.document, "default", "hair")["tint"], "#aabbcc")
