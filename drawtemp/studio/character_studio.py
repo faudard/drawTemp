@@ -485,6 +485,11 @@ def main(argv=None):
             key_before = previous.data(Qt.UserRole) if previous else None
             results = search_characters(
                 self.library_entries, self.library_search.text())
+            visible_keys = {key for key, _ in results}
+            if key_before not in visible_keys:
+                current_id = self.session.document["id"]
+                candidate = "starter:" + current_id
+                key_before = candidate if candidate in visible_keys else None
             self.library_grid.blockSignals(True)
             self.library_grid.clear()
             for key, label in results:
