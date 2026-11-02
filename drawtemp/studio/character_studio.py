@@ -77,7 +77,42 @@ def main(argv=None):
             self.timer = QTimer(self)
             self.timer.setSingleShot(True)
             self.timer.timeout.connect(self.advance)
-            self.setWindowTitle("DrawTemp 5.0 — Character & Animation Studio")
+            self.setWindowTitle("DrawTemp — Character Studio")
+            self.setStyleSheet("""
+                QMainWindow, QDockWidget { background-color: #eaf0f6; }
+                QWidget { color: #25374b; font-size: 12px; }
+                QLabel { color: #25374b; }
+                QListWidget, QLineEdit, QComboBox, QSpinBox {
+                    background: #ffffff; color: #22374a;
+                    border: 1px solid #bdcbd9; border-radius: 5px;
+                    padding: 4px;
+                }
+                QListWidget::item:selected { background: #cce2ff; color: #173854; }
+                QListWidget::item:hover { background: #eef5ff; }
+                QPushButton, QToolButton {
+                    border: 1px solid #b3c4d4; border-radius: 5px;
+                    background: #f7faff; padding: 5px 9px;
+                }
+                QPushButton:hover, QToolButton:hover {
+                    background: #dcecff; border-color: #7399c6;
+                }
+                QPushButton:pressed, QToolButton:pressed { background: #bcd9ff; }
+                QDockWidget::title {
+                    background: #d9e6f3; color: #213a55;
+                    padding: 7px; font-weight: 600;
+                }
+                QTabBar::tab {
+                    padding: 9px 18px; margin-right: 3px;
+                    border: 1px solid #b6c9db;
+                    background: #e0eaf4; color: #34536a;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                }
+                QTabBar::tab:selected {
+                    background: #ffffff; color: #154f83;
+                    border-bottom: 2px solid #3b86cd;
+                }
+            """)
             self.resize(1580, 930)
             self.library_entries = discover_character_library(root, templates)
             self.saved_revision = self.session.revision
@@ -90,6 +125,7 @@ def main(argv=None):
             self.library_search.setPlaceholderText("Search characters and templates…")
             self.library_search.setClearButtonEnabled(True)
             self.library_search.textChanged.connect(self.refresh_library)
+            self.library_search.returnPressed.connect(self.open_selected_library)
             self.library_grid = QListWidget()
             self.library_grid.setViewMode(QListView.IconMode)
             self.library_grid.setIconSize(QSize(76, 76))
@@ -464,6 +500,8 @@ def main(argv=None):
                 self.library_grid.addItem(item)
                 if key == key_before:
                     self.library_grid.setCurrentItem(item)
+            if self.library_grid.currentRow() < 0 and self.library_grid.count():
+                self.library_grid.setCurrentRow(0)
             self.library_grid.blockSignals(False)
             self.library_count.setText(
                 f"{len(results)} of {len(self.library_entries)} characters"
