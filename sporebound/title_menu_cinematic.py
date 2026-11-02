@@ -271,19 +271,19 @@ class CinematicTitleMenu(TitleMenu):
                     self._stage_source, (scenic_width, height),
                     method=Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS,
                     centering=(.49, .50))
-                background = Image.new("RGB", size, (15, 27, 42))
+                background = Image.new("RGB", (width, height), (15, 27, 42))
                 background.paste(stage, (0, 0))
                 # Blend the artwork naturally into the navy right-hand menu.
-                mask = Image.new("L", size, 0)
+                mask = Image.new("L", (width, height), 0)
                 draw = ImageDraw.Draw(mask)
-                start = round(layout["menu_x"] * .86)
+                start = round(layout["menu_x"] * .77)
                 end = round(layout["menu_x"] + 38)
                 for x in range(start, min(width, end)):
-                    blend = round(255 * (x-start) / max(1, end-start))
+                    blend = round(255 * (x - start) / max(1, end - start))
                     draw.line((x, 0, x, height), fill=blend)
                 draw.rectangle((min(width,end), 0, width, height), fill=255)
                 background = Image.composite(
-                    Image.new("RGB", size, (15, 27, 42)), background, mask)
+                    Image.new("RGB", (width, height), (15, 27, 42)), background, mask)
                 self._stage_photo = ImageTk.PhotoImage(background, master=self.app.root)
                 self._stage_size = size
             c.create_image(0, 0, anchor="nw", image=self._stage_photo, tags="art")
@@ -454,7 +454,7 @@ class CinematicTitleMenu(TitleMenu):
             description = "Un royaume en guerre, des choix qui changeront son destin."
         c.create_text(thumb_x+offset,thumb_y+6,anchor="nw",text=name,
                       fill=self._text_color,width=max(80,w-offset-25),
-                      font=self._font("Georgia",11),tags="art")
+                      font=self._font("Georgia",11 if layout["compact"] else 13),tags="art")
         if not layout["compact"]:
             c.create_text(thumb_x+offset,thumb_y+38,anchor="nw",text=description,
                           fill=MUTED,width=max(80,w-offset-25),

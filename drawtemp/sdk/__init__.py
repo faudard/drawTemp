@@ -12,7 +12,7 @@ SDK_FEATURES = frozenset({
     "simulation.v1", "authoring.v1", "migration.v0-envelope-to-v1",
     "replay.v1", "player-slots.v1", "workers.v1", "certification.v1",
     "sdk-negotiation.v1", "project-extensions.v1", "controlled-scripting.v1",
-    "massive-simulation.v1", "semantic-vcs.v1", "classic-party.v1", "rpg-turn-order.v1", "rpg-encounter.v1", "ai-decision.v1", "ai-session.v1", "ai-behavior-tree.v1", "modding-declarative.v1", "modding-preflight.v1",
+    "massive-simulation.v1", "semantic-vcs.v1", "classic-party.v1", "rpg-turn-order.v1", "rpg-encounter.v1", "ai-decision.v1", "ai-session.v1", "ai-behavior-tree.v1", "modding-declarative.v1", "modding-preflight.v1", "addons-foundation.v1",
 })
 
 _PUBLIC = {
@@ -31,6 +31,10 @@ _PUBLIC = {
     "evaluate_decision": "ai_decision",
     "ModError": "modding",
     "ModRegistry": "modding",
+    "AddonManager": "addons",
+    "AddonError": "addons",
+    "validate_addon_manifest": "addons",
+    "read_addon_manifest": "addons",
     "inspect_modded_project": "mod_preflight",
     "validate_mod_manifest": "modding",
     "read_mod_manifest": "modding",
