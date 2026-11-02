@@ -422,6 +422,231 @@ def main(argv=None):
                 "Character Studio | Select parts, edit colors and offsets. "
                 "Preview and four directions remain visible.")
 
+        def _character_icon(self, document, variant=None, action="idle"):
+            """Only genuine rendered sprites are used for gallery thumbnails."""
+            try:
+                variant = variant or next(iter(document["variants"]))
+                clips = document["variants"][variant]["clips"]
+                if action not in clips:
+                    action = next(iter(clips))
+                directions = clips[action]["directions"]
+                direction = next((key for key in ("south", "east", "north", "west")
+                                  if directions.get(key)), None)
+                if direction is None:
+                    return QIcon()
+                source = render_frame(document, variant, action, direction, 0, root)
+                memory = io.BytesIO()
+                source.save(memory, format="PNG")
+                image = QPixmap()
+                image.loadFromData(memory.getvalue(), "PNG")
+                return QIcon(image)
+            except (ValueError, OSError, KeyError, StopIteration):
+                return QIcon()
+
+        def refresh_library(self, *_):
+            """Filter by name/ID without changing what the user is editing."""
+            previous = self.library_grid.currentItem()
+            key_before = previous.data(Qt.UserRole) if previous else None
+            results = search_characters(
+                self.library_entries, self.library_search.text())
+            self.library_grid.blockSignals(True)
+            self.library_grid.clear()
+            for key, label in results:
+                cache_key = ("library", key)
+                if cache_key not in self._gallery_cache:
+                    self._gallery_cache[cache_key] = self._character_icon(
+                        self.library_entries[key][1])
+                icon = self._gallery_cache[cache_key]
+                item = QListWidgetItem(icon, label)
+                item.setData(Qt.UserRole, key)
+                item.setToolTip(
+                    label + "\n" + key + "\nDouble-click to open")
+                self.library_grid.addItem(item)
+                if key == key_before:
+                    self.library_grid.setCurrentItem(item)
+            self.library_grid.blockSignals(False)
+            self.library_count.setText(
+                f"{len(results)} of {len(self.library_entries)} characters"
+                " | Double-click to open")
+            self.library_open.setEnabled(bool(results))
+
+        def reload_library(self):
+            self.library_entries = discover_character_library(root, templates)
+            self._gallery_cache.clear()
+            self.refresh_library()
+
+        def _confirm_replace(self):
+            if self.session.revision == self.saved_revision:
+                return True
+            return QMessageBox.question(
+                self, "Unsaved changes",
+                "Open another character and discard your unsaved changes?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            ) == QMessageBox.Yes
+
+        def open_selected_library(self):
+            item = self.library_grid.currentItem()
+            if item is not None:
+                self.open_library_item(item)
+
+        def open_library_item(self, item):
+            key = item.data(Qt.UserRole)
+            record = self.library_entries.get(key)
+            if record is None or not self._confirm_replace():
+                return
+            try:
+                self.stop()
+                self.session = CharacterSession(record[1])
+                self.path = (root / key[len("file:"):]
+                             if key.startswith("file:") else None)
+                self.art_root = root
+                self.saved_revision = self.session.revision
+                self.refresh()
+                self.statusBar().showMessage("Opened " + record[0])
+            except (KeyError, CharacterError, ValueError) as exc:
+                QMessageBox.warning(self, "Character library", str(exc))
+
+        def new_character(self):
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            if not self._confirm_replace():
+                return
+            name, ok = QInputDialog.getText(
+                self, "New Character", "Character name", text="New Hero")
+            if not ok or not name.strip():
+                return
+            identifier = re.sub(r"[^a-z0-9]+", "_", name.strip().casefold())
+            identifier = identifier.strip("_")[:60]
+            if not identifier or not identifier[0].isalpha():
+                QMessageBox.warning(
+                    self, "Character name", "Name needs at least one Latin letter.")
+                return
+            doc = templates["modular_hero"].copy()
+            doc["id"] = identifier
+            doc["name"] = name.strip()
+            self.stop()
+            self.session = CharacterSession(doc)
+            self.path = None
+            self.art_root = root
+            self.saved_revision = 0
+            self.refresh()
+
+        def _look_icon(self, look):
+            key = ("look", look["id"])
+            if key not in self._gallery_cache:
+                from copy import deepcopy
+                doc = deepcopy(templates["modular_hero"])
+                try:
+                    apply_look(doc, look["profile"], look["id"], root)
+                    self._gallery_cache[key] = self._character_icon(
+                        doc, look["profile"])
+                except (CharacterError, ValueError, OSError):
+                    self._gallery_cache[key] = QIcon()
+            return self._gallery_cache[key]
+
+        def refresh_looks(self):
+            self.look_grid.blockSignals(True)
+            self.look_grid.clear()
+            doc = self.session.document
+            enabled = doc["size"] == [192, 192] and self.art_root == root
+            self.look_grid.setEnabled(enabled)
+            profile = self.active_variant()
+            if enabled:
+                looks = available_looks(
+                    profile if profile in PROFILE_PRESETS else None)
+                for look in looks:
+                    icon = self._look_icon(look)
+                    item = QListWidgetItem(icon, look["name"])
+                    item.setData(Qt.UserRole, look["id"])
+                    item.setToolTip(
+                        look["profile"].title() + " / " + look["name"] +
+                        "\nUses existing sprites with editable defaults")
+                    self.look_grid.addItem(item)
+                self.look_hint.setText(
+                    f"{len(looks)} curated looks using existing parts. "
+                    "Select to apply; Ctrl+Z undoes the change.")
+            else:
+                self.look_hint.setText(
+                    "Looks require a 192×192 Modular Hero. "
+                    "Other character formats remain editable in Animation Tools.")
+            self.look_grid.blockSignals(False)
+
+        def choose_look(self, item):
+            look_id = item.data(Qt.UserRole)
+            if not look_id or not self.look_grid.isEnabled():
+                return
+            variant = self.active_variant()
+            try:
+                self.session.edit(
+                    lambda document: apply_look(document, variant, look_id, root))
+                self.refresh()
+                self.statusBar().showMessage(
+                    "Applied " + item.text() + " to " + variant +
+                    "; adjust parts and offsets freely.")
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+
+        def _to_pixmap(self, image, size):
+            memory = io.BytesIO()
+            image.save(memory, format="PNG")
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(memory.getvalue(), "PNG"):
+                return QPixmap()
+            return pixmap.scaled(size, size, Qt.KeepAspectRatio,
+                                 Qt.FastTransformation)
+
+        def refresh_overview(self):
+            """Always show four authored facings plus a face crop/portrait."""
+            doc = self.session.document
+            variant = self.active_variant()
+            action = self.action.currentData()
+            self.character_name.setText(
+                doc["name"] + "  ·  " +
+                doc["variants"][variant]["name"] + "  ·  " +
+                str(doc["size"][0]) + "×" + str(doc["size"][1]))
+            for direction, thumb in self.direction_canvases.items():
+                thumb.clear()
+                frames = doc["variants"][variant]["clips"].get(
+                    action, {}).get("directions", {}).get(direction, ())
+                if not frames:
+                    thumb.setText("Not authored")
+                    continue
+                try:
+                    frame_no = min(self.frame_index, len(frames) - 1)
+                    image = render_frame(
+                        doc, variant, action, direction, frame_no, self.art_root)
+                    thumb.setPixmap(self._to_pixmap(image, 126))
+                except (ValueError, OSError, KeyError) as exc:
+                    thumb.setText("Missing asset")
+            # Face panel: existing authored expression takes precedence.
+            self.face_canvas.clear()
+            expr = self.expression.currentData()
+            portrait = doc["variants"][variant]["expressions"].get(expr, "")
+            if portrait:
+                pixmap = QPixmap(str(self.art_root / portrait))
+                if not pixmap.isNull():
+                    self.face_canvas.setPixmap(
+                        pixmap.scaled(158, 158, Qt.KeepAspectRatio,
+                                      Qt.SmoothTransformation))
+                    return
+            for action_name in ("idle", action):
+                frames = doc["variants"][variant]["clips"].get(
+                    action_name, {}).get("directions", {}).get("south", ())
+                if not frames:
+                    continue
+                try:
+                    image = render_frame(
+                        doc, variant, action_name, "south", 0, self.art_root)
+                    width, height = image.size
+                    head = image.crop((0, 0, width, max(1, round(height * 0.68))))
+                    self.face_canvas.setPixmap(self._to_pixmap(head, 154))
+                    self.face_canvas.setToolTip(
+                        "Crop of the actual sprite (not a separate authored portrait)")
+                    return
+                except (OSError, ValueError, KeyError):
+                    continue
+            self.face_canvas.setText("No face art")
+
         def sync_profile_tabs(self):
             """Tabs are only for Modular Hero, not arbitrary RPG actors."""
             doc = self.session.document
