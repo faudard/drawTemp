@@ -8,15 +8,33 @@
   "sdk": {
     "min_api": "1.0.0",
     "max_api": "2.0.0",
-    "required_features": ["addons-foundation.v1"]
+    "required_features": [
+      "addons-foundation.v1"
+    ]
   },
-  "capabilities": ["studio.tool"],
-  "permissions": ["project.read", "map.tiles.write"],
+  "capabilities": [
+    "studio.tool"
+  ],
+  "permissions": [
+    "project.read",
+    "map.tiles.write"
+  ],
   "dependencies": [],
   "contributions": [
-    {"id": "terrain-brush", "point": "studio.tool",
-     "config": {"algorithm": "builtin.autotile-v1"}}
+    {
+      "id": "terrain-brush",
+      "point": "studio.tool",
+      "config": {
+        "label": "Grass Brush",
+        "material": "grass",
+        "radius": 1,
+        "shape": "diamond"
+      }
+    }
   ],
-  "rights": {"license": "MIT", "origin": "DrawTemp sample metadata",
-             "redistributable": true}
+  "rights": {
+    "license": "MIT",
+    "origin": "DrawTemp sample metadata",
+    "redistributable": true
+  }
 }

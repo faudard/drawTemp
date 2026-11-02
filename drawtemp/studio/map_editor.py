@@ -136,6 +136,14 @@ class MapWindow(QMainWindow):
         self.material.addItems(list(SURFACE_PALETTE))
         toolbar.addWidget(QLabel(" Surface "))
         toolbar.addWidget(self.material)
+        # Data-only add-on presets reconfigure the existing canonical R5 brush.
+        # No custom stroke executor is registered or called.
+        self.addon_brushes = QComboBox(self)
+        self.addon_brushes.setObjectName("studio-addon-brush-presets")
+        self.addon_brushes.setAccessibleName("Add-on brush presets")
+        self.addon_brushes.addItem("Add-on brushes", None)
+        self.addon_brushes.setVisible(False)
+        toolbar.addWidget(self.addon_brushes)
         self.additive_selection = QCheckBox("Ajouter à la sélection")
         self.additive_selection.setObjectName("r5_selection_additive")
         self.additive_selection.setToolTip("Conserver les cellules déjà sélectionnées, même disjointes")
@@ -298,6 +306,7 @@ class MapWindow(QMainWindow):
         self.mode.currentIndexChanged.connect(self._construction_mode)
         self.projection_choice.currentIndexChanged.connect(self.change_projection)
         self.material.currentTextChanged.connect(self.tileset_panel.set_material)
+        self.addon_brushes.currentIndexChanged.connect(self._select_addon_brush)
         self.tileset_panel.set_material(self.material.currentText())
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
@@ -1270,6 +1279,48 @@ class MapWindow(QMainWindow):
         if not self._map_context("map.objective"):
             return
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
+
+
+    def set_addon_brush_presets(self, presets):
+        """Replace external preset metadata; no mutation or scene reconstruction."""
+        selected = self.addon_brushes.currentData()
+        identity = (selected["addon_id"], selected["id"]) if selected else None
+        self.addon_brushes.blockSignals(True)
+        self.addon_brushes.clear()
+        self.addon_brushes.addItem("Add-on brushes", None)
+        for preset in presets:
+            # The Studio validates point config; a standalone MapWindow must
+            # still refuse unsupported tool payloads.
+            from drawtemp.studio.addon_points import validate_studio_contribution
+            validated = validate_studio_contribution({
+                "id": preset["id"], "point": "studio.tool",
+                "config": {key: preset[key] for key in
+                           ("label", "material", "radius", "shape")},
+            })
+            self.addon_brushes.addItem(validated["config"]["label"], dict(preset))
+        target = 0
+        if identity is not None:
+            for i in range(1, self.addon_brushes.count()):
+                value = self.addon_brushes.itemData(i)
+                if (value["addon_id"], value["id"]) == identity:
+                    target = i
+                    break
+        self.addon_brushes.setCurrentIndex(target)
+        self.addon_brushes.blockSignals(False)
+        self.addon_brushes.setVisible(self.addon_brushes.count() > 1)
+
+    def _select_addon_brush(self, index):
+        preset = self.addon_brushes.itemData(index)
+        if not preset:
+            return
+        self.tools.setCurrentText("Pinceau")
+        self.material.setCurrentText(preset["material"])
+        self.brush_radius.setValue(preset["radius"])
+        index = self.brush_shape.findData(preset["shape"])
+        if index >= 0:
+            self.brush_shape.setCurrentIndex(index)
+        self.statusBar().showMessage(
+            "Add-on brush preset: " + preset["label"] + " (native Map Studio brush)")
 
     def _tool(self):
         return self.tools.currentText()

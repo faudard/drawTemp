@@ -295,6 +295,8 @@
     "command.help_docs": "Docs",
     "command.help_tutorial": "Tutorial…",
     "command.help_about": "About",
+    "tool.addons_manage": "Add-on Manager…",
+    "menu.addon_actions": "Add-on Actions",
     "menu.focus_editor": "Focus Editor (F11)"
   }
 }

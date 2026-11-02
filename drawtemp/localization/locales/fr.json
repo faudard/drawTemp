@@ -295,6 +295,8 @@
     "command.help_docs": "Docs",
     "command.help_tutorial": "Tutoriel…",
     "command.help_about": "À propos",
+    "tool.addons_manage": "Gestionnaire d’extensions…",
+    "menu.addon_actions": "Actions d’extensions",
     "menu.focus_editor": "Éditeur plein écran (F11)"
   }
 }

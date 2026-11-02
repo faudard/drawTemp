@@ -1,0 +1,63 @@
+name: Studio add-on extension points
+
+on:
+  push:
+    paths:
+      - "drawtemp/addons.py"
+      - "drawtemp/studio/addon_points.py"
+      - "drawtemp/studio/addon_manager_qt.py"
+      - "drawtemp/studio/qt_shell.py"
+      - "drawtemp/studio/map_editor.py"
+      - "drawtemp/localization/**"
+      - "tests_standalone/test_studio_addon_points.py"
+      - "examples/addons/**"
+      - ".github/workflows/studio-addon-points.yml"
+  pull_request:
+    paths:
+      - "drawtemp/addons.py"
+      - "drawtemp/studio/addon_points.py"
+      - "drawtemp/studio/addon_manager_qt.py"
+      - "drawtemp/studio/qt_shell.py"
+      - "drawtemp/studio/map_editor.py"
+      - "drawtemp/localization/**"
+      - "tests_standalone/test_studio_addon_points.py"
+      - "examples/addons/**"
+      - ".github/workflows/studio-addon-points.yml"
+
+jobs:
+  contracts:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+          - os: macos-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Studio contribution contracts
+        run: python -m unittest tests_standalone.test_studio_addon_points.StudioPointsTests tests_standalone.test_drawtemp_addons_foundation -v
+
+  qt-smoke:
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Qt 6 Studio dependencies
+        run: python -m pip install -e ".[qt6]"
+      - name: Studio native menu, docks and map-brush smoke
+        run: python -m unittest tests_standalone.test_studio_addon_points.QtStudioAddonTests -v
