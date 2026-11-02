@@ -52,6 +52,22 @@ def title_geometry(width, height):
     }
 
 
+def native_cover_crop(source_width, source_height, target_width, target_height):
+    """Integer-nearest-neighbour cover crop for Tk when Pillow is unavailable.
+
+    Tk PhotoImage cannot resize proportionally to arbitrary dimensions. Zoom
+    enough to cover the destination, then copy a centered crop into an image
+    with exactly the viewport's dimensions (no unpainted margins).
+    """
+    if min(source_width, source_height, target_width, target_height) <= 0:
+        raise ValueError("image and viewport dimensions must be positive")
+    zoom = max(1, (target_width + source_width - 1) // source_width,
+               (target_height + source_height - 1) // source_height)
+    left = (source_width * zoom - target_width) // 2
+    top = (source_height * zoom - target_height) // 2
+    return zoom, (left, top, left + target_width, top + target_height)
+
+
 class _ActionProxy:
     """Compatibility shim for older smoke tests that inspected ttk buttons."""
 
@@ -174,6 +190,10 @@ class CinematicTitleMenu(TitleMenu):
         if self._stage_path is False:
             return False
         mode = self._appearance["background"]
+        if mode == "auto" and self._backdrop_source is not None:
+            self._stage_source = self._backdrop_source
+            self._stage_path = self._backdrop_path
+            return True
         if mode == "image":
             root = self.app.asset_root.resolve()
             artwork = (root / self._appearance["image"]).resolve()
@@ -198,6 +218,45 @@ class CinematicTitleMenu(TitleMenu):
             self._stage_path = False
             return False
 
+    def _paint_native_stage(self, scenic_width, width, height, layout):
+        """Fill the scenic viewport using native Tk even without Pillow."""
+        native = self._backdrop_native
+        if native is None:
+            return False
+        key = ("tk", scenic_width, height)
+        try:
+            if self._stage_size != key:
+                zoom, crop = native_cover_crop(native.width(), native.height(),
+                                               scenic_width, height)
+                scaled = native.zoom(zoom)
+                photo = self.tk.PhotoImage(master=self.app.root,
+                                           width=scenic_width, height=height)
+                photo.tk.call(str(photo), "copy", str(scaled),
+                              "-from", *crop, "-to", 0, 0)
+                self._stage_photo = photo
+                self._stage_size = key
+            self.canvas.create_image(0, 0, anchor="nw",
+                                     image=self._stage_photo, tags="art")
+        except self.tk.TclError:
+            self._stage_photo = None
+            self._stage_size = None
+            return False
+
+        # Approximate the Pillow feather using stippled Tk bands, followed by
+        # the opaque menu surface. These are visual-only Canvas elements.
+        start = round(layout["menu_x"] * .77)
+        end = max(start, layout["menu_x"] - 8)
+        patterns = ("gray12", "gray25", "gray50", "gray75")
+        for index, stipple in enumerate(patterns):
+            x0 = start + (end - start) * index / len(patterns)
+            x1 = start + (end - start) * (index + 1) / len(patterns)
+            self.canvas.create_rectangle(x0, 0, x1 + 1, height,
+                                         fill="#0f1c2b", stipple=stipple,
+                                         outline="", tags="art")
+        self.canvas.create_rectangle(layout["menu_x"] - 8, 0, width, height,
+                                     fill="#0f1c2b", outline="", tags="art")
+        return True
+
     def _paint_stage(self, width, height, layout):
         c = self.canvas
         c.create_rectangle(0, 0, width, height, fill="#000000" if self.contrast else "#101b2a", outline="", tags="art")
@@ -205,7 +264,7 @@ class CinematicTitleMenu(TitleMenu):
             return
         scenic_width = min(width, round(width * (.73 if not layout["compact"] else .69)))
         if self._load_stage():
-            size = (width, height)
+            size = ("pillow", width, height, scenic_width)
             if size != self._stage_size:
                 from PIL import Image, ImageDraw, ImageOps, ImageTk
                 stage = ImageOps.fit(
@@ -228,6 +287,9 @@ class CinematicTitleMenu(TitleMenu):
                 self._stage_photo = ImageTk.PhotoImage(background, master=self.app.root)
                 self._stage_size = size
             c.create_image(0, 0, anchor="nw", image=self._stage_photo, tags="art")
+            return
+        if self._backdrop_native is not None and self._paint_native_stage(
+                scenic_width, width, height, layout):
             return
         if self._backdrop_source is not None or self._backdrop_native is not None:
             # Retain the bundled PNG fallback when Pillow is absent.
@@ -331,7 +393,7 @@ class CinematicTitleMenu(TitleMenu):
                                fill="#203249",outline="",tags=("art",tag))
             self._icon(icon,x0+icon_width/2,y0+h/2,min(h*.29,26),tag)
             tx=x0+icon_width+13
-            title_size=max(13,min(round(22*self.scale),round(h*.33)))
+            title_size=max(13,min(round((21 if layout["compact"] else 26)*self.scale),round(h*.37)))
             c.create_text(tx,y0+h*(.33 if h>66 else .34),text=label,anchor="w",
                           fill=self._text_color if not disabled else "#94a1ae",
                           font=("Georgia",title_size,"bold"),tags=("art",tag))
@@ -340,7 +402,7 @@ class CinematicTitleMenu(TitleMenu):
             c.create_text(tx,y0+h*.71,text=sub,anchor="w",
                           fill=MUTED if not disabled else "#7f8894",
                           width=max(80,x1-tx-32),
-                          font=self._font("Segoe UI",9 if layout["compact"] else 10),
+                          font=self._font("Segoe UI",9 if layout["compact"] else 12),
                           tags=("art",tag))
             c.create_text(x1-15,y0+h/2, text="›", anchor="center",
                           fill=self._accent if not disabled else "#6e7784",
@@ -366,7 +428,7 @@ class CinematicTitleMenu(TitleMenu):
         w,h=x1-x0,y1-y0
         c.create_rectangle(x0,y0,x1,y1,fill="#101b2a",outline="#af884f",width=1,tags="art")
         c.create_text(x0+15,y0+14,anchor="nw",text="Campagne actuelle",fill="#f0d3a0",
-                      font=self._font("Georgia",11),tags="art")
+                      font=self._font("Georgia",11 if layout["compact"] else 13),tags="art")
         thumb_size=max(58,min(116,round(h*.48)))
         thumb_x, thumb_y = x0+15,y0+41
         if not layout["compact"] and self._backdrop_source is not None:
@@ -396,7 +458,7 @@ class CinematicTitleMenu(TitleMenu):
         if not layout["compact"]:
             c.create_text(thumb_x+offset,thumb_y+38,anchor="nw",text=description,
                           fill=MUTED,width=max(80,w-offset-25),
-                          font=self._font("Segoe UI",9),tags="art")
+                          font=self._font("Segoe UI",11),tags="art")
         by1=y1-12
         by0=by1-(30 if layout["compact"] else 39)
         bx0=x0+15
@@ -424,7 +486,7 @@ class CinematicTitleMenu(TitleMenu):
             tag="title_footer_"+key
             c.create_rectangle(xx,y,xx1,y+h,fill="#101a29",outline="#b18a51",tags=("art",tag))
             c.create_text((xx+xx1)/2,y+h/2,text=label,fill=self._text_color,
-                          font=self._font("Georgia",9 if layout["compact"] else 11),
+                          font=self._font("Georgia",9 if layout["compact"] else 12),
                           tags=("art",tag))
             self._region(tag,(xx,y,xx1,y+h),key=key)
         c.create_rectangle(0,height-31,152,height,fill="#101b2a",outline="",tags="art")

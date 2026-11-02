@@ -4,7 +4,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from sporebound.title_menu_cinematic import CinematicTitleMenu, title_geometry
+from sporebound.title_menu_cinematic import (
+    CinematicTitleMenu, native_cover_crop, title_geometry,
+)
 
 
 class TitleMenuGeometryTests(unittest.TestCase):
@@ -24,6 +26,28 @@ class TitleMenuGeometryTests(unittest.TestCase):
                         self.assertGreater(y0, layout["cards"][index-1][3])
                 self.assertLess(layout["campaign"][2], layout["menu_x"])
                 self.assertLessEqual(layout["footer_y"] + layout["footer_height"], height)
+
+    def test_native_cover_crop_exactly_fills_window(self):
+        # Previously the no-Pillow fallback drew a 640x900 image at natural
+        # size, leaving broad empty strips around the title illustration.
+        for viewport in ((800, 580), (1160, 820), (1595, 933), (1920, 1080)):
+            with self.subTest(viewport=viewport):
+                width, height = viewport
+                scenic_width = round(width * (.69 if width < 1070 or height < 680 else .73))
+                zoom, crop = native_cover_crop(640, 900, scenic_width, height)
+                self.assertGreaterEqual(zoom, 1)
+                self.assertGreaterEqual(crop[0], 0)
+                self.assertGreaterEqual(crop[1], 0)
+                self.assertLessEqual(crop[2], 640 * zoom)
+                self.assertLessEqual(crop[3], 900 * zoom)
+                self.assertEqual(crop[2] - crop[0], scenic_width)
+                self.assertEqual(crop[3] - crop[1], height)
+
+    def test_native_cover_crop_rejects_invalid_dimensions(self):
+        for dimensions in ((0, 900, 800, 600), (640, -1, 800, 600),
+                           (640, 900, 0, 600)):
+            with self.assertRaises(ValueError):
+                native_cover_crop(*dimensions)
 
     def test_packaged_art_is_present(self):
         from importlib.resources import files
@@ -135,6 +159,43 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 for bounds in menu._hitboxes.values():
                     self.assertGreaterEqual(bounds[0], 0)
                     self.assertLessEqual(bounds[2], menu.canvas.winfo_width())
+            finally:
+                app.close()
+
+    def test_jeanne_art_fills_viewport_without_pillow(self):
+        from sporebound.player_app import PlayerApplication
+        root = Path(__file__).resolve().parents[1]
+        content = root / "sporebound" / "content" / "jeanne.json"
+        project = root / "sporebound" / "content" / "jeanne.game.json"
+        artwork = root / "sporebound" / "content" / "art" / "jeanne" / "jeanne_menu_backdrop.png"
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(content, project,
+                                    profile_path=Path(directory) / "player.profile")
+            try:
+                app.root.update()
+                menu = app._title_menu
+                self.assertIsInstance(menu, CinematicTitleMenu)
+                # Force the native Tk path even if Pillow is installed in CI.
+                native = app.tk.PhotoImage(file=str(artwork))
+                menu._stage_source = None
+                menu._stage_path = False
+                menu._backdrop_native = native
+                menu._stage_size = None
+                for width, height in ((800, 580), (1595, 933)):
+                    with self.subTest(size=(width, height)):
+                        app.root.geometry(f"{width}x{height}")
+                        app.root.update()
+                        actual_width = menu.canvas.winfo_width()
+                        actual_height = menu.canvas.winfo_height()
+                        menu.paint(actual_width, actual_height)
+                        self.assertIsNotNone(menu._stage_photo)
+                        self.assertEqual(
+                            menu._stage_photo.width(),
+                            min(actual_width, round(actual_width *
+                                (.69 if title_geometry(actual_width, actual_height)["compact"]
+                                 else .73))))
+                        self.assertEqual(menu._stage_photo.height(), actual_height)
+                        self.assertEqual(len(menu._hitboxes), 10)
             finally:
                 app.close()
 

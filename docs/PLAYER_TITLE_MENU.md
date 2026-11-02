@@ -84,11 +84,19 @@ par une interface **entièrement interactive en Canvas Tk** :
   « Changer de campagne ».
 - Barre inférieure Outils avancés, Crédits et Aide, chacun ouvrant un vrai
   panneau utilisable, sans commandes factices.
-- Illustration `jeanne_menu_stage.jpg` embarquée et estompée vers la zone
-  droite sans afficher les textes/boutons de la maquette. Le JPEG est
-  déclaré dans `pyproject.toml` pour rester présent hors du dépôt source.
+- Le décor original `jeanne_menu_backdrop.png` est prioritaire sur
+  `jeanne_menu_stage.jpg` (désormais uniquement utilisé en secours). Le PNG
+  est chargé séparément du Canvas : aucun texte ni bouton n'est rasterisé.
+- Avec Pillow, l'illustration est redimensionnée en `cover` (recadrage sans
+  marges) et estompée progressivement vers la colonne de commandes.
+- **Sans Pillow**, le PNG est agrandi par `PhotoImage.zoom` puis recadré
+  dans une image Tk exactement aux dimensions de la zone décorative. Cela
+  évite l'ancien problème de PNG minuscule au centre d'une grande fenêtre ;
+  le rendu de secours est en pixels voisins (qualité inférieure à LANCZOS),
+  avec transition sombre en bandes tramées. Aucun paquet supplémentaire
+  n'est requis pour afficher l'image en grand.
 - Dimensions calculées via `title_geometry()` ; contrôle explicite des
-  800×580, 1160×820, 1672×914 et 1920×1080. À petite taille,
+  800×580, 1160×820, 1595×933, 1672×914 et 1920×1080. À petite taille,
   les sous-titres et pictogrammes se compactent plutôt que se superposer.
 - Focalisation Canvas, navigation ↑/↓, Début/Fin et Entrée/Espace ;
   Échap ferme les panneaux. Une partie absente reste inchargeable.
@@ -97,8 +105,9 @@ par une interface **entièrement interactive en Canvas Tk** :
   univers. Toutes les mutations de jeu restent dans `PlayerController`.
 
 Le rendu illustré utilise Pillow quand il est présent. Sans Pillow, le
-fond PNG antérieur ou le décor vectoriel restent disponibles et le jeu est
-pleinement utilisable. Le contraste renforcé masque les fonds illustrés.
+fond PNG utilise le recadrage natif Tk aux dimensions de la fenêtre ; le
+décor vectoriel ne sert qu'en dernier recours. Le contraste renforcé masque
+toujours les fonds illustrés.
 
 ### Vérification
 
