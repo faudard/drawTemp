@@ -626,8 +626,22 @@ def main(argv=None):
                 self.statusBar().showMessage(str(exc))
 
         def _to_pixmap(self, image, size):
+            # RPG-style alpha checkerboard, drawn underneath actual sprites.
+            from PIL import ImageDraw
+            width, height = image.size
+            checker = Image.new("RGBA", (width, height), "#ffffff")
+            brush = ImageDraw.Draw(checker)
+            tile = max(8, min(width, height) // 12)
+            for row in range(0, height, tile):
+                for column in range(0, width, tile):
+                    if (row // tile + column // tile) % 2:
+                        brush.rectangle(
+                            (column, row, min(width - 1, column + tile - 1),
+                             min(height - 1, row + tile - 1)),
+                            fill="#dde3e8")
+            checker.alpha_composite(image.convert("RGBA"))
             memory = io.BytesIO()
-            image.save(memory, format="PNG")
+            checker.save(memory, format="PNG")
             pixmap = QPixmap()
             if not pixmap.loadFromData(memory.getvalue(), "PNG"):
                 return QPixmap()
@@ -1060,12 +1074,7 @@ def main(argv=None):
                     ghost.putalpha(ghost.getchannel("A").point(lambda a: a // 4))
                     ghost.alpha_composite(image)
                     image = ghost
-                memory = io.BytesIO()
-                image.save(memory, format="PNG")
-                pixmap = QPixmap()
-                pixmap.loadFromData(memory.getvalue(), "PNG")
-                self.canvas.setPixmap(pixmap.scaled(
-                    300, 300, Qt.KeepAspectRatio, Qt.FastTransformation))
+                self.canvas.setPixmap(self._to_pixmap(image, 360))
                 self.status.setText(
                     f"{self.active_variant()} / {self.action.currentData()}"
                     f" / {self.direction.currentData()} / image {self.frame_index+1}")
