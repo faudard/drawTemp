@@ -64,7 +64,6 @@ class QuarterAutotileQtTests(unittest.TestCase):
             topdown_tiles = [r for r in controller.items if r["kind"] == "tile"]
             self.assertTrue(topdown_tiles)
             self.assertTrue(all(r.get("autotileKey") for r in topdown_tiles))
-            window.tileset_panel.set_material("stone")
             window.tileset_panel.items.setCurrentRow(3)
             self.assertEqual(window.material.currentText(), "stone")
 
