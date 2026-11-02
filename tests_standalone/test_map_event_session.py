@@ -8,6 +8,8 @@ from drawtemp.studio.map_event_session import MapEventSession
 class MapEventSessionTests(unittest.TestCase):
     def setUp(self):
         self.map = MapStudio.reference()
+        # Avoid assuming a production mission has no authored events.
+        self.map.create("event_test_blank", "Empty event map", 6, 6)
         self.events = MapEventSession(self.map)
 
     def test_clicking_empty_cell_does_not_paint_or_create_event(self):
@@ -25,7 +27,7 @@ class MapEventSessionTests(unittest.TestCase):
         self.assertIn("map_event_11", [row["id"] for row in self.map.mission()["triggers"]])
         self.map.authoring.undo()
         self.assertNotIn("map_event_11", [row["id"] for row in self.map.mission()["triggers"]])
-        self.assertEqual(self.events.events(), [])
+        self.assertNotIn("map_event_11", [row["id"] for row in self.events.events()])
         self.assertEqual(self.events.selected_id, "")
 
     def test_edit_message_and_delete_are_undoable(self):
