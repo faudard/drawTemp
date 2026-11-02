@@ -38,7 +38,7 @@ class PlayerPreferencesR7GUI(unittest.TestCase):
                 mappings[0].set("F1")
                 apply = next(w for w in descendants(app.root)
                              if isinstance(w, ttk.Button)
-                             and w.cget("text") == "Appliquer")
+                             and w.cget("text") == "Apply")
                 with patch.object(app.messagebox, "showerror") as show_error:
                     apply.invoke()
                     app.root.update()

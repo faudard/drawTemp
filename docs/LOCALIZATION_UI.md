@@ -25,3 +25,13 @@ UI files are embedded in the installed Python package via `pyproject.toml` packa
 The catalog migration includes top-level Studio navigation and frequently used Player screens. Specialized Studio workspaces, old Tk windows, and some complex Player HUD/gameplay strings remain to be converted. The R57 per-project Translation Studio is still the correct place for *authored dialogue*; UI JSON is only for application chrome.
 
 Testing: `python -m unittest tests_standalone.test_ui_locale_defaults tests_standalone.test_drawtemp5_r57c -v`, `python -m compileall -q drawtemp/localization drawtemp/studio/qt_shell.py drawtemp/player/qt_app.py`, and offscreen Qt smoke + visual review on Windows/macOS/Linux.
+
+## In-game language for the legacy Tk Player
+
+The legacy Tk game now has **Options → Language** with the locales enumerated
+by `locales/manifest.json`. The default is English; choose Français, then
+**Apply** to persist the selection to `<profile>.ui-language.json` (atomic,
+versioned and independent of savegames and `<profile>.player-ux.json`).
+**Back without saving** does not change the language. Title, Pause and Options
+are localized with the shared JSON catalogs. The underlying authored project
+language is unchanged. Some specialist gameplay windows are not yet translated.
