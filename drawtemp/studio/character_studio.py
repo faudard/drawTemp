@@ -1349,22 +1349,31 @@ def main(argv=None):
                     QMessageBox.critical(self, "Invalid Character File", str(exc))
 
         def save_recipe(self):
-            if self.path is None:
+            destination = self.path
+            if destination is None:
+                library_dir = root / "characters"
+                try:
+                    library_dir.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    QMessageBox.critical(self, "Character library", str(exc))
+                    return
                 path, _ = QFileDialog.getSaveFileName(
                     self, "Save Character",
-                str(root / "characters" /
-                    (self.session.document["id"] + ".character.json")),
-                "Character JSON (*.json)")
+                    str(library_dir /
+                        (self.session.document["id"] + ".character.json")),
+                    "Character JSON (*.json)")
                 if not path:
                     return
-                self.path = Path(path)
+                destination = Path(path)
             try:
-                self.path.write_text(json.dumps(
+                destination.write_text(json.dumps(
                     self.session.document, ensure_ascii=False, indent=2) + "\n",
                     encoding="utf-8")
+                self.path = destination
                 self.saved_revision = self.session.revision
                 self.statusBar().showMessage("Character saved.")
                 self.refresh()
+                self.reload_library()
             except OSError as exc:
                 QMessageBox.critical(self, "Save failed", str(exc))
 
