@@ -48,6 +48,8 @@ class StudioPanels:
         self.workspace = ProjectWorkspaceTab(self, notebook)
         self._entities_tab(notebook)
         self._project_tab(notebook)
+        from .title_screen_studio import TitleScreenStudio
+        self.title_screen_studio = TitleScreenStudio(self, notebook)
         from .studio_campaign_flow_editor import CampaignFlowEditor
         self.flow_editor = CampaignFlowEditor(self, notebook)
         from .studio_campaign_simulation import CampaignSimulationStudio
@@ -142,6 +144,7 @@ class StudioPanels:
         if project.campaign(self.campaign_id.get()) is None:
             self.campaign_id.set(project.campaigns[0]['id'])
         self._show_campaign()
+        self.title_screen_studio.load()
         self._last_mission_signature = None
         self.project_status.config(text='Historique Studio restauré (contenu + projet).')
 
@@ -533,7 +536,9 @@ class StudioPanels:
         ttk.Checkbutton(left,text='Plein écran',variable=self.fullscreen).grid(row=6,column=0,columnspan=2,sticky='w',padx=6)
         ttk.Button(left,text='Appliquer configuration',command=lambda: self._run(self.apply_project)).grid(row=7,column=0,columnspan=2,pady=6)
         ttk.Button(left,text='Enregistrer projet de jeu…',command=lambda: self._run(self.save_project)).grid(row=8,column=0,columnspan=2,pady=6)
-        ttk.Button(left,text='Aperçu écran titre',command=lambda: self._run(self.preview)).grid(row=9,column=0,columnspan=2,pady=6)
+        ttk.Button(left,text='Edit Title Screen',
+                   command=lambda: notebook.select(self.title_screen_studio.tab)
+                   ).grid(row=9,column=0,columnspan=2,pady=6)
         left.columnconfigure(1,weight=1)
 
         self.campaign_id, cb = self._field(right,0,'Campagne','main',choices=[])
@@ -585,6 +590,7 @@ class StudioPanels:
         self.slots.set(str(self.project.save_slots))
         self.campaign_id.set(self.project.campaigns[0]['id'])
         self._show_campaign()
+        self.title_screen_studio.load()
         self.story_editor.reset_project()
         self.cinematic_studio.reset_project()
         self.audio_studio.stop()
@@ -621,6 +627,7 @@ class StudioPanels:
         self.slots.set(str(self.project.save_slots))
         self.campaign_id.set(self.project.campaigns[0]['id'])
         self._show_campaign()
+        self.title_screen_studio.load()
         self.refresh()
 
     def _pending_fields(self):
@@ -640,7 +647,7 @@ class StudioPanels:
                     self.cstart.get()!=c['start_mission']))
 
     def dirty(self):
-        return (self._pending_fields() or
+        return (self._pending_fields() or self.title_screen_studio.pending() or
                 json.dumps(self.project.to_dict(),sort_keys=True)!=self.project_saved)
 
     def apply_project(self):

@@ -92,6 +92,25 @@ class PlayerController:
         self.long_mode, self.last_load_status = True, status
         return status.session
 
+    def first_free_slot(self, campaign_id):
+        """Return a genuinely unused slot without reading or modifying saves.
+
+        Check the standard and long-session namespaces, including orphan
+        backup/journal and recovery evidence. Never recycle a damaged slot.
+        """
+        for slot in range(1, self.project.save_slots + 1):
+            regular = self.path_for(campaign_id, slot)
+            long = self.long_path_for(campaign_id, slot)
+            candidates = (regular, long)
+            evidence = (
+                path.with_name(path.name + suffix)
+                for path in candidates
+                for suffix in ("", ".bak", ".damaged", ".journal")
+            )
+            if not any(path.exists() or path.is_symlink() for path in evidence):
+                return slot
+        return None
+
     def store(self):
         require(self.campaign_id is not None and self.slot is not None, "No save selected")
         return SessionStore(self.path_for(self.campaign_id, self.slot))

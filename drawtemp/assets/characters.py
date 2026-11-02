@@ -21,7 +21,13 @@ from sporebound.assets import AssetRegistry, _portable_path
 
 DIRECTIONS = ("south", "north", "east", "west")
 ACTIONS = ("idle", "walk", "run", "attack", "magic", "hit", "block", "death", "victory")
-SLOTS = ("body", "face", "eyes", "hair", "clothing", "cape", "weapon", "accessory")
+# Keep legacy layer slots; modular categories map directly to existing
+# assets/hero_parts folder names and are backward-compatible recipe v1 slots.
+SLOTS = ("body", "face", "eyes", "hair", "clothing", "cape", "weapon", "accessory",
+         "head_shape", "ears", "skin_spots", "head_pattern", "iris", "pupil",
+         "brows", "nose", "mouth", "teeth", "facial_hair", "cap", "horns",
+         "bottom", "top", "mark", "mark_2", "mark_3", "earrings", "jewelry",
+         "accessory_2", "accessory_3")
 MANDATORY = ("idle", "walk", "attack")
 ID_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}\Z")
@@ -88,7 +94,7 @@ def validate(document):
         _check(isinstance(variant["name"], str) and variant["name"].strip(),
                "Outfit name is required")
         layers = variant["layers"]
-        _check(isinstance(layers, list) and len(layers) <= 24, "Invalid appearance layers")
+        _check(isinstance(layers, list) and len(layers) <= 48, "Invalid appearance layers")
         seen = set()
         for layer in layers:
             _check(isinstance(layer, dict)
@@ -180,6 +186,9 @@ def starter_library():
     }
     generic_atlas = "sporebound/content/art/iso/chibi_actors.png"
     library = {"jeanne": validate(jeanne)}
+    # The editor-facing modular character uses the same v1 recipe/renderer.
+    from .character_parts import modular_starter
+    library["modular_hero"] = modular_starter()
     for key, title, row in (
         ("villager", "Villageois (prototype)", 0),
         ("knight", "Chevalier (prototype)", 1),
@@ -397,8 +406,12 @@ def export_pack(document, root, destination, *, strict=False):
     """
     from PIL import Image
     data = validate(document)
+    # Authoring previews can export truthful, partial sprite packs.
+    # Missing actions remain explicit QA errors in metadata; release/strict
+    # export still rejects them. Never invent fallback frames.
     errors = [issue for issue in diagnostics(data, require_outfits=strict)
-              if issue["severity"] == "error"]
+              if issue["severity"] == "error" and
+              (strict or issue["code"] != "missing_animation")]
     if errors:
         raise CharacterError("Art QA failed: " + json.dumps(errors, ensure_ascii=False))
     root, destination = Path(root).resolve(), Path(destination).resolve()

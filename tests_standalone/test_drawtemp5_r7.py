@@ -41,7 +41,7 @@ def small_character():
 class CharacterRecipeTests(unittest.TestCase):
     def test_packaged_jeanne_uses_four_real_atlas_directions(self):
         library = starter_library()
-        self.assertEqual(set(library), {"jeanne", "villager", "knight", "archer",
+        self.assertEqual(set(library), {"jeanne", "modular_hero", "villager", "knight", "archer",
                                         "wolf", "spearman", "ogre"})
         self.assertIn("missing_animation", {x["code"] for x in diagnostics(library["wolf"])})
         jeanne = library["jeanne"]

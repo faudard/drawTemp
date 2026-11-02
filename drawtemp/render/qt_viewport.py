@@ -78,6 +78,8 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._batch = TerrainTextureBatches(self._index, atlas_url=self._atlas)
             self._batch_enabled = False  # Enabled only when an engine owns the provider.
             self._image_provider = None
+            self._topdown_provider = None
+            self._quick_engine = None
             self._rendered_items = []
             self._batch_rows = []
             self._batched_ids = set()
@@ -201,22 +203,52 @@ def make_controller(scene, atlas_url=None, *, assets=None,
                  (row.get("selected") or row.get("overlay")))
             ]
 
-        def attach_engine(self, engine):
-            """Register a single image provider on a QQuickView/QQuickWidget engine.
-
-            A standalone controller without an engine still uses the unchanged
-            per-tile renderer; the Player and Studio both register before load.
-            """
-            if self._image_provider is not None:
+        def _ensure_topdown_provider(self):
+            if self._quick_engine is None or self._topdown_provider is not None:
                 return
+            from .topdown_image_provider import make_topdown_image_provider
+            provider = make_topdown_image_provider()
+            self._quick_engine.addImageProvider("drawtemp-topdown", provider)
+            self._topdown_provider = provider  # Qt engine retains ownership.
+
+        def attach_engine(self, engine):
+            """Attach texture providers to the shared Qt Quick engine once."""
+            if self._quick_engine is not None:
+                if self._quick_engine is not engine:
+                    raise ValueError("A renderer may only attach one Qt engine")
+                return
+            self._quick_engine = engine
             provider = make_image_provider(self._batch)
             engine.addImageProvider("drawtemp-tiles", provider)
-            self._image_provider = provider  # Qt owns it while engine is live.
-            # R3 raster batch atlas geometry is isometric; never paint diamond
-            # tile textures into top-down scenes. Both projections still use
-            # the same renderer controller/culling/scene records.
+            self._image_provider = provider
+            if self.projection_mode == "top_down":
+                self._ensure_topdown_provider()
             self._batch_enabled = self.projection_mode == "isometric"
             self.refresh()
+
+        def setProjectionMode(self, mode):
+            """Switch projection without resetting document, viewport or zoom.
+
+            Recenter the same fractional map position in the new projection.
+            Input picking and tile culling use the new R3 projection immediately.
+            """
+            if mode not in ("isometric", "top_down"):
+                raise ValueError("Only ISO and top-down are switchable in Studio")
+            if mode == self.projection_mode:
+                return False
+            world_x, world_y = self.camera.world(
+                self.camera.width / 2, self.camera.height / 2)
+            position = self.projection.unproject(world_x, world_y)
+            self.projection_mode = mode
+            self.projection = TopDownProjection() if mode == "top_down" else IsoProjection()
+            self._depth_profile = normalize_depth_profile(
+                None, projection_mode=mode)
+            self._batch_enabled = (mode == "isometric" and self._image_provider is not None)
+            if mode == "top_down":
+                self._ensure_topdown_provider()
+            self.camera.center(*self.projection.project(*position))
+            self.refresh()
+            return True
 
         @Property(bool, notify=sceneChanged)
         def textureBatching(self):
@@ -334,7 +366,7 @@ def make_controller(scene, atlas_url=None, *, assets=None,
             self._event_selected = selected_id
             self.sceneChanged.emit()
 
-        @Property(str, constant=True)
+        @Property(str, notify=sceneChanged)
         def projectionMode(self):
             return self.projection_mode
 

@@ -39,4 +39,4 @@ include = ["sporebound*", "drawtemp*"]
 [tool.setuptools.package-data]
 sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/jeanne/*.jpg", "content/art/iso/*.png"]
 
-drawtemp = ["render/*.qml", "player/*.qml", "creator_examples/*.json", "studio/data/*.json"]
+drawtemp = ["render/*.qml", "player/*.qml", "creator_examples/*.json", "studio/data/*.json", "localization/locales/*.json"]

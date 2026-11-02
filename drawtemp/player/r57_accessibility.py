@@ -11,17 +11,19 @@ import os
 from pathlib import Path
 import tempfile
 
+from drawtemp.localization.ui import DEFAULT_LANGUAGE, LANGUAGES as UI_LANGUAGES
+
 
 class AccessibilityError(ValueError):
     """A persisted accessibility setting is invalid or cannot be loaded safely."""
 
 
-LANGUAGES = ("fr", "en", "qps-ploc", "qps-plocm")
+LANGUAGES = tuple(UI_LANGUAGES) + ("qps-ploc", "qps-plocm")
 FIELDS = frozenset({"language", "subtitle_scale", "reduce_motion", "reduce_flashes"})
 
 
-def defaults(language="fr"):
-    if language not in ("fr", "en"):
+def defaults(language=DEFAULT_LANGUAGE):
+    if language not in UI_LANGUAGES:
         raise AccessibilityError("Unsupported project source language")
     return {
         "version": 1,
@@ -51,7 +53,7 @@ def validate(data):
 class AccessibilityPreferences:
     """Detached, atomic local UI preferences; one per Player save directory."""
 
-    def __init__(self, path, *, default_language="fr"):
+    def __init__(self, path, *, default_language=DEFAULT_LANGUAGE):
         self.path = Path(path)
         self._data = defaults(default_language)
         self.warning = ""

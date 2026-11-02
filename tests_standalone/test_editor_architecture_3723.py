@@ -9,10 +9,11 @@ from sporebound.editor_architecture import (
     EditingContext, EditorChange, ChangeNotifications, StructureCommand,
     StructureGroupCommand,
     EntityCommand, TacticalEventCommand, SelectionController, ToolController,
-    RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+    RENDERER, MINIMAP, INSPECTOR, WORKSPACE,
+    selection_cell_or_default)
 from sporebound.event_composer import save_event, condition, action
 from sporebound.iso_structures import place_structure
-from sporebound.model import Content, RuleError
+from sporebound.model import Board, Content, RuleError
 
 
 class EditorArchitectureTests(TestCase):
@@ -150,6 +151,23 @@ class EditorArchitectureTests(TestCase):
         tools.set('Inspecter entité', self.mid)
         self.assertEqual(len(inspector), 2)
         self.assertEqual(selection.state.cells, ((2, 3),))
+
+    def test_selection_remains_valid_after_off_map_click_or_mission_resize(self):
+        board = Board(4, 3)
+        self.assertEqual(selection_cell_or_default(board, (2, 1)), (2, 1))
+        self.assertEqual(selection_cell_or_default(board, [3, 2]), (3, 2))
+        for invalid in (None, (), (1,), ('1', 1), (True, 1), (4, 1), (-1, 1)):
+            with self.subTest(cell=invalid):
+                self.assertEqual(selection_cell_or_default(board, invalid),
+                                 (0, 0))
+
+        selection = SelectionController(ChangeNotifications())
+        selection.set(self.mid, (2, 1), publish=False)
+        for invalid in (None, (), (1,), ('1', 1), (True, 1)):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(RuleError):
+                    selection.set(self.mid, invalid, publish=False)
+                self.assertEqual(selection.state.cell, (2, 1))
 
     def test_rejected_invalid_command_does_not_publish(self):
         notices = []

@@ -33,26 +33,35 @@ class TitleMenu:
         self._backdrop_size = None
         self._backdrop_native = None
         self._image_tk = None
-        if any(campaign["id"] == "jeanne" for campaign in app.project.campaigns):
+        from .title_screen_settings import settings_for
+        appearance = settings_for(app.project)
+        if appearance["background"] == "image":
+            root = app.asset_root.resolve()
+            custom = (root / appearance["image"]).resolve()
+            candidates = (custom,) if custom.is_relative_to(root) else ()
+        elif appearance["background"] == "auto" and any(
+                campaign["id"] == "jeanne" for campaign in app.project.campaigns):
             candidates = (
                 app.asset_root / "art" / "jeanne" / "jeanne_menu_backdrop.png",
                 Path(__file__).resolve().parent / "content" / "art" /
                 "jeanne" / "jeanne_menu_backdrop.png",
             )
-            self._backdrop_path = next((path for path in candidates
-                                         if path.is_file()), None)
-            if self._backdrop_path is not None:
+        else:
+            candidates = ()
+        self._backdrop_path = next((path for path in candidates
+                                     if path.is_file()), None)
+        if self._backdrop_path is not None:
+            try:
+                from PIL import Image, ImageTk
+                self._backdrop_source = Image.open(self._backdrop_path).convert("RGB")
+                self._image_tk = ImageTk
+            except (ImportError, OSError, ValueError):
+                # No Pillow dependency: native Tk supports bundled PNGs.
                 try:
-                    from PIL import Image, ImageTk
-                    self._backdrop_source = Image.open(self._backdrop_path).convert("RGB")
-                    self._image_tk = ImageTk
-                except (ImportError, OSError, ValueError):
-                    # No Pillow dependency: native Tk supports bundled PNGs.
-                    try:
-                        self._backdrop_native = self.tk.PhotoImage(
-                            file=str(self._backdrop_path))
-                    except self.tk.TclError:
-                        self._backdrop_native = None
+                    self._backdrop_native = self.tk.PhotoImage(
+                        file=str(self._backdrop_path))
+                except self.tk.TclError:
+                    self._backdrop_native = None
         self.portrait = None
         if any(campaign["id"] == "jeanne" for campaign in app.project.campaigns):
             image_path = app.asset_root / "art" / "jeanne" / "jeanne_portrait.png"
@@ -79,6 +88,19 @@ class TitleMenu:
     def _focus_default(self):
         if self.canvas.winfo_exists() and self.overlay is None:
             (self.continue_button if self._saved() else self.new_button).focus_set()
+
+    def dispose(self):
+        """Delete Canvas items and Tk images before the Tcl interpreter closes."""
+        self.canvas.delete("all")
+        for name in ("_backdrop_photo", "_backdrop_native", "portrait",
+                     "_stage_photo", "_thumb_photo"):
+            if hasattr(self, name):
+                setattr(self, name, None)
+        for name in ("_backdrop_source", "_stage_source"):
+            source = getattr(self, name, None)
+            if source is not None:
+                source.close()
+                setattr(self, name, None)
 
     def _saved(self):
         return has_save(self.app.player, self.app.campaign_var.get(),
@@ -107,7 +129,7 @@ class TitleMenu:
         self.load_button = self._button("CHARGER UNE PARTIE",
                                         lambda: self.open_selection(load=True))
         self.options_button = self._button("OPTIONS", self.app.options_screen)
-        self.quit_button = self._button("QUITTER", self.app.close)
+        self.quit_button = self._button("QUITTER", self.app.request_close)
         self.choose_button = self._button("CHOISIR CAMPAGNE / EMPLACEMENT",
                                           self.open_selection)
         self.advanced_button = self._button("OUTILS AVANCÉS", self.open_advanced)
