@@ -25,6 +25,7 @@ from drawtemp.studio.ads_docking import DockHost
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
 from drawtemp.addons import AddonManager, AddonError, read_addon_manifest, validate_addon_manifest
+from drawtemp.sdk.event_addons import event_addon_script, preview_event_addon
 from drawtemp.studio.addon_points import (
     PROJECT_FIELDS, STUDIO_POINTS, project_field_values,
     studio_contributions, validate_studio_contribution,
@@ -2263,6 +2264,8 @@ class StudioWindow(QMainWindow):
             for contribution in descriptor["contributions"]:
                 if contribution.get("point") in STUDIO_POINTS:
                     validate_studio_contribution(contribution)
+            # All game.event configurations must be native and bounded before registration.
+            event_addon_script(descriptor)
         return self.addons.register(descriptor)
 
     def enable_addon(self, addon_id, grants):
@@ -2275,6 +2278,25 @@ class StudioWindow(QMainWindow):
             self._sync_addon_ui()
             raise
         return self.addons.status(addon_id)
+
+    def preview_addon_events(self, addon_id):
+        """Return exact native effects and revision-bound preview, without mutation."""
+        script = event_addon_script(self.addons.manifest(addon_id))
+        plan = preview_event_addon(
+            self.addons, self.session, addon_id,
+            expected_revision=self.session.revision,
+        )
+        return plan, script
+
+    def apply_addon_events(self, addon_id, plan):
+        """Commit the confirmed preview through the original AuthoringSession."""
+        status = self.addons.status(addon_id)
+        if not status["enabled"] or "events.write" not in status["grants"]:
+            raise AddonError("permission_denied", "Event addon is no longer enabled")
+        transition = self.session.apply(plan)
+        self.refresh()
+        self.problems.addItem("Native event hooks compiled: " + addon_id)
+        return transition
 
     def disable_addon(self, addon_id):
         state = self.addons.disable(addon_id)
