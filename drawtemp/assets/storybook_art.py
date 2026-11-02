@@ -499,14 +499,56 @@ def apply_storybook_look(document, variant, look_id):
     validate(document)
 
 
+
+def contact_sheet(root, output):
+    """Visual QA board of twelve real exported looks, all four facings."""
+    from PIL import Image, ImageDraw
+    from .characters import render_frame
+    from copy import deepcopy
+
+    root = Path(root).resolve()
+    build(root)
+    original = storybook_starter()
+    board = Image.new("RGB", (4 * 224 + 32, 12 * 220 + 48), "#eaf0f6")
+    d = ImageDraw.Draw(board)
+    for index, entry in enumerate(LOOKS):
+        key, label, profile, _ = entry
+        doc = deepcopy(original)
+        apply_storybook_look(doc, profile, key)
+        row = index
+        d.text((16, row * 220 + 5), f"{profile.title()} · {label}",
+               fill="#253249")
+        for col, direction in enumerate(("south", "east", "north", "west")):
+            sample = render_frame(doc, profile, "idle", direction, 0, root)
+            x = 16 + col * 224
+            y = 24 + row * 220
+            # Transparent checkerboard (only in QA board).
+            for cy in range(0, 192, 12):
+                for cx in range(0, 192, 12):
+                    shade = "#f4f5f8" if (cx // 12 + cy // 12) % 2 else "#dde3ea"
+                    d.rectangle((x+cx, y+cy, x+cx+11, y+cy+11),
+                                fill=shade)
+            board.paste(sample, (x, y), sample)
+            d.text((x+4, y+195), direction.upper(), fill="#4a556b")
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    board.save(path, format="PNG", optimize=True)
+    return path
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Build original DrawTemp art")
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--force", action="store_true",
                         help="Regenerate only namespaced storybook assets")
+    parser.add_argument("--preview", type=Path,
+                        help="Save a QA contact sheet of 12 looks x 4 directions")
     args = parser.parse_args(argv)
     changed = build(args.root, overwrite=args.force)
+    if args.preview:
+        board = contact_sheet(args.root, args.preview)
+        print("QA artwork board: " + str(board))
     print(f"{COLLECTION}: {changed} PNG rendered, "
           f"{sum(map(len, FAMILIES.values())) * 4} total, "
           "192x192 RGBA, four facings")
