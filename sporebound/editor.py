@@ -2701,11 +2701,12 @@ def launch(path):
             visual_pick = pick_building_part(
                 canvas, iso_geometry, px, py,
                 fallback_cell=iso_geometry.hit_test(px, py))
-        selected_cell = (visual_pick.cell if visual_pick is not None
-                         else event_cell(event))
-        if selected_cell is None:
-            return
-        validate_selection(doc.data, mission_var.get(), [selected_cell])
+        clicked_cell = (visual_pick.cell if visual_pick is not None
+                        else event_cell(event))
+        if clicked_cell is None:
+            return  # Off-map picks must preserve the last valid selection.
+        validate_selection(doc.data, mission_var.get(), [clicked_cell])
+        selected_cell = clicked_cell
         editing_context.selection.set(mission_var.get(), selected_cell,
                                       selected_tiles, publish=False)
         tool, brush = tool_var.get(), active_brush()
@@ -3284,6 +3285,10 @@ def launch(path):
         refresh_group_tree(content.missions[mission_var.get()])
         board = battle.board if battle else mission.board
         units = battle.units if battle else mission.units
+        # A playtest or mission change may follow an off-map/stale cursor.
+        # Normalize before SelectionController and rendering consume it.
+        if selected_cell is None or not board.contains(selected_cell):
+            selected_cell = (0, 0)
         unit_box['values'] = [u.id for u in units if not battle or not battle.deploying
                               or u.team == 'player' and u.alive]
         if unit_var.get() not in unit_box['values']:
@@ -3433,10 +3438,6 @@ def launch(path):
                 heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
             else:
                 heading = 'TERRAIN — case ' + str(selected_cell)
-            # Switching to a smaller mission may invalidate the previous
-            # cursor position; keep the shared inspector on a valid tile.
-            if not board.contains(selected_cell):
-                selected_cell = (0, 0)
             context = inspect_map(doc.data, mission_var.get(),
                                   selected_cell, selected_tiles)
             text = (context.title + '\n' + context.detail +
