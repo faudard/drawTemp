@@ -3595,11 +3595,18 @@ def launch(path):
                width=3).pack(side='left', padx=(13, 2))
     ttk.Button(header, text='↷', command=redo_global,
                width=3).pack(side='left', padx=2)
-    ttk.Button(header, text='Éditer', command=stop).pack(
-        side='right', padx=(4, 0))
-    ttk.Button(header, text='▶ Playtest', command=start,
-               style='Studio.Primary.TButton').pack(
-        side='right', padx=(4, 0))
+    # Edition is the default mode. One explicit toggle avoids a misleading
+    # no-op 'Edit' button whenever no playtest is running.
+    def toggle_playtest():
+        if battle is None:
+            start()
+        else:
+            stop()
+
+    playtest_button = ttk.Button(
+        header, text='▶ Playtest', command=toggle_playtest,
+        style='Studio.Primary.TButton')
+    playtest_button.pack(side='right', padx=(4, 0))
     section_bar = ttk.Frame(root, style='Studio.Section.TFrame')
     section_bar.pack(fill='x', pady=(0, 5))
     # A compact tool notebook replaces the seven permanent toolbar rows.
@@ -3655,6 +3662,9 @@ def launch(path):
     ttk.Button(battle_controls,text='IA : 1 tour',command=ai_turn).pack(side='left')
 
     def sync_mode_toolbar(*_args):
+        # The button always describes the action it will perform next.
+        playtest_button.configure(
+            text='■ Stop Playtest' if battle is not None else '▶ Playtest')
         # Map paint tools must not be stacked with inapplicable battle orders.
         active, inactive = ((battle_controls, controls) if battle is not None
                             else (controls, battle_controls))
