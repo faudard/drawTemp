@@ -393,7 +393,7 @@ class MapWindow(QMainWindow):
         self._connect_viewport_inputs(self.viewport.rootObject())
         self.tileset_dock.setVisible(mode == "top_down")
         self.visual_layers_dock.setVisible(mode == "top_down")
-        if mode == "top_down":
+        if mode == "top_down" and self._editing_mode == "Editor":
             self.visual_layers_dock.raise_()
         else:
             self.functional_layers_dock.raise_()
@@ -699,6 +699,7 @@ class MapWindow(QMainWindow):
         loaded = MapStudio.open(path)
         self.studio = loaded
         self.layers_panel.set_workspace(loaded.layers)
+        self.events = MapEventSession(loaded)
         self.visual_layers_editor = VisualLayerStudio(loaded)
         self.visual_layers_panel.set_editor(self.visual_layers_editor)
         self.selection = []
@@ -1319,8 +1320,9 @@ class MapWindow(QMainWindow):
             self.statusBar().showMessage(
                 "R27 : interaction positionnée en ({}, {}). Valider dans le panneau.".format(x, y))
             return
-        if (self.renderer.projection_mode == "top_down" and
-                self.visual_layers_panel.editing()):
+        if (self.renderer.projection_mode == "top_down"
+                and self._editing_mode == "Editor"
+                and self.visual_layers_panel.editing()):
             layer_id = self.visual_layers_panel.selected_id()
             if not layer_id:
                 self.statusBar().showMessage("Choose or create a graphic layer first.")

@@ -78,9 +78,10 @@ extension only draws when a client chooses the 2D projection.
 
 ## Integration
 
-**This PR targets PR #481's branch**, because the 2D atlas and image provider
-are its prerequisites. Merge PR #481 first; then retarget this PR to `master`
-and resolve/check any changes in the PR #476 Editor/Events UI.
+**Integration PR targets current `master` directly**, which already contains
+PR 2's 2D atlas/image provider and the Editor/Events UI. The earlier stacked
+PR #486 was merged into the obsolete PR 2 branch, not into `master`; this
+rebased integration PR is the actionable path for shipping visual layers.
 
 ## Tests and CI
 

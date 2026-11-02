@@ -100,8 +100,7 @@ def scene_for_player(controller):
     Current Battle and exploration views come exclusively from the R1
     Simulation snapshot. Outside gameplay, show the first authored map.
     """
-    # Optional validated GameProject graphics, shared by Studio and Player.
-    # The scene projection and tactical session remain untouched.
+    # Canonical project graphic stack is shared with the Studio; no save data.
     from sporebound.visual_layers import attach_visual_layers
 
     def decorated(scene):
