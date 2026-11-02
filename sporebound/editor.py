@@ -3691,9 +3691,7 @@ def launch(path):
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
-    ttk.Checkbutton(controls, text='Vue iso 2.5D',
-                    variable=iso_var, command=refresh).pack(
-                        side='left', padx=(12, 2))
+    # Projection is selected once, above the canvas (2D / Iso 2.5D).
     ttk.Label(battle_controls, text='Unité').pack(side='left')
     unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
@@ -4673,7 +4671,9 @@ def launch(path):
         'Alt+1 : carte  •  Alt+2 : espace projet  •  Ctrl+F : chercher\n'
         'Ctrl+C/V : copier/coller la sélection sur la carte  •  '
         'Échap : vider la recherche\n'
-        'Glisser les séparateurs pour adapter le navigateur, la carte, '
+        'Ctrl+molette : zoomer  •  Clic molette maintenu : déplacer la carte\n'
+        'Ajuster : voir la carte entière  •  Centrer : revenir au milieu\n'
+        'Glisser les séparateurs pour adapter la palette, la carte, '
         'le journal et l’inspecteur.'),
         justify='left', wraplength=620).pack(anchor='nw', padx=12, pady=12)
     source_frame = ttk.Frame(notebook)
