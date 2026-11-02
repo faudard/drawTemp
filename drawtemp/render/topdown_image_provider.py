@@ -9,6 +9,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from functools import lru_cache
 from threading import RLock
+import re
+
+from sporebound.visual_layers import MATERIALS
 
 from drawtemp.assets.topdown_tileset import atlas_rect, starter_tileset_png
 from .autotile2d import (QUADRANTS, QUARTER_SIZE, TILE_SIZE, decode_key,
@@ -20,7 +23,7 @@ MAX_ATLAS_IMAGES = 256
 def make_topdown_image_provider(max_images=MAX_ATLAS_IMAGES):
     """Optional Qt import; usable by both Map Studio and exported Player."""
     from PySide6.QtCore import Qt, QRect
-    from PySide6.QtGui import QImage, QPainter, qRgba
+    from PySide6.QtGui import QColor, QImage, QPainter, qRgba
     from PySide6.QtQuick import QQuickImageProvider
 
     if type(max_images) is not int or not 1 <= max_images <= 4096:
@@ -75,15 +78,39 @@ def make_topdown_image_provider(max_images=MAX_ATLAS_IMAGES):
             painter.end()
             return tile
 
+        def _render_layer(self, key):
+            """One sprite, four independent per-quadrant alpha channels."""
+            material = MATERIALS[int(key[1])]
+            variant = int(key[2])
+            opacity = [int(key[3 + index * 2:5 + index * 2], 16)
+                       for index in range(4)]
+            tile = QImage(TILE_SIZE, TILE_SIZE, QImage.Format_ARGB32)
+            tile.fill(Qt.transparent)
+            painter = QPainter(tile)
+            source_x, _, _, _ = atlas_rect(material, variant)
+            painter.drawImage(QRect(0, 0, TILE_SIZE, TILE_SIZE),
+                              self.atlas, QRect(source_x, 0, TILE_SIZE, TILE_SIZE))
+            painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+            for quadrant, alpha in zip(QUADRANTS, opacity):
+                qx, qy = self._quadrant_origin(quadrant)
+                painter.fillRect(QRect(qx, qy, QUARTER_SIZE, QUARTER_SIZE),
+                                 QColor(255, 255, 255, alpha))
+            painter.end()
+            return tile
+
         def requestImage(self, image_id, size, requestedSize):
-            try:
-                decode_key(image_id)
-            except ValueError:
-                return QImage()  # malformed or stale image URL
+            masked = isinstance(image_id, str) and re.fullmatch(
+                r"v[0-7][01][0-9a-f]{8}", image_id) is not None
+            if not masked:
+                try:
+                    decode_key(image_id)
+                except ValueError:
+                    return QImage()  # malformed or stale image URL
             with self.lock:
                 tile = self.entries.get(image_id)
                 if tile is None:
-                    tile = self._render(image_id)
+                    tile = (self._render_layer(image_id) if masked else
+                            self._render(image_id))
                     self.entries[image_id] = tile
                     while len(self.entries) > max_images:
                         self.entries.popitem(last=False)
