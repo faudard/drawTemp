@@ -450,16 +450,16 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
-        self._action("new", "Nouveau projet…", self.new_document)
+        self._action("new", "New Project (Classic)…", self.new_document)
         self._action("new_project", "&New Project…", self.new_project)
-        self._action("new_template", "Projet depuis un modèle rapide…", self.new_project_template)
+        self._action("new_template", "New Project from Template…", self.new_project_template)
         self._action("open", "&Open Project…", self.open_document)
         self._action("close", "&Close Project", self.close_project)
         save_action = self._action("save", "&Save Project", self.save_document)
         save_action.setIcon(QIcon.fromTheme(
             "document-save", self.style().standardIcon(QStyle.SP_DialogSaveButton)))
         save_action.setIconVisibleInMenu(True)
-        self._action("save_as", "Enregistrer sous…", self.save_document_as)
+        self._action("save_as", "Save As…", self.save_document_as)
         self._action("playtest", "Jouer / Playtest", self.playtest)
         self._action("stop_playtest", "Arrêter le playtest", self.stop_playtest)
         self._action("return_playtest", "Revenir à l'édition testée",
@@ -468,9 +468,9 @@ class StudioWindow(QMainWindow):
                      self.show_playtest_report)
         self._action("export", "Exporter le Player…", self.export_player)
         self._action("preferences", "Préférences…", self.open_preferences)
-        self._action("undo", "Annuler", self.undo)
-        self._action("redo", "Rétablir", self.redo)
-        self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("undo", "Undo", self.undo)
+        self._action("redo", "Redo", self.redo)
+        self._action("palette", "Command Palette…", self.open_palette)
         self._action("global_search", "R38 • Recherche globale et utilisations…",
                      self.open_global_search)
         self._action("r38_prefabs", "R38 • Prefabs et variantes héritées…",
@@ -554,32 +554,32 @@ class StudioWindow(QMainWindow):
         for key in ("new_project", "open", "close", "save"):
             file_menu.addAction(self.commands[key])
         self._sync_playtest_commands()
-        edit_menu = self.menuBar().addMenu("&Édition")
+        edit_menu = self.menuBar().addMenu("&Edit")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
-        view_menu = self.menuBar().addMenu("&Affichage")
-        self.workspaces_menu = self.menuBar().addMenu("&Ateliers")
+        view_menu = self.menuBar().addMenu("&Display")
+        self.workspaces_menu = self.menuBar().addMenu("&Workspaces")
         for identifier in WORKSPACES:
             self.workspaces_menu.addAction(self.commands["go_" + identifier])
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             view_menu.addAction(dock.toggleViewAction())
-        for title, name in (("Disposition édition", "editing"),
-                            ("Disposition analyse", "analysis"),
-                            ("Disposition compacte", "compact")):
+        for title, name in (("Editing Layout", "editing"),
+                            ("Analysis Layout", "analysis"),
+                            ("Compact Layout", "compact")):
             action = view_menu.addAction(title)
             action.triggered.connect(lambda _=False, p=name: self.layout_preset(p))
-        theme_menu = view_menu.addMenu("Thème")
-        for title, key in (("Sombre", "dark"), ("Clair", "light")):
+        theme_menu = view_menu.addMenu("Theme")
+        for title, key in (("Dark", "dark"), ("Light", "light")):
             action = theme_menu.addAction(title)
             action.triggered.connect(lambda _=False, value=key: self.set_theme(value))
         for scale in (90, 100, 115, 130):
-            action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
+            action = view_menu.addAction("UI Scale: " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
-        tools_menu = self.menuBar().addMenu("&Outils")
-        advanced_project = tools_menu.addMenu("Projet avancé")
+        tools_menu = self.menuBar().addMenu("&Tools")
+        advanced_project = tools_menu.addMenu("Advanced Project")
         for key in ("new", "new_template", "save_as"):
             advanced_project.addAction(self.commands[key])
-        self.recent_menu = advanced_project.addMenu("Projets récents")
+        self.recent_menu = advanced_project.addMenu("Recent Projects")
         self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
         vcs_menu = tools_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
@@ -625,12 +625,12 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r76_optimizer"])
         tools_menu.addAction(self.commands["r57_translation"])
         tools_menu.addAction(self.commands["r45_economy"])
-        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
+        scripts_menu = tools_menu.addMenu("Controlled Hooks")
         import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
         import_hooks.triggered.connect(self._import_hooks_dialog)
         tools_menu.addAction(self.commands["preferences"])
         tools_menu.addAction(self.commands["guide"])
-        package_menu = tools_menu.addMenu("Packages de ressources R58")
+        package_menu = tools_menu.addMenu("Resource Packages R58")
         manage_packages = package_menu.addAction("Gérer les packages…")
         manage_packages.triggered.connect(self.open_package_manager)
         plugin_menu = tools_menu.addMenu("Plugins Studio")
@@ -641,11 +641,11 @@ class StudioWindow(QMainWindow):
         mod_menu = tools_menu.addMenu("Modules / SDK R47")
         mod_manager = mod_menu.addAction("Inspecter les mods déclaratifs…")
         mod_manager.triggered.connect(self.open_mod_manager)
-        shortcuts = tools_menu.addAction("Configurer un raccourci…")
+        shortcuts = tools_menu.addAction("Configure Shortcut…")
         shortcuts.triggered.connect(self.configure_shortcut)
         # Localization applies to global workspace labels; legacy editors
         # maintain their own FR labels while they are being migrated.
-        locale_menu = tools_menu.addMenu("Langue")
+        locale_menu = tools_menu.addMenu("Language")
         for lang in ("fr", "en"):
             action = locale_menu.addAction(lang.upper())
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
