@@ -84,7 +84,7 @@ class FileMenuQtTests(unittest.TestCase):
         tools = next(action.menu() for action in self.window.menuBar().actions()
                      if action.menu() and action.menu().title() == "&Tools")
         advanced = next(action.menu() for action in tools.actions()
-                        if action.menu() and action.menu().title() == "Advanced Project")
+                        if action.menu() and action.menu().title() == "Advanced project")
         self.assertIn(self.window.commands["new_project"], advanced.actions())
         self.assertIn(self.window.commands["new_template"], advanced.actions())
         self.assertIn(self.window.commands["save_as"], advanced.actions())
