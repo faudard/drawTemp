@@ -87,15 +87,18 @@ class WorkspaceShellGUITests(TestCase):
                 self.assertEqual(len(mode_labels), 1)
                 mode = lambda: root.getvar(mode_labels[0].cget('textvariable'))
                 self.assertIn('ÉDITION', mode())
-                buttons['Playtest'].invoke()
+                playtest_button = buttons['▶ Playtest']
+                playtest_button.invoke()
                 root.update()
                 self.assertIn('PLAYTEST', mode())
                 self.assertEqual(
                     toolbars[0].tab(toolbars[0].select(), 'text'),
                     'Carte & combat')
-                buttons['Éditer'].invoke()
+                self.assertEqual(playtest_button.cget('text'), '■ Stop Playtest')
+                playtest_button.invoke()
                 root.update()
                 self.assertIn('ÉDITION', mode())
+                self.assertEqual(playtest_button.cget('text'), '▶ Playtest')
 
                 buttons['Espace projet complet'].invoke()
                 self.assertEqual(main.tab(main.select(), 'text'), 'Espace projet')
