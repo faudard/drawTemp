@@ -3577,32 +3577,21 @@ def launch(path):
             "renderer_enabled": views is None or RENDERER in views,
         })
 
-    # A single application header replaces the eleven equally prominent
-    # buttons. Common actions stay one click away; the others live in menus.
-    header = ttk.Frame(root, padding=(14, 8), style='Studio.Header.TFrame')
-    header.pack(fill='x')
-    ttk.Label(header, text='GAME STUDIO', style='Studio.Header.TLabel').pack(
-        side='left', padx=(0, 22))
-    file_button = ttk.Menubutton(header, text='Fichier ▾')
-    file_button.pack(side='left', padx=(0, 5))
-    file_menu = tk.Menu(file_button, tearoff=False)
-    for title, callback in (
-        ('Ouvrir…', open_doc), ('Enregistrer sous…', save_doc),
-        ('Enregistrer tout', save_all), ('Nouvelle mission', new_mission),
-        ('Carte vierge', blank_mission), ('Sauver combat', save_game),
-        ('Charger combat', load_game)):
-        file_menu.add_command(label=title, command=callback)
-    file_button.configure(menu=file_menu)
-    view_button = ttk.Menubutton(header, text='Affichage ▾')
-    view_button.pack(side='left', padx=(5, 0))
-    ttk.Button(header, text='Enregistrer tout',
-               command=save_all).pack(side='left', padx=2)
-    ttk.Button(header, text='↶', command=undo_global,
-               width=3).pack(side='left', padx=(13, 2))
-    ttk.Button(header, text='↷', command=redo_global,
-               width=3).pack(side='left', padx=2)
-    # Edition is the default mode. One explicit toggle avoids a misleading
-    # no-op 'Edit' button whenever no playtest is running.
+
+    # The real OS menubar is installed once navigation and docks exist.
+    # Keep only a single short quick-access strip below the native menu.
+    toolbar = ttk.Frame(root, padding=(5, 2), style='Studio.Header.TFrame')
+    toolbar.pack(fill='x')
+    for label, callback in (
+        ('New Map', blank_mission),
+        ('Open', open_doc),
+        ('Save', save_all),
+        ('Undo', undo_global),
+        ('Redo', redo_global),
+    ):
+        ttk.Button(toolbar, text=label, command=callback,
+                   style='Studio.Toolbar.TButton').pack(side='left', padx=2)
+
     def toggle_playtest():
         if battle is None:
             start()
@@ -3610,11 +3599,13 @@ def launch(path):
             stop()
 
     playtest_button = ttk.Button(
-        header, text='▶ Playtest', command=toggle_playtest,
-        style='Studio.Primary.TButton')
-    playtest_button.pack(side='right', padx=(4, 0))
+        toolbar, text='▶ Playtest', command=toggle_playtest,
+        style='Studio.Toolbar.TButton')
+    playtest_button.pack(side='right', padx=(4, 1))
+
+    # StudioNavigation still owns notebook selection and category history.
+    # Its former full-width category strip is deliberately not packed.
     section_bar = ttk.Frame(root, style='Studio.Section.TFrame')
-    section_bar.pack(fill='x', pady=(0, 5))
     # A compact tool notebook replaces the seven permanent toolbar rows.
     # Keep the existing action callbacks/variables; only presentation changes.
     tool_tabs = ttk.Notebook(root)
@@ -4713,29 +4704,195 @@ def launch(path):
     from .studio_docks import StudioDocks, DockPreferences
     studio_docks = StudioDocks(
         root, work, canvas_region, sidebar, side_panel, bottom_panel, tk)
-    view_menu = tk.Menu(view_button, tearoff=False)
-    view_button.configure(menu=view_menu)
-    dock_titles = (
-        ('explorer', 'Explorateur  ·  Ctrl+B'),
-        ('inspector', 'Inspecteur  ·  Ctrl+Alt+I'),
-        ('bottom', 'Journal  ·  Ctrl+J'),
+
+    # Native Windows/macOS menu bar: access with Alt+F, Alt+E, etc.
+    # All entries dispatch to the existing validated Studio commands.
+    menubar = tk.Menu(root, tearoff=False)
+    root.configure(menu=menubar)
+    file_menu = tk.Menu(menubar, tearoff=False)
+    edit_menu = tk.Menu(menubar, tearoff=False)
+    mode_menu = tk.Menu(menubar, tearoff=False)
+    draw_menu = tk.Menu(menubar, tearoff=False)
+    layer_menu = tk.Menu(menubar, tearoff=False)
+    view_menu = tk.Menu(menubar, tearoff=False)
+    scale_menu = tk.Menu(menubar, tearoff=False)
+    tools_menu = tk.Menu(menubar, tearoff=False)
+    game_menu = tk.Menu(menubar, tearoff=False)
+    help_menu = tk.Menu(menubar, tearoff=False)
+    native_menus = (file_menu, edit_menu, mode_menu, draw_menu,
+                    layer_menu, view_menu, scale_menu, tools_menu,
+                    game_menu, help_menu)
+    for title, menu in zip(
+        ('File', 'Edit', 'Mode', 'Draw', 'Layer', 'Display',
+         'Scale', 'Tools', 'Game', 'Help'), native_menus):
+        menubar.add_cascade(label=title, menu=menu, underline=0)
+
+    file_menu.add_command(label='New Map…', command=blank_mission)
+    file_menu.add_command(label='New Mission…', command=new_mission)
+    file_menu.add_separator()
+    file_menu.add_command(label='Open…', command=open_doc,
+                          accelerator='Ctrl+O')
+    file_menu.add_command(label='Save Project', command=save_all,
+                          accelerator='Ctrl+S')
+    file_menu.add_command(label='Save Content As…', command=save_doc,
+                          accelerator='Ctrl+Shift+S')
+    file_menu.add_separator()
+    file_menu.add_command(label='Exit', command=lambda: close_editor())
+
+    edit_menu.add_command(label='Undo', command=undo_global,
+                          accelerator='Ctrl+Z')
+    edit_menu.add_command(label='Redo', command=redo_global,
+                          accelerator='Ctrl+Y')
+    edit_menu.add_separator()
+    edit_menu.add_command(label='Copy Tiles', command=copy_selection,
+                          accelerator='Ctrl+C')
+    edit_menu.add_command(label='Paste Tiles', command=paste_selection,
+                          accelerator='Ctrl+V')
+    edit_menu.add_command(label='Fill Selection', command=fill_selection)
+    edit_menu.add_command(label='Rotate Clockwise',
+                          command=lambda: rotate_or_flip('rotate_cw'))
+
+    section_labels = (
+        ('Map Editor', 'Carte & monde'),
+        ('Building Editor', 'Bâtiments'),
+        ('Content', 'Contenu'),
+        ('Events', 'Événements'),
+        ('Campaign', 'Campagne'),
+        ('Presentation', 'Présentation'),
+        ('Analysis', 'Analyse'),
+        ('Project', 'Projet'),
+        ('Other', 'Autres'),
     )
-    for dock_name, dock_title in dock_titles:
+    for label, section_name in section_labels:
+        mode_menu.add_command(
+            label=label,
+            command=lambda selected=section_name:
+                studio_navigation.choose_section(selected))
+
+    def choose_draw_tool(name):
+        if battle is not None:
+            status_var.set('Stop Playtest before editing the map.')
+            return
+        studio_navigation.choose_section('Carte & monde')
+        tool_var.set(name)
+        canvas.focus_set()
+
+    for label, tool_name in (
+        ('Select', 'Sélection'),
+        ('Pencil', 'Pinceau'),
+        ('Smart Pencil', 'Pinceau intelligent'),
+        ('Rectangle', 'Rectangle'),
+        ('Fill', 'Remplissage'),
+        ('Pick Terrain', 'Pipette sol'),
+        ('Pick Decoration', 'Pipette décor'),
+        ('Select Structure', 'Sélection structure'),
+        ('Place Structure', 'Structure'),
+        ('Place Entity', 'Entité'),
+    ):
+        draw_menu.add_command(
+            label=label, command=lambda selected=tool_name:
+                choose_draw_tool(selected))
+
+    for layer_name, enabled in layer_vars.items():
+        layer_menu.add_checkbutton(
+            label=layer_name, variable=enabled,
+            command=view_options_changed)
+    layer_menu.add_separator()
+    layer_menu.add_checkbutton(
+        label='Interior Cutaway', variable=interior_var,
+        command=view_options_changed)
+    locks_menu = tk.Menu(layer_menu, tearoff=False)
+    for layer_name, locked in layer_lock_vars.items():
+        locks_menu.add_checkbutton(
+            label=layer_name, variable=locked,
+            command=view_options_changed)
+    layer_menu.add_cascade(label='Lock Layers', menu=locks_menu)
+
+    for dock_name, dock_title in (
+        ('explorer', 'Explorer  ·  Ctrl+B'),
+        ('inspector', 'Inspector  ·  Ctrl+Alt+I'),
+        ('bottom', 'Journal  ·  Ctrl+J'),
+    ):
         view_menu.add_checkbutton(
             label=dock_title, variable=studio_docks.visible_vars[dock_name],
             command=lambda name=dock_name: toggle_studio_dock(name))
-    view_menu.add_separator()
     view_menu.add_checkbutton(
-        label='Carte plein espace  ·  F11',
+        label='Maximize Map  ·  F11',
         variable=studio_docks.focus_var,
         command=lambda: set_studio_focus(studio_docks.focus_var.get()))
+    view_menu.add_checkbutton(
+        label='Show Editor Tabs',
+        variable=studio_navigation.show_tabs,
+        command=studio_navigation.toggle_tabs)
+    view_menu.add_separator()
+    view_menu.add_checkbutton(
+        label='Isometric 2.5D', variable=iso_var, command=refresh)
+    view_menu.add_checkbutton(
+        label='Animated Environment', variable=ambient_var, command=refresh)
     view_menu.add_separator()
     view_menu.add_radiobutton(
-        label='Thème clair', value='light', variable=appearance_var,
+        label='Light Theme', value='light', variable=appearance_var,
         command=lambda: apply_studio_theme(appearance_var.get()))
     view_menu.add_radiobutton(
-        label='Thème sombre', value='dark', variable=appearance_var,
+        label='Dark Theme', value='dark', variable=appearance_var,
         command=lambda: apply_studio_theme(appearance_var.get()))
+
+    scale_menu.add_command(label='Zoom In', accelerator='Ctrl++',
+                           command=lambda: set_zoom(6))
+    scale_menu.add_command(label='Zoom Out', accelerator='Ctrl+-',
+                           command=lambda: set_zoom(-6))
+    scale_menu.add_command(label='Reset Zoom',
+                           command=lambda: set_zoom(54 - tile_size))
+
+    def populate_tools_menu():
+        # Rebuild on opening so newly registered Studio editors are visible.
+        tools_menu.delete(0, 'end')
+        tools_menu.add_command(label='Asset Library…',
+                               command=open_asset_palette)
+        tools_menu.add_command(label='Actors and Objects…',
+                               command=open_entity_palette)
+        tools_menu.add_command(label='Inspect Selected Entity',
+                               command=inspect_selected_entity)
+        tools_menu.add_separator()
+        studio_navigation.rebuild()
+        for english, category in section_labels:
+            choices = studio_navigation.group_tabs.get(category, ())
+            if not choices:
+                continue
+            sub = tk.Menu(tools_menu, tearoff=False)
+            for title, page in choices:
+                def activate(target=page, group=category):
+                    studio_navigation.choose_section(group)
+                    if group != 'Bâtiments':
+                        notebook.select(target)
+                sub.add_command(label=title, command=activate)
+            tools_menu.add_cascade(label=english, menu=sub)
+    tools_menu.configure(postcommand=populate_tools_menu)
+
+    game_menu.add_command(label='Start / Stop Playtest',
+                          command=toggle_playtest)
+    game_menu.add_command(label='Start Playtest', command=start)
+    game_menu.add_command(label='Stop Playtest', command=stop)
+    game_menu.add_separator()
+    game_menu.add_command(label='Save Battle…', command=save_game)
+    game_menu.add_command(label='Load Battle…', command=load_game)
+
+    def open_studio_docs():
+        import webbrowser
+        webbrowser.open('https://github.com/faudard/drawTemp/tree/master/docs')
+
+    help_menu.add_command(label='Documentation…',
+                          command=open_studio_docs)
+    help_menu.add_command(
+        label='Tutorial…',
+        command=lambda: messagebox.showinfo(
+            'DrawTemp Tutorial', 'Tutorials will be added in a future update.'))
+    help_menu.add_separator()
+    help_menu.add_command(
+        label='About DrawTemp',
+        command=lambda: messagebox.showinfo(
+            'About DrawTemp', 'DrawTemp — Game Studio\n'
+            'Tactical RPG editor and player.'))
     studio.workspace.attach_navigator(sidebar)
     studio.workspace.attach_problems(bottom_panel)
     ttk.Button(sidebar, text='Espace projet complet',
@@ -4891,6 +5048,25 @@ def launch(path):
         'write', lambda *_: editing_context.tools.set(
             tool_var.get(), mission_var.get()))
 
+
+    def global_shortcut(callback, *, allow_text=False):
+        def run(event):
+            # Text fields keep their native undo/redo; map operations remain
+            # available when canvas and non-text widgets have focus.
+            if not allow_text and isinstance(
+                event.widget, (tk.Text, tk.Entry, ttk.Entry, ttk.Combobox,
+                               ttk.Spinbox)):
+                return None
+            callback()
+            return 'break'
+        return run
+
+    root.bind_all('<Control-o>', global_shortcut(open_doc, allow_text=True))
+    root.bind_all('<Control-s>', global_shortcut(save_all, allow_text=True))
+    root.bind_all('<Control-Shift-S>',
+                  global_shortcut(save_doc, allow_text=True))
+    root.bind_all('<Control-z>', global_shortcut(undo_global))
+    root.bind_all('<Control-y>', global_shortcut(redo_global))
     root.bind('<Control-f>', focus_project_search)
     root.bind('<Control-Shift-p>',
               lambda _e: studio.workspace.focus_problems())
@@ -4931,7 +5107,7 @@ def launch(path):
         for floating in (asset_palette, entity_palette):
             if floating is not None and floating.window.winfo_exists():
                 floating.apply_appearance(palette)
-        for menu in (file_menu, view_menu):
+        for menu in (*native_menus, locks_menu):
             try:
                 menu.configure(background=palette.surface,
                                foreground=palette.text,
