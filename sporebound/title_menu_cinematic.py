@@ -385,7 +385,9 @@ class CinematicTitleMenu(TitleMenu):
         camp = self.app.project.campaign(self.app.campaign_var.get())
         name=camp["name"] if camp is not None else self.app.project.title
         description=(camp.get("description") if camp is not None else None) or self.app.project.subtitle
-        if camp is not None and camp["id"] == "jeanne":
+        if (camp is not None and camp["id"] == "jeanne"
+                and "org.drawtemp.titlescreen" not in self.app.project.extensions):
+            # Preserve the original Jeanne card until the title screen is authored.
             name = "Les Cendres du Royaume"
             description = "Un royaume en guerre, des choix qui changeront son destin."
         c.create_text(thumb_x+offset,thumb_y+6,anchor="nw",text=name,
