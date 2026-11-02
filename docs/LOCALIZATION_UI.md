@@ -9,7 +9,7 @@ Two distinct domains share the **drawtemp.localization** package:
 
 - Copy `drawtemp/localization/locales/en.json` to `<code>.json`, set `locale` to the BCP47-style code, translate values (never change IDs like `menu.file` or placeholders like `{name}`).
 - Register the locale once in `locales/manifest.json` with `{"code": "es", "name": "Español"}`.
-- Run `python -m unittest tests_standalone.test_ui_locale_defaults -v`. `audit_catalogs()` reports missing keys and the loader rejects invalid JSON, duplicate keys, unknown keys and mismatched placeholders. A missing translation safely falls back to English.
+- Run `python -m unittest tests_standalone.test_ui_locale_defaults -v`. CI also runs this audit on Windows, Linux and macOS through the existing R57 workflow. `audit_catalogs()` reports missing keys and the loader rejects invalid JSON, duplicate keys, unknown keys and mismatched placeholders. A missing translation safely falls back to English.
 - Call `ui_text("menu.file", ui_language)` in Python/Qt Widgets or `root.ui("player.options")` in QML. Add the keys to `en.json`, then translate in each locale. Never use a translated label as a programmatic ID or persistence value.
 
 UI files are embedded in the installed Python package via `pyproject.toml` package data; no absolute source-tree paths or network access required. Files are UTF-8 and read via `importlib.resources` with cached, validated catalogs. No extra dependency is needed.

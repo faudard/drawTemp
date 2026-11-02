@@ -37,6 +37,21 @@ class UiLocalizationTests(unittest.TestCase):
         with self.assertRaises(UiLocalizationError):
             ui_text("studio.workspace_prefix", "fr", wrong="key")
 
+    def test_missing_ui_translation_falls_back_to_english(self):
+        from unittest.mock import patch
+        english = {"menu.file": "&File"}
+        french = {}
+        with patch("drawtemp.localization.ui.get_catalog",
+                   side_effect=lambda code: english if code == "en" else french):
+            self.assertEqual(ui_text("menu.file", "fr"), "&File")
+
+    def test_packaged_json_catalogs_are_readable(self):
+        from importlib.resources import files
+        for filename in ("manifest.json", "en.json", "fr.json"):
+            path = files("drawtemp.localization").joinpath("locales", filename)
+            self.assertTrue(path.is_file())
+            self.assertTrue(path.read_text(encoding="utf-8").lstrip().startswith("{"))
+
     def test_legacy_r57_content_localization(self):
         from drawtemp.localization import Catalog
         self.assertEqual(Catalog.empty("fr").data["source_language"], "fr")
