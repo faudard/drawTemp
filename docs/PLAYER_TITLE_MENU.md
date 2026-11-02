@@ -18,8 +18,15 @@ utilise désormais **Pillow comme dépendance runtime**, installée avec le proj
   emplacement libre, le Player explique la situation sans modifier le disque.
   Ce choix ne permet pas de reprendre l'ancienne progression : elle nécessite
   les données d'origine ou une migration explicite validée.
-- **Nouvelle partie** conserve la confirmation d'écrasement du slot v2 et le refus
-  d'écraser une session longue.
+- **Nouvelle partie** demande une confirmation lorsque l'emplacement v2
+  est occupé. Cette confirmation crée une session neuve même si les données
+  précédentes sont incompatibles : le checkpoint et sa copie `.bak` sont
+  copiés à l'identique dans
+  `<dossier des slots>/<campagne>/archived_sessions/slot_N-<identifiant>/`
+  avant publication atomique d'un nouveau checkpoint indépendant (séquence 1).
+  Une erreur d'archivage laisse la sauvegarde active inchangée. Les anciens
+  checkpoints ne deviennent **pas** compatibles pour autant.
+  Les sessions longues conservent leur refus d'écrasement.
 - **Charger une partie** ouvre un panneau de sélection du nom de campagne, du
   slot et du mode de sauvegarde (mode long toujours **opt-in**).
 - **Options** et **Quitter** restent visibles dans le menu principal.

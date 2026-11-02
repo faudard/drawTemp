@@ -28,6 +28,7 @@ class PlayerController:
         self.slot = None
         self.last_load_status = None
         self.long_mode = False  # Explicit opt-in; never upgrade existing slots.
+        self.last_restart_archive = None  # Separate, byte-identical old slot copies.
         # Optional local playtest observer; OFF by default. Never serialized.
         self.playtest = None
 
@@ -117,20 +118,20 @@ class PlayerController:
 
     def new_game(self, campaign_id, slot, *, overwrite=False, seed=1):
         path = self.path_for(campaign_id, slot)
-        require(overwrite or not path.exists() and not SessionStore(path).backup.exists(),
-                "Save already exists; explicit overwrite required")
-        # Validate the previous generation without deleting it: SessionStore.save
-        # retains the last verified checkpoint as a recovery backup.
         store = SessionStore(path)
-        if overwrite and (path.exists() or store.backup.exists()):
-            previous = self._load_compatible(store)
-            require(previous.session.campaign_id == campaign_id,
-                    "Slot belongs to another campaign")
+        require(overwrite or not path.exists() and not store.backup.exists(),
+                "Save already exists; explicit overwrite required")
         candidate = GameSession.new(self.content, self.project, campaign_id,
                                     seed=seed, rules=self.rules)
+        # Explicit restarts archive the original bytes first. Do not require
+        # an old save to replay under the *new* content/rules to start fresh.
+        # Ordinary autosaves still use strict SessionStore.save validation.
+        archive = store.restart(candidate) if overwrite else None
+        if not overwrite:
+            store.save(candidate)
         # Publish before switching away from the current in-memory campaign.
-        store.save(candidate)
         self.campaign_id, self.slot, self.session = campaign_id, slot, candidate
+        self.last_restart_archive = archive
         self.last_load_status = None
         self.long_mode = False
         return candidate

@@ -694,8 +694,11 @@ class PlayerApplication(JeanneChapterUiMixin):
         else:
             path = self.player.path_for(cid, slot)
             exists = path.exists() or path.with_name(path.name + ".bak").exists()
-            if exists and not self.messagebox.askyesno("Nouvelle partie",
-                                                        "Recommencer cet emplacement ?"):
+            if exists and not self.messagebox.askyesno(
+                    "Nouvelle partie",
+                    "Recommencer cet emplacement ?\n\nLes anciennes sauvegardes "
+                    "seront archivées sans être supprimées, même si elles "
+                    "proviennent d'une ancienne version du jeu."):
                 return
             self.player.new_game(cid, slot, overwrite=exists)
         self._seen_tactical_cinematics.clear()
@@ -723,7 +726,8 @@ class PlayerApplication(JeanneChapterUiMixin):
             self.messagebox.showwarning(
                 "Sauvegarde incompatible",
                 message + "\n\nAucun emplacement libre n'est disponible. "
-                "Conservez les anciennes sauvegardes avant toute intervention."
+                "Pour recommencer, choisissez Nouvelle partie et confirmez "
+                "l'archivage de l'ancienne sauvegarde."
             )
             return True
 
