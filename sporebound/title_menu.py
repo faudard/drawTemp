@@ -51,18 +51,17 @@ class TitleMenu:
         self._backdrop_path = next((path for path in candidates
                                      if path.is_file()), None)
         if self._backdrop_path is not None:
-            if self._backdrop_path is not None:
+            try:
+                from PIL import Image, ImageTk
+                self._backdrop_source = Image.open(self._backdrop_path).convert("RGB")
+                self._image_tk = ImageTk
+            except (ImportError, OSError, ValueError):
+                # No Pillow dependency: native Tk supports bundled PNGs.
                 try:
-                    from PIL import Image, ImageTk
-                    self._backdrop_source = Image.open(self._backdrop_path).convert("RGB")
-                    self._image_tk = ImageTk
-                except (ImportError, OSError, ValueError):
-                    # No Pillow dependency: native Tk supports bundled PNGs.
-                    try:
-                        self._backdrop_native = self.tk.PhotoImage(
-                            file=str(self._backdrop_path))
-                    except self.tk.TclError:
-                        self._backdrop_native = None
+                    self._backdrop_native = self.tk.PhotoImage(
+                        file=str(self._backdrop_path))
+                except self.tk.TclError:
+                    self._backdrop_native = None
         self.portrait = None
         if any(campaign["id"] == "jeanne" for campaign in app.project.campaigns):
             image_path = app.asset_root / "art" / "jeanne" / "jeanne_portrait.png"
