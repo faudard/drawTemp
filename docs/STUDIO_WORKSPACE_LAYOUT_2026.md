@@ -11,7 +11,7 @@ editing surface competed with controls from unrelated workflows.
 ## New navigation (no editor reimplementation)
 
 - The top header exposes **Fichier** (all previous file/game actions), direct
-  Save, Undo/Redo and Edit/Playtest actions.
+  Save, Undo/Redo and a single Playtest/Stop Playtest toggle.
 - Seven thematic workspaces (**Carte & monde**, **Contenu**, **Événements**,
   **Campagne**, **Présentation**, **Analyse**, **Projet**) and an **Autres**
   fallback replace the always-visible row of dozens of editor tabs.

@@ -358,6 +358,7 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
     through pan/zoom and updated only when authored terrain actually changes.
     """
     from .tile_chunks import TileChunkIndex
+    from .autotile2d import tile_key
 
     if isinstance(projection, SideProjection):
         validate_side_scene(scene)
@@ -406,7 +407,9 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                      "blocked": t.get("blocked", False), "cover": t.get("cover", 0),
                      "hazard": t.get("hazard", 0), "goal": t.get("goal", False),
                      "zOrder": -100000 if top_down else (y * 100 if side_view
-                                                  else (x + y) * 100)})
+                                                  else (x + y) * 100),
+                     **({"autotileKey": tile_key(index.tiles, x, y)}
+                        if top_down else {})})
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:

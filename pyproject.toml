@@ -11,6 +11,8 @@ dependencies = ["Pillow>=10"]
 
 [project.optional-dependencies]
 qt6 = ["PySide6==6.8.3; python_version == '3.12'"]
+# Qt ADS is opt-in until the Windows/PySide6 6.8.3 binary smoke gate is green.
+qt6-docking = ["PySide6==6.8.3; python_version == '3.12'", "PySide6-QtAds==5.1.1.1; python_version == '3.12'"]
 art = ["Pillow>=10"]
 
 [project.scripts]
@@ -39,4 +41,4 @@ include = ["sporebound*", "drawtemp*"]
 [tool.setuptools.package-data]
 sporebound = ["content/*.json", "content/art/jeanne/*.png", "content/art/jeanne/*.jpg", "content/art/iso/*.png"]
 
-drawtemp = ["render/*.qml", "player/*.qml", "creator_examples/*.json", "studio/data/*.json"]
+drawtemp = ["render/*.qml", "player/*.qml", "creator_examples/*.json", "studio/data/*.json", "localization/locales/*.json"]

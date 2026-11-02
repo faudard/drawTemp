@@ -12,14 +12,16 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, QSortFilterProxyModel, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
     QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyle, QStyleFactory, QTabWidget, QToolBar, QToolButton, QTreeView, QVBoxLayout, QWidget,
 )
 
+from drawtemp.localization.ui import DEFAULT_LANGUAGE, language_choices, normalize_language, ui_text
+from drawtemp.studio.ads_docking import DockHost
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
 from drawtemp.sdk.reference import reference_project
@@ -60,8 +62,8 @@ DEFAULT_SHORTCUTS = {
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
     "global_search": "Ctrl+Shift+F",
     "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+Shift+N",
-    "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
+    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+N",
+    "new_project": "Ctrl+Shift+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
     "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
     "go_construction": "Ctrl+Alt+3", "go_actors": "Ctrl+Alt+4",
@@ -94,8 +96,18 @@ def apply_theme(app, name, scale=100):
     palette.setColor(QPalette.Disabled, QPalette.Text, QColor("#a0a8b6"))
     app.setPalette(palette)
     font = QFont(app.font())
-    font.setPointSizeF(max(8.0, min(18.0, 10.0 * scale / 100)))
+    font.setPointSizeF(max(8.0, min(18.0, 10.5 * scale / 100)))
     app.setFont(font)
+    # Use spacing and moderate emphasis rather than tiny, crowded native menus.
+    # The palette still controls foreground/background in both themes.
+    app.setStyleSheet(
+        "QMenuBar { font-weight: 500; spacing: 4px; }"
+        "QMenuBar::item { padding: 6px 10px; }"
+        "QMenu { font-weight: 500; }"
+        "QMenu::item { padding: 7px 28px 7px 14px; }"
+        "QMenu::separator { height: 1px; margin: 5px 10px; }"
+        "QToolButton#studio-workspaces-button { font-weight: 600; padding: 5px 10px; }"
+    )
 
 
 class ResourceProxy(QSortFilterProxyModel):
@@ -221,14 +233,15 @@ class StudioWindow(QMainWindow):
     def _build(self):
         self.workspace_tabs = QStackedWidget()
         self.workspace_tabs.setAccessibleName("Ateliers Studio")
-        self.setCentralWidget(self.workspace_tabs)
+        self.docking = DockHost(self, self.workspace_tabs, central_name="Studio")
+        self._focus_dock_state = None
         self._make_home()
         self._make_resource_dock()
         self._make_inspector_dock()
         self._make_problems_dock()
         self._build_commands()
         self._build_menus()
-        self.set_language(str(self.settings.value("language", "fr")))
+        self.set_language(str(self.settings.value("language", DEFAULT_LANGUAGE)))
         self._refresh_recent_menu()
         self._activate("project")
 
@@ -293,7 +306,7 @@ class StudioWindow(QMainWindow):
         guide_layout.addWidget(warning)
         panel.addWidget(self.guide_panel)
         for label, callback in (("Nouveau projet…", self.new_document),
-                                ("Nouveau projet multi-genres…", self.new_project)):
+                                ("Assistant multi-genres…", self.new_project)):
             button = QPushButton(label)
             button.setAccessibleName(label)
             button.clicked.connect(callback)
@@ -315,15 +328,9 @@ class StudioWindow(QMainWindow):
         self.pages["project"] = page
 
     def _dock(self, title, name, widget, area):
-        dock = QDockWidget(title, self)
-        dock.setObjectName(name)
-        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-        dock.setFeatures(QDockWidget.DockWidgetMovable |
-                         QDockWidget.DockWidgetFloatable |
-                         QDockWidget.DockWidgetClosable)
-        dock.setWidget(widget)
-        self.addDockWidget(area, dock)
-        return dock
+        return self.docking.add(
+            title, name, widget, area,
+            auto_hide=name == "r2-inspector-dock")
 
     def _make_resource_dock(self):
         host = QWidget()
@@ -450,11 +457,15 @@ class StudioWindow(QMainWindow):
         return action
 
     def _build_commands(self):
-        self._action("new", "Nouveau projet…", self.new_document)
-        self._action("new_project", "Nouveau projet multi-genres…", self.new_project)
-        self._action("new_template", "Projet depuis un modèle rapide…", self.new_project_template)
-        self._action("open", "Ouvrir un projet…", self.open_document)
-        self._action("save", "Enregistrer le projet", self.save_document)
+        self._action("new", "&New Project…", self.new_document)
+        self._action("new_project", "Advanced Project Wizard…", self.new_project)
+        self._action("new_template", "New from Template…", self.new_project_template)
+        self._action("open", "&Open Project…", self.open_document)
+        self._action("close", "&Close Project", self.close_project)
+        save_action = self._action("save", "&Save Project", self.save_document)
+        save_action.setIcon(QIcon.fromTheme(
+            "document-save", self.style().standardIcon(QStyle.SP_DialogSaveButton)))
+        save_action.setIconVisibleInMenu(True)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
         self._action("playtest", "Jouer / Playtest", self.playtest)
         self._action("stop_playtest", "Arrêter le playtest", self.stop_playtest)
@@ -464,9 +475,9 @@ class StudioWindow(QMainWindow):
                      self.show_playtest_report)
         self._action("export", "Exporter le Player…", self.export_player)
         self._action("preferences", "Préférences…", self.open_preferences)
-        self._action("undo", "Annuler", self.undo)
-        self._action("redo", "Rétablir", self.redo)
-        self._action("palette", "Palette de commandes…", self.open_palette)
+        self._action("undo", "Undo", self.undo)
+        self._action("redo", "Redo", self.redo)
+        self._action("palette", "Command Palette…", self.open_palette)
         self._action("global_search", "R38 • Recherche globale et utilisations…",
                      self.open_global_search)
         self._action("r38_prefabs", "R38 • Prefabs et variantes héritées…",
@@ -476,6 +487,9 @@ class StudioWindow(QMainWindow):
         self._action("r38_preflight", "R38 • Preflight du projet…",
                      self.open_preflight)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
+        self._action("help_docs", "Docs", self.open_help_docs)
+        self._action("help_tutorial", "Tutorial…", self.open_help_tutorial)
+        self._action("help_about", "About", self.open_help_about)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
                      self.open_project_history)
@@ -543,120 +557,233 @@ class StudioWindow(QMainWindow):
             self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
-        file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("new_project", "new", "new_template", "open"):
-            file_menu.addAction(self.commands[key])
-        self.recent_menu = file_menu.addMenu("Projets récents")
-        self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
-        for key in ("save", "save_as"):
-            file_menu.addAction(self.commands[key])
-        file_menu.addSeparator()
-        for key in ("playtest", "stop_playtest", "return_playtest",
-                    "playtest_report", "export"):
+        # Minimal native File menu with Windows mnemonics.
+        file_menu = self.menuBar().addMenu("&File")
+        file_menu.setObjectName("studio-file-menu")
+        for key in ("new", "open", "close", "save"):
             file_menu.addAction(self.commands[key])
         self._sync_playtest_commands()
-        edit_menu = self.menuBar().addMenu("&Édition")
+        edit_menu = self.menuBar().addMenu("&Edit")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
-        view_menu = self.menuBar().addMenu("&Affichage")
-        self.workspaces_menu = self.menuBar().addMenu("&Ateliers")
+        view_menu = self.menuBar().addMenu("&Display")
+        self.workspaces_menu = self.menuBar().addMenu("&Workspaces")
         for identifier in WORKSPACES:
             self.workspaces_menu.addAction(self.commands["go_" + identifier])
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             view_menu.addAction(dock.toggleViewAction())
-        for title, name in (("Disposition édition", "editing"),
-                            ("Disposition analyse", "analysis"),
-                            ("Disposition compacte", "compact")):
-            action = view_menu.addAction(title)
+        focus_action = view_menu.addAction("Focus Editor (F11)")
+        focus_action.setShortcut("F11")
+        focus_action.triggered.connect(self.toggle_focus_mode)
+        self._localized_actions = {}
+        for name in ("editing", "analysis", "compact"):
+            action = view_menu.addAction(ui_text("layout." + name))
+            self._localized_actions["layout." + name] = action
             action.triggered.connect(lambda _=False, p=name: self.layout_preset(p))
-        theme_menu = view_menu.addMenu("Thème")
-        for title, key in (("Sombre", "dark"), ("Clair", "light")):
-            action = theme_menu.addAction(title)
+        theme_menu = view_menu.addMenu("Theme")
+        for key in ("dark", "light"):
+            action = theme_menu.addAction(ui_text("theme." + key))
+            self._localized_actions["theme." + key] = action
             action.triggered.connect(lambda _=False, value=key: self.set_theme(value))
         for scale in (90, 100, 115, 130):
-            action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
+            action = view_menu.addAction(ui_text("menu.ui_scale", scale=scale))
+            self._localized_actions[("menu.ui_scale", scale)] = action
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
-        tools_menu = self.menuBar().addMenu("&Outils")
-        vcs_menu = tools_menu.addMenu("Collaboration / VCS")
-        review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
+        tools_menu = self.menuBar().addMenu("&Tools")
+        advanced_project = tools_menu.addMenu(ui_text("menu.advanced_project"))
+        for key in ("new_project", "new_template", "save_as"):
+            advanced_project.addAction(self.commands[key])
+        self.recent_menu = advanced_project.addMenu(ui_text("menu.recent"))
+        self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
+        # Navigation uses task names first, not internal roadmap identifiers.
+        # Preserve the technical title in the action tooltip/status bar.
+        tool_labels = (
+            "global_search",
+            "r35_world",
+            "r44_atlas",
+            "r54_stream",
+            "r77_lab",
+            "r30_assist",
+            "r74_dungeons",
+            "procgen",
+            "r43_ability",
+            "r65_composer",
+            "r41_party",
+            "r53_composer",
+            "r41_encounter",
+            "r37_ai",
+            "r37_sensor",
+            "r37_squad",
+            "r37_boss",
+            "r31_logic",
+            "r42_narrative",
+            "r75_narrative",
+            "r62_relationships",
+            "r55_systems",
+            "r62_farm",
+            "r63_survival",
+            "r45_economy",
+            "r51_hud",
+            "r49_references",
+            "r38_prefabs",
+            "r38_refactor",
+            "r38_preflight",
+            "r76_optimizer",
+            "r76_bench",
+            "r49_metrics",
+            "r30_scale",
+            "r57_translation",
+            "r48_history",
+            "r78_team_reviews",
+            "r30_creator",
+        )
+        for key in tool_labels:
+            action = self.commands[key]
+            action.setStatusTip(action.text())
+            action.setToolTip(action.text())
+            action.setText(ui_text('tool_short.' + key))
+            self._localized_actions['tool_short.' + key] = action
+        # Make the two discovery commands available without opening a submenu.
+        tools_menu.addAction(self.commands["palette"])
+        tools_menu.addAction(self.commands["global_search"])
+        tools_menu.addSeparator()
+        # Keep one canonical QAction per command: only the visual grouping changes.
+        tool_groups = (
+            ("Monde et exploration", (
+                "r35_world", "r44_atlas", "r54_stream", "r77_lab",
+                "r30_assist", "r74_dungeons", "procgen")),
+            ("Gameplay, combat et IA", (
+                "r43_ability", "r65_composer", "r41_party", "r53_composer",
+                "r41_encounter", "r37_ai", "r37_sensor", "r37_squad",
+                "r37_boss")),
+            ("Scénarios et narration", (
+                "r31_logic", "r42_narrative", "r75_narrative",
+                "r62_relationships")),
+            ("Systèmes et économie", (
+                "r55_systems", "r62_farm", "r63_survival",
+                "r45_economy", "r51_hud")),
+            ("Projet, qualité et diagnostic", (
+                "r49_references", "r38_prefabs", "r38_refactor",
+                "r38_preflight", "r76_optimizer", "r76_bench", "r49_metrics",
+                "r30_scale", "r57_translation")),
+        )
+        self._group_menus = {}
+        group_keys = ("menu.tool_group_world", "menu.tool_group_combat",
+                      "menu.tool_group_story", "menu.tool_group_systems",
+                      "menu.tool_group_quality")
+        for menu_key, (_, keys) in zip(group_keys, tool_groups):
+            submenu = tools_menu.addMenu(ui_text(menu_key))
+            self._group_menus[menu_key] = submenu
+            for key in keys:
+                submenu.addAction(self.commands[key])
+            if menu_key == "menu.tool_group_quality":
+                qa_action = submenu.addAction(ui_text("tool.qa_lab"))
+                self._localized_actions["tool.qa_lab"] = qa_action
+                qa_action.setObjectName("r56-qa-lab-action")
+                qa_action.triggered.connect(self.open_gameplay_qa_lab)
+        collab_menu = tools_menu.addMenu(ui_text("menu.collaboration"))
+        vcs_menu = collab_menu.addMenu(ui_text("menu.vcs"))
+        review_branch = vcs_menu.addAction(ui_text("tool.vcs_merge"))
+        self._localized_actions["tool.vcs_merge"] = review_branch
         review_branch.triggered.connect(self._semantic_merge_dialog)
         vcs_menu.addAction(self.commands["r48_history"])
         vcs_menu.addAction(self.commands["r78_team_reviews"])
-        tools_menu.addAction(self.commands["r30_creator"])
-        tools_menu.addAction(self.commands["r30_scale"])
-        tools_menu.addAction(self.commands["r76_bench"])
-        tools_menu.addAction(self.commands["r49_metrics"])
-        tools_menu.addAction(self.commands["r77_lab"])
-        tools_menu.addAction(self.commands["r49_references"])
-        tools_menu.addAction(self.commands["r30_assist"])
-        tools_menu.addAction(self.commands["r75_narrative"])
-        tools_menu.addAction(self.commands["r74_dungeons"])
-        tools_menu.addAction(self.commands["procgen"])
-        tools_menu.addAction(self.commands["r31_logic"])
-        tools_menu.addAction(self.commands["r42_narrative"])
-        tools_menu.addAction(self.commands["global_search"])
-        tools_menu.addAction(self.commands["r38_prefabs"])
-        tools_menu.addAction(self.commands["r38_refactor"])
-        tools_menu.addAction(self.commands["r38_preflight"])
-        tools_menu.addAction(self.commands["r43_ability"])
-        tools_menu.addAction(self.commands["r65_composer"])
-        tools_menu.addAction(self.commands["r35_world"])
-        tools_menu.addAction(self.commands["r62_farm"])
-        tools_menu.addAction(self.commands["r62_relationships"])
-        tools_menu.addAction(self.commands["r41_party"])
-        tools_menu.addAction(self.commands["r53_composer"])
-        tools_menu.addAction(self.commands["r41_encounter"])
-        tools_menu.addAction(self.commands["r44_atlas"])
-        tools_menu.addAction(self.commands["r37_ai"])
-        tools_menu.addAction(self.commands["r37_sensor"])
-        tools_menu.addAction(self.commands["r37_squad"])
-        tools_menu.addAction(self.commands["r37_boss"])
-        tools_menu.addAction(self.commands["r55_systems"])
-        qa_action = tools_menu.addAction("R56 • QA Lab du gameplay…")
-        qa_action.setObjectName("r56-qa-lab-action")
-        qa_action.triggered.connect(self.open_gameplay_qa_lab)
-        tools_menu.addAction(self.commands["r63_survival"])
-        tools_menu.addAction(self.commands["r54_stream"])
-        tools_menu.addAction(self.commands["r51_hud"])
-        tools_menu.addAction(self.commands["r76_optimizer"])
-        tools_menu.addAction(self.commands["r57_translation"])
-        tools_menu.addAction(self.commands["r45_economy"])
-        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
-        import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
-        import_hooks.triggered.connect(self._import_hooks_dialog)
+        collab_menu.addAction(self.commands["r30_creator"])
+        package_menu = collab_menu.addMenu(ui_text("menu.packages"))
+        manage_packages = package_menu.addAction(ui_text("tool.packages_manage"))
+        self._localized_actions["tool.packages_manage"] = manage_packages
+        manage_packages.triggered.connect(self.open_package_manager)
+        plugin_menu = collab_menu.addMenu(ui_text("menu.plugins"))
+        load_plugin = plugin_menu.addAction(ui_text("tool.plugins_load"))
+        self._localized_actions["tool.plugins_load"] = load_plugin
+        load_plugin.triggered.connect(self._load_plugin_dialog)
+        disable_plugin = plugin_menu.addAction(ui_text("tool.plugins_disable"))
+        self._localized_actions["tool.plugins_disable"] = disable_plugin
+        disable_plugin.triggered.connect(self._disable_plugin_dialog)
+        mod_menu = collab_menu.addMenu(ui_text("menu.mods"))
+        mod_manager = mod_menu.addAction(ui_text("tool.mods_inspect"))
+        self._localized_actions["tool.mods_inspect"] = mod_manager
+        mod_manager.triggered.connect(self.open_mod_manager)
+
+        tools_menu.addSeparator()
         tools_menu.addAction(self.commands["preferences"])
         tools_menu.addAction(self.commands["guide"])
-        package_menu = tools_menu.addMenu("Packages de ressources R58")
-        manage_packages = package_menu.addAction("Gérer les packages…")
-        manage_packages.triggered.connect(self.open_package_manager)
-        plugin_menu = tools_menu.addMenu("Plugins Studio")
-        load_plugin = plugin_menu.addAction("Charger un manifeste…")
-        load_plugin.triggered.connect(self._load_plugin_dialog)
-        disable_plugin = plugin_menu.addAction("Désactiver un plugin…")
-        disable_plugin.triggered.connect(self._disable_plugin_dialog)
-        mod_menu = tools_menu.addMenu("Modules / SDK R47")
-        mod_manager = mod_menu.addAction("Inspecter les mods déclaratifs…")
-        mod_manager.triggered.connect(self.open_mod_manager)
-        shortcuts = tools_menu.addAction("Configurer un raccourci…")
+        scripts_menu = tools_menu.addMenu(ui_text("menu.scripts"))
+        import_hooks = scripts_menu.addAction(ui_text("tool.scripts_import"))
+        self._localized_actions["tool.scripts_import"] = import_hooks
+        import_hooks.triggered.connect(self._import_hooks_dialog)
+        shortcuts = tools_menu.addAction(ui_text("menu.shortcuts"))
+        self._localized_actions["menu.shortcuts"] = shortcuts
         shortcuts.triggered.connect(self.configure_shortcut)
-        # Localization applies to global workspace labels; legacy editors
-        # maintain their own FR labels while they are being migrated.
-        locale_menu = tools_menu.addMenu("Langue")
-        for lang in ("fr", "en"):
-            action = locale_menu.addAction(lang.upper())
+        locale_menu = tools_menu.addMenu(ui_text("menu.language"))
+        self._locale_actions = {}
+        for lang, name in language_choices():
+            action = locale_menu.addAction(name)
+            action.setCheckable(True)
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+            self._locale_actions[lang] = action
+
+
+        game_menu = self.menuBar().addMenu(ui_text("menu.game"))
+        for key in ("playtest", "stop_playtest", "return_playtest",
+                    "playtest_report", "export"):
+            game_menu.addAction(self.commands[key])
+        help_menu = self.menuBar().addMenu(ui_text("menu.help"))
+        help_menu.setObjectName("studio-help-menu")
+        help_menu.addAction(self.commands["help_docs"])
+        help_menu.addAction(self.commands["help_tutorial"])
+        help_menu.addSeparator()
+        help_menu.addAction(self.commands["help_about"])
+        self._localized_menus = {
+            "menu.file": file_menu, "menu.edit": edit_menu,
+            "menu.display": view_menu, "menu.workspaces": self.workspaces_menu,
+            "menu.tools": tools_menu, "menu.recent": self.recent_menu,
+            "menu.theme": theme_menu, "menu.language": locale_menu,
+            "menu.vcs": vcs_menu, "menu.scripts": scripts_menu,
+            "menu.packages": package_menu, "menu.plugins": plugin_menu,
+            "menu.mods": mod_menu, "menu.game": game_menu,
+            "menu.help": help_menu, "menu.advanced_project": advanced_project,
+            "menu.collaboration": collab_menu,
+        }
+        # A permanent, keyboard-accessible selector always exposes all
+        # workspaces; the old 13-item toolbar overflow was easily missed.
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
+        self.toolbar.setMovable(False)
+        self.toolbar.setFloatable(False)
         self.addToolBar(self.toolbar)
+        self.workspace_switcher = QToolButton(self.toolbar)
+        self.workspace_switcher.setObjectName("studio-workspaces-button")
+        self.workspace_switcher.setText("Tous les ateliers ▾")
+        self.workspace_switcher.setAccessibleName("Accéder à tous les ateliers")
+        self.workspace_switcher.setPopupMode(QToolButton.InstantPopup)
+        self.toolbar_workspaces_menu = QMenu(self.workspace_switcher)
+        self.toolbar_workspaces_menu.setTitle("Tous les ateliers")
         for identifier in WORKSPACES:
-            self.toolbar.addAction(self.commands["go_" + identifier])
+            self.toolbar_workspaces_menu.addAction(self.commands["go_" + identifier])
+        self.workspace_switcher.setMenu(self.toolbar_workspaces_menu)
+        self.toolbar.addWidget(self.workspace_switcher)
+        self.toolbar.addSeparator()
+
+        # Only frequent destinations live on the toolbar. The shared actions
+        # remain checkable and are also reachable from both workspace menus.
+        self._toolbar_buttons = {}
+        for identifier in ("project", "gameplay", "maps", "actors", "events", "campaigns"):
+            button = QToolButton(self.toolbar)
+            button.setDefaultAction(self.commands["go_" + identifier])
+            button.setText(LABELS[identifier])
+            button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+            self.toolbar.addWidget(button)
+            self._toolbar_buttons[identifier] = button
+        self._localized_menus['menu.all_workspaces_title'] = self.toolbar_workspaces_menu
+        self._localized_menus.update(self._group_menus)
 
     def _restore_layout(self):
         geometry = self.settings.value("window/geometry")
-        state = self.settings.value("window/docks")
+        state_key = "window/ads_v1" if self.docking.enabled else "window/docks"
         if geometry:
             self.restoreGeometry(geometry)
-        if not (state and self.restoreState(state, 1)):
+        if not self.docking.restore_state(self.settings.value(state_key)):
             preset = str(self.settings.value("window/preset", "editing"))
             self.layout_preset(preset if preset in ("editing", "analysis", "compact")
                                else "editing")
@@ -665,14 +792,23 @@ class StudioWindow(QMainWindow):
         if preset not in ("editing", "analysis", "compact"):
             raise ValueError("Unknown layout preset: " + str(preset))
         self.settings.setValue("window/preset", preset)
-        for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
-            dock.setFloating(False)
-        self.resource_dock.show()
-        self.inspector_dock.setVisible(preset != "compact")
-        self.problems_dock.setVisible(preset == "analysis")
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.resource_dock)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.inspector_dock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.problems_dock)
+        self.docking.show_preset(preset, resource=self.resource_dock,
+                                 inspector=self.inspector_dock,
+                                 problems=self.problems_dock)
+
+    def toggle_focus_mode(self):
+        """F11 hides tool panes without destroying the workspace or selection."""
+        panes = (self.resource_dock, self.inspector_dock, self.problems_dock)
+        if self._focus_dock_state is None:
+            self._focus_dock_state = self.docking.save_state()
+            for dock in panes:
+                dock.toggleView(False)
+            self.statusBar().showMessage("Focus Editor — F11 to restore panels")
+        else:
+            state = self._focus_dock_state
+            self._focus_dock_state = None
+            if not self.docking.restore_state(state):
+                self.layout_preset("editing")
 
     def set_theme(self, theme):
         self.settings.setValue("theme", theme)
@@ -684,13 +820,41 @@ class StudioWindow(QMainWindow):
         apply_theme(QApplication.instance(), self.settings.value("theme", "dark"), scale)
 
     def set_language(self, language):
+        language = normalize_language(language)
         self.settings.setValue("language", language)
-        labels = EN if language == "en" else LABELS
+        for key, menu in self._localized_menus.items():
+            menu.setTitle(ui_text(key, language))
+        for code, action in self._locale_actions.items():
+            action.setChecked(code == language)
         for identifier in WORKSPACES:
-            self.commands["go_" + identifier].setText("Workspace: " + labels[identifier]
-                                                      if language == "en" else
-                                                      "Atelier : " + labels[identifier])
-        self.statusBar().showMessage("Langue du shell : " + language.upper())
+            self.commands["go_" + identifier].setText(ui_text(
+                "studio.workspace_prefix", language,
+                name=ui_text("workspace." + identifier, language)))
+        for key, action in self._localized_actions.items():
+            if isinstance(key, tuple):
+                action.setText(ui_text(key[0], language, scale=key[1]))
+            else:
+                action.setText(ui_text(key, language))
+        self.resource_dock.setWindowTitle(ui_text("dock.resources", language))
+        self.inspector_dock.setWindowTitle(ui_text("dock.inspector", language))
+        self.problems_dock.setWindowTitle(ui_text("dock.problems", language))
+        for key in (
+            "new", "new_project", "new_template", "open", "close", "save", "save_as",
+            "help_docs", "help_tutorial", "help_about",
+            "playtest", "stop_playtest", "return_playtest", "playtest_report",
+            "export", "preferences", "undo", "redo", "palette", "guide",
+            "r57_translation", "focus_resources", "focus_inspector",
+            "focus_workspace",
+        ):
+            self.commands[key].setText(ui_text("command." + key, language))
+        for identifier, button in self._toolbar_buttons.items():
+            button.setText(ui_text("workspace." + identifier, language))
+        self.workspace_switcher.setText(ui_text("menu.all_workspaces", language))
+        self.workspace_switcher.setAccessibleName(ui_text("menu.all_workspaces_title", language))
+        self.workspace_switcher.setToolTip(ui_text("menu.active_workspace", language,
+            name=ui_text("workspace." + self._active_workspace, language)))
+        self.statusBar().showMessage(ui_text(
+            "studio.language_changed", language, language=language.upper()))
         self._update_guide()
 
     def configure_shortcut(self):
@@ -713,6 +877,18 @@ class StudioWindow(QMainWindow):
             return
         self.commands[key].setShortcut(sequence)
         self.settings.setValue("shortcuts/" + key, sequence.toString())
+
+    def open_help_docs(self):
+        from drawtemp.studio.help_dialogs import open_docs
+        return open_docs(self)
+
+    def open_help_tutorial(self):
+        from drawtemp.studio.help_dialogs import TutorialSelectorDialog
+        TutorialSelectorDialog(self).exec()
+
+    def open_help_about(self):
+        from drawtemp.studio.help_dialogs import show_about
+        show_about(self)
 
     def open_palette(self):
         CommandPalette(self).exec()
@@ -1192,6 +1368,8 @@ class StudioWindow(QMainWindow):
         self._update_title()
         self.commands["undo"].setEnabled(snapshot.can_undo)
         self.commands["redo"].setEnabled(snapshot.can_redo)
+        self.commands["close"].setEnabled(
+            self.content_path is not None and not self._r49_playtest.active)
         self._update_guide()
 
     def _refresh_if_changed(self):
@@ -1605,6 +1783,8 @@ class StudioWindow(QMainWindow):
         self._active_workspace = identifier
         for name in WORKSPACES:
             self.commands["go_" + name].setChecked(name == identifier)
+        self.workspace_switcher.setToolTip(
+            "Atelier actif : " + LABELS[identifier])
         self.statusBar().showMessage("Atelier : " + LABELS[identifier])
 
     def _r49_on_focus_changed(self, _old, current):
@@ -1980,7 +2160,7 @@ class StudioWindow(QMainWindow):
     def _unmount_plugin(self, plugin_id):
         dock = self._plugin_docks.pop(plugin_id, None)
         if dock is not None:
-            self.removeDockWidget(dock)
+            self.docking.remove(dock)
             dock.hide()
             dock.deleteLater()
         for key in tuple(self._plugin_fields):
@@ -2237,12 +2417,19 @@ class StudioWindow(QMainWindow):
         # Project switch invalidates every R47 consent and installed descriptor.
         self.mods = ModRegistry()
         self.session = fresh
-        self.content_path = Path(path)
+        self.content_path = Path(path) if path is not None else None
         self._activate("project")
         self.refresh()
-        self._record_recent(path)
-        # A loaded project is proof of a completed open/create action.
-        self._guide_switch_document(path)
+        if path is not None:
+            self._record_recent(path)
+            # A loaded project is proof of a completed open/create action.
+            self._guide_switch_document(path)
+        else:
+            # Closing a document restores the no-project Studio home without
+            # clearing the recent-project list or creating a disk file.
+            self._onboarding_key = None
+            self._onboarding_done = set()
+            self._update_guide()
 
     @measure_studio("studio.open")
     def open_path(self, path):
@@ -2254,6 +2441,13 @@ class StudioWindow(QMainWindow):
             self.report_error(exc)
             return False
         self._install_document(fresh, path)
+        return True
+
+    def close_project(self):
+        """Close only the current project; keep the Studio application open."""
+        if self.content_path is None or not self._confirm_leave():
+            return False
+        self._install_document(AuthoringSession.new(*reference_project()), None)
         return True
 
     def create_project(self, kind, destination):
@@ -2297,14 +2491,20 @@ class StudioWindow(QMainWindow):
         self.create_project(kind, Path(parent) / name)
 
     def new_document(self):
-        """R22: use the canonical CreatorDialog and shared R1 session."""
-        if self._r49_playtest.active:
+        """Create a blank project using the compact RPG-Maker-style dialog."""
+        if self._r49_playtest.active or not self._confirm_leave():
             return False
-        from drawtemp.studio.r15_creator import CreatorDialog
-        dialog = CreatorDialog(self)
+        from drawtemp.studio.simple_project_dialog import SimpleProjectDialog
+        dialog = SimpleProjectDialog(self, settings=self.settings)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
             return False
-        return self.open_path(dialog.created_content_path)
+        try:
+            fresh = AuthoringSession.open(dialog.created_content_path)
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return False
+        self._install_document(fresh, dialog.created_content_path)
+        return True
 
     def new_project(self):
         """R28: guided multi-genre flow without a second Studio session."""
@@ -2381,6 +2581,8 @@ class StudioWindow(QMainWindow):
         for key in ("new", "new_project", "new_template", "open",
                     "save", "save_as", "export"):
             self.commands[key].setEnabled(not active)
+        self.commands["close"].setEnabled(
+            not active and self.content_path is not None)
         if hasattr(self, "_r49_publication_play"):
             self._r49_publication_play.setEnabled(not active)
             self._r49_publication_stop.setEnabled(active)
@@ -2650,7 +2852,11 @@ class StudioWindow(QMainWindow):
             event.ignore()
             return
         self.settings.setValue("window/geometry", self.saveGeometry())
-        self.settings.setValue("window/docks", self.saveState(1))
+        state_key = "window/ads_v1" if self.docking.enabled else "window/docks"
+        # Persist the pre-focus layout rather than the temporary empty view.
+        self.settings.setValue(state_key, self._focus_dock_state
+                               if self._focus_dock_state is not None
+                               else self.docking.save_state())
         self.settings.sync()
         try:
             QApplication.instance().focusChanged.disconnect(

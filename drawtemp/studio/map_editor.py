@@ -6,6 +6,7 @@ All editing goes through MapStudio / R1; no private QML Canvas renderer.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -17,6 +18,7 @@ from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
 from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
+from .map_event_session import MapEventSession
 
 try:
     from PySide6.QtCore import QObject, Property, Signal, Slot, Qt, QUrl
@@ -53,10 +55,20 @@ class MapWindow(QMainWindow):
         self.pending_transform = None
         self.preview_anchor = None
         self.pending_generation = None
+        self.events = MapEventSession(self.studio)
+        self._editing_mode = "Editor"
+        self._previous_map_mode = 0
 
         toolbar = QToolBar("Carte", self)
         self.addToolBar(toolbar)
         self.toolbar_actions = {}
+        self.editor_mode = QComboBox(self)
+        self.editor_mode.setObjectName("r5-editor-events-mode")
+        self.editor_mode.setAccessibleName("Map mode: Editor or Events")
+        self.editor_mode.addItems(["Editor", "Events"])
+        toolbar.addWidget(QLabel(" Mode "))
+        toolbar.addWidget(self.editor_mode)
+        toolbar.addSeparator()
         for name, func in (
             ("Nouveau / Export", self.creator),
             ("Nouvelle carte", self.create_map),
@@ -108,6 +120,13 @@ class MapWindow(QMainWindow):
         self.mode.addItems(["Édition carte", "Construction 2.5D", "Donjons / énigmes"])
         toolbar.addWidget(QLabel(" Espace "))
         toolbar.addWidget(self.mode)
+        self.projection_choice = QComboBox(self)
+        self.projection_choice.setObjectName("r5-map-projection")
+        self.projection_choice.setAccessibleName("Map projection: ISO or 2D")
+        self.projection_choice.addItem("Iso 2.5D", "isometric")
+        self.projection_choice.addItem("2D", "top_down")
+        toolbar.addWidget(QLabel(" View "))
+        toolbar.addWidget(self.projection_choice)
         toolbar.addWidget(QLabel(" Outil "))
         toolbar.addWidget(self.tools)
 
@@ -162,17 +181,11 @@ class MapWindow(QMainWindow):
         if viewport.status() == QQuickWidget.Error:
             raise RuntimeError("\n".join(error.toString() for error in viewport.errors()))
         root = viewport.rootObject()
-        root.setProperty("interactionMode", "edit")
-        root.setProperty("showLegend", False)
-        root.strokeStarted.connect(self.begin_stroke)
-        root.strokeMoved.connect(self.extend_stroke)
-        root.strokeFinished.connect(self.finish_stroke)
-        root.strokeCancelled.connect(self.cancel_stroke)
-        root.editHover.connect(self._hover_transform)
-        root.editHoverLeft.connect(self._hover_left)
-        root.buildingPicked.connect(self._on_building_pick)
+        self._connect_viewport_inputs(root)
         self.viewport = viewport
-        self.setCentralWidget(viewport)
+        # Keep the ONE R3/QML viewport; ADS only changes QWidget geometry.
+        from .ads_docking import DockHost
+        self.docking = DockHost(self, viewport, central_name="Map Viewport")
 
         if project is not None:
             from drawtemp.assets.qt_browser import AssetBrowser
@@ -183,7 +196,18 @@ class MapWindow(QMainWindow):
 
         self.maps = QListWidget()
         self.maps.currentRowChanged.connect(self.change_map)
-        self._dock("Cartes / Missions", self.maps, Qt.LeftDockWidgetArea)
+        self.maps_dock = self._dock("Cartes / Missions", self.maps,
+                                    Qt.LeftDockWidgetArea)
+        # Actual native-resolution PNG atlas swatches, sharing the existing
+        # R5 surface brush; no new terrain schema or sidecar.
+        from .topdown_tileset_dock import TopDownTilesetDock
+        self.tileset_panel = TopDownTilesetDock(self)
+        self.tileset_panel.materialSelected.connect(self._select_tileset_material)
+        self.tileset_dock = self._dock("Tileset 2D", self.tileset_panel,
+                                      Qt.LeftDockWidgetArea)
+        self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
+        self.maps_dock.raise_()
+        self.tileset_dock.hide()
 
         right = QWidget()
         layout = QVBoxLayout(right)
@@ -218,7 +242,13 @@ class MapWindow(QMainWindow):
         # Editor-only layers share the canonical mission, not the Player save.
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
-        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        self.layers_dock = self._dock("Calques", self.layers_panel,
+                                      Qt.RightDockWidgetArea)
+        self._make_event_dock()
+        # Both contextual panels share one column; preserve map canvas width.
+        self.tabifyDockWidget(self.layers_dock, self.events_dock)
+        self.layers_dock.raise_()
+        self.events_dock.hide()
         self._make_generator_dock()
         self._make_prefab_dock()
 
@@ -252,10 +282,19 @@ class MapWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.dungeon)
         self.dungeon.hide()
         self.mode.currentIndexChanged.connect(self._construction_mode)
+        self.projection_choice.currentIndexChanged.connect(self.change_projection)
+        self.material.currentTextChanged.connect(self.tileset_panel.set_material)
+        self.tileset_panel.set_material(self.material.currentText())
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
         self.construction.cutaway_changed.connect(self._construction_view)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
+        from PySide6.QtCore import QSettings
+        self._dock_settings = QSettings("DrawTemp", "MapEditor5")
+        self.docking.restore_state(
+            self._dock_settings.value("window/ads_v1" if self.docking.enabled
+                                      else "window/native_v1"))
+        self.editor_mode.currentTextChanged.connect(self.set_editor_mode)
         self.refresh_maps()
 
     def show_side_preview(self, *_):
@@ -285,6 +324,66 @@ class MapWindow(QMainWindow):
         from .r15_creator import open_creator
         open_creator(self)
 
+    def _connect_viewport_inputs(self, root):
+        """The same R5 paint/hover contract exists in both Qt Quick views."""
+        root.setProperty("interactionMode", "edit")
+        root.setProperty("showLegend", False)
+        root.strokeStarted.connect(self.begin_stroke)
+        root.strokeMoved.connect(self.extend_stroke)
+        root.strokeFinished.connect(self.finish_stroke)
+        root.strokeCancelled.connect(self.cancel_stroke)
+        root.cellSelected.connect(self.select_event_cell)
+        root.editHover.connect(self._hover_transform)
+        root.editHoverLeft.connect(self._hover_left)
+        root.buildingPicked.connect(self._on_building_pick)
+
+    def _select_tileset_material(self, material):
+        index = self.material.findText(material)
+        if index >= 0:
+            self.material.setCurrentIndex(index)
+            self.tools.setCurrentText("Pinceau")
+
+    def change_projection(self, *_):
+        """Switch ISO/2D without replacing the shared renderer/session or zoom."""
+        mode = self.projection_choice.currentData()
+        if mode == self.renderer.projection_mode:
+            return
+        if mode == "top_down" and self.mode.currentIndex() != 0:
+            self.projection_choice.blockSignals(True)
+            self.projection_choice.setCurrentIndex(0)
+            self.projection_choice.blockSignals(False)
+            self.statusBar().showMessage(
+                "2D painting is available in Edit Map mode, not Construction.")
+            return
+        self.cancel_stroke()
+        self.cancel_transform()
+        self.cancel_generation()
+        previous = self.renderer.projection_mode
+        self.renderer.setProjectionMode(mode)
+        name = "TopDownViewport.qml" if mode == "top_down" else "IsoViewport.qml"
+        qml = Path(__file__).resolve().parents[1] / "render" / name
+        self.viewport.setSource(QUrl.fromLocalFile(str(qml)))
+        if self.viewport.status() == QQuickWidget.Error:
+            failure = "; ".join(e.toString() for e in self.viewport.errors())
+            self.renderer.setProjectionMode(previous)
+            old = "TopDownViewport.qml" if previous == "top_down" else "IsoViewport.qml"
+            self.viewport.setSource(QUrl.fromLocalFile(str(qml.with_name(old))))
+            self.projection_choice.blockSignals(True)
+            self.projection_choice.setCurrentIndex(0 if previous == "isometric" else 1)
+            self.projection_choice.blockSignals(False)
+            if self.viewport.rootObject() is not None:
+                self._connect_viewport_inputs(self.viewport.rootObject())
+            QMessageBox.warning(self, "Projection failed", failure)
+            return
+        self._connect_viewport_inputs(self.viewport.rootObject())
+        self.tileset_dock.setVisible(mode == "top_down")
+        if mode == "top_down":
+            self.tileset_dock.raise_()
+        else:
+            self.maps_dock.raise_()
+        self._construction_mode()
+        self.refresh()
+
     def _map_context(self, operation):
         if self.mode.currentIndex() == 2 and operation == "map.stroke":
             return True  # Preserve R27 dungeon placement.
@@ -298,6 +397,8 @@ class MapWindow(QMainWindow):
 
     def _construction_mode(self, *_):
         current = self.mode.currentIndex()
+        if current != 0 and self.renderer.projection_mode == "top_down":
+            self.projection_choice.setCurrentIndex(0)
         active = current == 1
         self.cancel_stroke()
         self.cancel_transform()
@@ -309,7 +410,9 @@ class MapWindow(QMainWindow):
         self.brush_shape.setEnabled(not active)
         self.brush_mask.setEnabled(not active)
         root = self.viewport.rootObject()
-        root.setProperty("interactionMode", "construction" if active else "edit")
+        root.setProperty("interactionMode",
+                         "select" if self._editing_mode == "Events" else
+                         "construction" if active else "edit")
         self.construction.setVisible(active)
         self.dungeon.setVisible(current == 2)
         self.tools.setEnabled(current == 0)
@@ -349,12 +452,156 @@ class MapWindow(QMainWindow):
             hit.get("cell", ()), hit.get("part", "building"), hit.get("level", 0))
         self._construction_view()
 
+    def _make_event_dock(self):
+        """Contextual R9 controls; no parallel event model or viewport."""
+        panel = QWidget(self)
+        layout = QVBoxLayout(panel)
+        self.event_focus = QLabel("Click a map cell to select or create an event.")
+        self.event_focus.setWordWrap(True)
+        layout.addWidget(self.event_focus)
+        self.events_list = QListWidget()
+        self.events_list.setObjectName("r5-events-list")
+        self.events_list.setAccessibleName("Events in the current map")
+        self.events_list.currentItemChanged.connect(self._on_event_selected)
+        layout.addWidget(self.events_list, 1)
+        self.event_details = QTextEdit()
+        self.event_details.setObjectName("r5-events-details")
+        self.event_details.setReadOnly(True)
+        layout.addWidget(self.event_details, 1)
+        for title, handler in (
+            ("Add Event at Cell...", self.create_event_at_cell),
+            ("Edit First Message...", self.edit_event_message),
+            ("Delete Event", self.delete_map_event),
+        ):
+            button = QPushButton(title)
+            button.clicked.connect(handler)
+            layout.addWidget(button)
+        self.events_dock = self._dock("Events", panel, Qt.RightDockWidgetArea)
+        self.events_dock.setObjectName("r5-map-events-dock")
+        self.events_dock.hide()
+
+    def set_editor_mode(self, mode):
+        """Switch input policy without replacing the QML viewport or session."""
+        if mode not in ("Editor", "Events"):
+            raise ValueError("Unsupported map editing mode")
+        if mode == self._editing_mode:
+            return
+        if mode == "Events":
+            self._previous_map_mode = self.mode.currentIndex()
+            self.mode.setCurrentIndex(0)
+        self._editing_mode = mode
+        if mode == "Editor":
+            self.mode.setCurrentIndex(self._previous_map_mode)
+        self.mode.setEnabled(mode == "Editor")
+        self.cancel_stroke()
+        self.cancel_transform()
+        self._construction_mode()
+        self.events_dock.setVisible(mode == "Events")
+        if mode == "Events":
+            self.events_dock.raise_()
+        else:
+            self.layers_dock.raise_()
+        self.viewport.rootObject().setProperty("showEventMarkers", mode == "Events")
+        if mode == "Events":
+            self.viewport.rootObject().setProperty("selectionCells", [])
+        else:
+            self._render_selection()
+        self._refresh_event_panel()
+        self.statusBar().showMessage(
+            "Events: select a marker or click a cell to create an event."
+            if mode == "Events" else "Editor: map painting enabled.")
+
+    def _refresh_event_panel(self):
+        mid = self.events.mission_id
+        entries = self.events.events()
+        self.events_list.blockSignals(True)
+        self.events_list.clear()
+        selected_row = -1
+        for index, event in enumerate(entries):
+            item_label = event["id"] + "  [" + event["condition"] + "]"
+            self.events_list.addItem(item_label)
+            item = self.events_list.item(index)
+            item.setData(Qt.UserRole, event["id"])
+            if event["id"] == self.events.selected_id:
+                selected_row = index
+        self.events_list.setCurrentRow(selected_row)
+        self.events_list.blockSignals(False)
+        cell = self.events.focus_cell
+        self.event_focus.setText(
+            "Map: " + mid + " | Cell: " +
+            (f"{cell[0]}, {cell[1]}" if cell is not None else "not selected"))
+        if self.events.selected_id:
+            event = next(row for row in entries
+                         if row["id"] == self.events.selected_id)
+            self.event_details.setPlainText(json.dumps(event, indent=2, ensure_ascii=False))
+        else:
+            self.event_details.setPlainText("Select an event marker or a map cell.")
+        # R9 markers use the exact R3 renderer and camera; selection is cosmetic.
+        if self._editing_mode == "Events":
+            self.renderer.setEventMarkers(
+                self.events.markers(), selected_id=self.events.selected_id)
+
+    def _on_event_selected(self, item, _previous=None):
+        if self._editing_mode != "Events" or item is None:
+            return
+        self.events.select_event(item.data(Qt.UserRole))
+        self._refresh_event_panel()
+
+    def select_event_cell(self, x, y):
+        if self._editing_mode != "Events":
+            return
+        self.events.select_cell(x, y)
+        self._refresh_event_panel()
+
+    def create_event_at_cell(self, *_):
+        if self._editing_mode != "Events":
+            return
+        cell = self.events.focus_cell
+        if cell is None:
+            self.statusBar().showMessage("Select a cell on the map first.")
+            return
+        suggested = f"event_{cell[0]}_{cell[1]}"
+        identifier, accepted = QInputDialog.getText(
+            self, "New Event", "Event ID", text=suggested)
+        if not accepted or not identifier.strip():
+            return
+        message, accepted = QInputDialog.getText(
+            self, "New Event", "Message when player enters the cell")
+        if not accepted or not message.strip():
+            return
+        self._safe(lambda: self.events.create_at_focus(
+            identifier.strip(), message.strip()))
+
+    def edit_event_message(self, *_):
+        selected = self.events.selected_id
+        if not selected:
+            self.statusBar().showMessage("Select an event first.")
+            return
+        event = self.events.events_studio.event(self.events.mission_id, selected)
+        if not event["actions"] or event["actions"][0]["kind"] != "message":
+            self.statusBar().showMessage("This event has no first message to edit.")
+            return
+        initial = event["actions"][0]["text"]
+        message, accepted = QInputDialog.getText(
+            self, "Edit Event", "First message", text=initial)
+        if accepted and message.strip():
+            self._safe(lambda: self.events.replace_first_message(message))
+
+    def delete_map_event(self, *_):
+        if not self.events.selected_id:
+            self.statusBar().showMessage("Select an event first.")
+            return
+        choice = QMessageBox.question(
+            self, "Delete Event", "Delete " + self.events.selected_id + "?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if choice == QMessageBox.Yes:
+            self._safe(self.events.delete_selected)
+
     def _dock(self, title, widget, area):
-        dock = QDockWidget(title, self)
-        dock.setObjectName(title)
-        dock.setWidget(widget)
-        self.addDockWidget(area, dock)
-        return dock
+        # Contextual right-side tools stay available as narrow vertical tabs.
+        return self.docking.add(
+            title, "map-" + title, widget, area,
+            auto_hide=area == Qt.RightDockWidgetArea)
 
     def _safe(self, operation):
         try:
@@ -1114,12 +1361,15 @@ class MapWindow(QMainWindow):
         mission = self.studio.mission()
         board = mission["board"]
         self.renderer.replace_scene(self._render_scene())
+        self._refresh_event_panel()
         if hasattr(self, "construction"):
             self._construction_view()
         if hasattr(self, "dungeon"):
             self.dungeon.refresh()
         root = self.viewport.rootObject()
         self._render_selection()
+        if self._editing_mode == "Events":
+            root.setProperty("selectionCells", [])
         if self.pending_generation is not None:
             root.setProperty("transformCells",
                              self._project_cells(self.pending_generation.cells))
@@ -1152,6 +1402,10 @@ class MapWindow(QMainWindow):
                 return
         if self._r52_side_view is not None:
             self._r52_side_view.close()
+        self._dock_settings.setValue(
+            "window/ads_v1" if self.docking.enabled else "window/native_v1",
+            self.docking.save_state())
+        self._dock_settings.sync()
         event.accept()
 
 

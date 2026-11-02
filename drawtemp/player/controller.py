@@ -30,7 +30,7 @@ class PlayerController:
         self.preferences = PlayerPreferences(self.save_dir / 'player-preferences.json')
         self.accessibility = AccessibilityPreferences(
             self.save_dir / 'r57-accessibility.json',
-            default_language=self.project.options['language'])
+            default_language="en")  # UI preference independent of project source
         self.session = None
         self.show_title = True
         self.selected = [0, 0]

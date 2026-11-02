@@ -156,8 +156,9 @@ class PlayerApplication(JeanneChapterUiMixin):
         self._explore_pan = (0, 0)
         self._audible_scene = None
         self._closing = False
+        self._close_request_job = None
         self._pause_dialog = None
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.protocol("WM_DELETE_WINDOW", self.request_close)
         self.root.bind("<Escape>", self._handle_escape)
         self.root.bind("<F5>", lambda event: self._game_shortcut(self._quick_save))
         self.root.bind("<F9>", lambda event: self._game_shortcut(self._quick_load))
@@ -174,6 +175,9 @@ class PlayerApplication(JeanneChapterUiMixin):
 
     def _clear(self):
         self._close_pause()
+        menu = getattr(self, "_title_menu", None)
+        if menu is not None:
+            menu.dispose()
         self.presentation.transition(self.presentation.screen)
         if self.cinematic is not None:
             self.cinematic.close()
@@ -697,10 +701,50 @@ class PlayerApplication(JeanneChapterUiMixin):
         self._seen_tactical_cinematics.clear()
         self._cinematic_sequence("campaign_start", cid, self.show)
 
+    def _offer_new_slot_for_incompatible_save(self, campaign_id, slot, error):
+        """Explain content drift and offer only an explicitly accepted fresh slot.
+
+        A checkpoint from another content/project/rules revision cannot be
+        replayed or silently migrated. Never overwrite its primary or backup.
+        """
+        if "Save incompatible (" not in str(error):
+            return False
+
+        message = (
+            "La sauvegarde de l'emplacement %s a été créée avec une autre "
+            "version du contenu, du projet ou des règles du jeu. Aucune "
+            "copie de secours compatible n'a été trouvée.\n\n"
+            "Pour reprendre cette progression, rouvrez la version exacte "
+            "des fichiers utilisée lors de la sauvegarde. Aucune sauvegarde "
+            "n'a été modifiée." % slot
+        )
+        free_slot = self.player.first_free_slot(campaign_id)
+        if free_slot is None:
+            self.messagebox.showwarning(
+                "Sauvegarde incompatible",
+                message + "\n\nAucun emplacement libre n'est disponible. "
+                "Conservez les anciennes sauvegardes avant toute intervention."
+            )
+            return True
+
+        if self.messagebox.askyesno(
+                "Sauvegarde incompatible",
+                message + "\n\nVoulez-vous commencer une NOUVELLE partie "
+                "dans l'emplacement libre %s ? La sauvegarde de "
+                "l'emplacement %s sera conservée." % (free_slot, slot)):
+            self.slot_var.set(str(free_slot))
+            self._new_game()
+        return True
+
     def _load_game(self):
         cid, slot = self.campaign_var.get(), int(self.slot_var.get())
         if self.long_save_var.get():
-            status = self.player.inspect_long_game(cid, slot)
+            try:
+                status = self.player.inspect_long_game(cid, slot)
+            except RuleError as exc:
+                if self._offer_new_slot_for_incompatible_save(cid, slot, exc):
+                    return
+                raise
             if status.source == "backup" or status.degraded:
                 if not self.messagebox.askyesno(
                         "Reprise après interruption",
@@ -713,7 +757,12 @@ class PlayerApplication(JeanneChapterUiMixin):
                     cid, slot, expected_digest=status.session.recording()["digest"])
             self.player.load_long_game(cid, slot)
         else:
-            self.player.load_game(cid, slot)
+            try:
+                self.player.load_game(cid, slot)
+            except RuleError as exc:
+                if self._offer_new_slot_for_incompatible_save(cid, slot, exc):
+                    return
+                raise
         self._acknowledge_loaded_tactical_cinematics()
         status = self.player.last_load_status
         if status is not None and status.source == "backup":
@@ -2673,12 +2722,26 @@ class PlayerApplication(JeanneChapterUiMixin):
                     lambda: self.player.start_recovery(
                         self.front_var.get()))).pack(side="left", padx=4)
 
+    def request_close(self):
+        """Defer teardown until the current Canvas/WM event has returned to Tk."""
+        if self._closing or self._close_request_job is not None:
+            return
+        self._close_request_job = self.root.after_idle(self._complete_requested_close)
+
+    def _complete_requested_close(self):
+        self._close_request_job = None
+        self.close()
+
     def close(self):
         # Multiple WM_DELETE/button callbacks must never double-close audio/Tk.
         if self._closing:
             return
         self._closing = True
         try:
+            # A direct close (e.g. by a test) must not leave a stale idle exit.
+            if self._close_request_job is not None:
+                self.root.after_cancel(self._close_request_job)
+                self._close_request_job = None
             if self.player.session is not None:
                 try:
                     self.player.save()
@@ -2705,6 +2768,8 @@ class PlayerApplication(JeanneChapterUiMixin):
                         if recorder.revision != self.playtest_exported_revision:
                             self._closing = False
                             return
+            # Dispose images and cancel Tk after jobs BEFORE destroying Tcl/Tk.
+            self._clear()
             self.audio.close()
             self.root.destroy()
         except Exception:

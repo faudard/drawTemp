@@ -6,6 +6,27 @@ import QtQuick
 Item {
     id: viewport
     clip: true
+    // These input signals match IsoViewport for the shared R5 Map Studio.
+    // The standalone Player keeps the default pan/inspect policy.
+    property string interactionMode: "pan" // pan | edit | select
+    property bool showGrid: true
+    property bool showBlocked: false
+    property bool showHeights: false
+    property bool showActors: true
+    property bool showLegend: false
+    property bool showEventMarkers: false
+    property var layerVisibility: ({})
+    property var layerOpacity: ({})
+    property var selectionCells: []
+    property var transformCells: []
+    signal editHover(int x, int y)
+    signal editHoverLeft()
+    signal strokeStarted(int x, int y)
+    signal strokeMoved(int x, int y)
+    signal strokeFinished(int x, int y)
+    signal strokeCancelled()
+    signal cellSelected(int x, int y)
+    signal buildingPicked(var hit)
     readonly property var camera: renderer.cameraState
     readonly property bool topDown: renderer.projectionMode === "top_down"
     readonly property bool sideView: renderer.projectionMode === "side"
@@ -23,16 +44,16 @@ Item {
         model: renderer.depthLayers
         delegate: Rectangle {
             required property var modelData
-            readonly property var layer: modelData
+            readonly property var depthLayer: modelData
             readonly property real zoom: viewport.camera.zoom
             visible: viewport.flatView
-            width: layer.width * zoom
-            height: layer.height * zoom
-            x: viewport.width / 2 + (viewport.camera.panX + layer.sx * zoom) * layer.parallax - width / 2
-            y: viewport.height / 2 + (viewport.camera.panY + layer.sy * zoom) * layer.parallax - height / 2
-            z: -200000 + layer.depthIndex
-            color: layer.color
-            opacity: layer.opacity
+            width: depthLayer.width * zoom
+            height: depthLayer.height * zoom
+            x: viewport.width / 2 + (viewport.camera.panX + depthLayer.sx * zoom) * depthLayer.parallax - width / 2
+            y: viewport.height / 2 + (viewport.camera.panY + depthLayer.sy * zoom) * depthLayer.parallax - height / 2
+            z: -200000 + depthLayer.depthIndex
+            color: depthLayer.color
+            opacity: depthLayer.opacity
         }
     }
 
@@ -88,17 +109,34 @@ Item {
                 anchors.fill: parent
                 visible: projected.tile
                 color: row.color
-                border.width: 1
+                border.width: viewport.showGrid ? 1 : 0
                 border.color: row.selected ? "#ffe195" : "#4d7161"
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 3 * projected.unit
-                    visible: row.blocked
-                    radius: 5 * projected.unit
-                    color: "#667a76"
-                    border.color: "#8b9993"
-                    border.width: 2
+            }
+            // One cached PNG per material/neighborhood; 2x2 quarters are
+            // composited by the shared Qt image provider, not by QML JS.
+            Loader {
+                anchors.fill: parent
+                active: projected.tile && viewport.topDown && !!row.autotileKey
+                sourceComponent: Image {
+                    source: "image://drawtemp-topdown/" + projected.row.autotileKey
+                    fillMode: Image.Stretch
+                    smooth: false
+                    cache: true
+                    asynchronous: false
                 }
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: projected.tile && viewport.showGrid
+                color: "transparent"
+                border.width: projected.unit >= 0.6 ? 1 : 0
+                border.color: row.selected ? "#ffe195" : "#4d7161"
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: projected.tile && viewport.showBlocked && row.blocked
+                color: "#b33a35"
+                opacity: 0.30
             }
             Rectangle {
                 anchors.fill: parent
@@ -108,7 +146,7 @@ Item {
             }
             Rectangle {
                 anchors.fill: parent
-                visible: projected.actor && !(spriteLoader.item &&
+                visible: projected.actor && viewport.showActors && !(spriteLoader.item &&
                                                spriteLoader.item.status === Image.Ready)
                 radius: width / 2
                 color: row.alive ? (row.team === "player" ? "#f1ca75" : "#d06561")
@@ -132,7 +170,7 @@ Item {
             // Only actor delegates that have validated R28 art instantiate it.
             Loader {
                 id: spriteLoader
-                active: projected.actor && !!row.imageUrl
+                active: projected.actor && viewport.showActors && !!row.imageUrl
                 sourceComponent: Component {
                     Image {
                         readonly property real spriteScale: Math.min(
@@ -153,7 +191,7 @@ Item {
             }
             // Pose label stays visible whether the actor has artwork or not.
             Text {
-                visible: projected.actor && !!row.animationState
+                visible: projected.actor && viewport.showActors && !!row.animationState
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: projected.height + 2 * projected.unit
                 text: row.animationState || ""
@@ -173,11 +211,87 @@ Item {
         }
     }
 
-    // The R3 renderer alone performs picking/camera unprojection.
+    // R5 selection/transform overlays use the same projected cells as ISO.
+    Repeater {
+        model: viewport.selectionCells.concat(viewport.transformCells)
+        delegate: Rectangle {
+            required property var modelData
+            readonly property var cell: modelData
+            width: 64 * viewport.camera.zoom
+            height: 64 * viewport.camera.zoom
+            x: viewport.width/2 + viewport.camera.panX + cell.sx * viewport.camera.zoom - width/2
+            y: viewport.height/2 + viewport.camera.panY + cell.sy * viewport.camera.zoom - height/2
+            z: 20000
+            color: cell.invalid ? "#90ed5b56" : "#408fe4c0"
+            border.width: 2
+            border.color: cell.invalid ? "#f05f56" : "#e6ffb8"
+        }
+    }
+
+    // Both Player and Studio use R3 unprojection (not a private QML grid).
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton
-        onClicked: function(event) { renderer.pickAt(event.x, event.y) }
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        hoverEnabled: true
+        property bool editing: false
+        property var lastCell: ({})
+        property real lastX: 0
+        property real lastY: 0
+        property real downX: 0
+        property real downY: 0
+        function valid(cell) {
+            return cell !== undefined && cell !== null &&
+                   typeof cell.x === "number" && typeof cell.y === "number"
+        }
+        onPressed: function(mouse) {
+            lastX = mouse.x; lastY = mouse.y
+            downX = mouse.x; downY = mouse.y
+            editing = false
+            if (mouse.button === Qt.LeftButton && viewport.interactionMode === "edit") {
+                const cell = renderer.cellAt(mouse.x, mouse.y)
+                if (valid(cell)) {
+                    editing = true
+                    lastCell = cell
+                    viewport.strokeStarted(cell.x, cell.y)
+                }
+            }
+        }
+        onPositionChanged: function(mouse) {
+            const cell = renderer.cellAt(mouse.x, mouse.y)
+            if (valid(cell)) viewport.editHover(cell.x, cell.y)
+            else viewport.editHoverLeft()
+            if ((mouse.buttons & Qt.RightButton) ||
+                ((viewport.interactionMode === "pan" ||
+                  viewport.interactionMode === "select") &&
+                 (mouse.buttons & Qt.LeftButton))) {
+                renderer.panBy(mouse.x - lastX, mouse.y - lastY)
+            } else if (editing && (mouse.buttons & Qt.LeftButton) && valid(cell) &&
+                       (!valid(lastCell) || cell.x !== lastCell.x || cell.y !== lastCell.y)) {
+                lastCell = cell
+                viewport.strokeMoved(cell.x, cell.y)
+            }
+            lastX = mouse.x; lastY = mouse.y
+        }
+        onReleased: function(mouse) {
+            if (mouse.button === Qt.LeftButton && editing) {
+                const cell = renderer.cellAt(mouse.x, mouse.y)
+                if (valid(cell)) viewport.strokeFinished(cell.x, cell.y)
+                else viewport.strokeCancelled()
+                editing = false
+            } else if (mouse.button === Qt.LeftButton &&
+                       Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) < 6) {
+                const cell = renderer.cellAt(mouse.x, mouse.y)
+                if (viewport.interactionMode === "select" && valid(cell))
+                    viewport.cellSelected(cell.x, cell.y)
+                else if (viewport.interactionMode === "pan")
+                    renderer.pickAt(mouse.x, mouse.y)
+            }
+        }
+        onCanceled: {
+            if (editing) viewport.strokeCancelled()
+            editing = false
+        }
+        onExited: viewport.editHoverLeft()
         onWheel: function(wheel) {
             renderer.zoomAt(wheel.angleDelta.y, wheel.x, wheel.y)
             wheel.accepted = true

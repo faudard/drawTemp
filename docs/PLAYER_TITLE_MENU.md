@@ -10,6 +10,14 @@ utilise désormais **Pillow comme dépendance runtime**, installée avec le proj
 - **Continuer** n'est activé que lorsque le slot sélectionné possède un fichier
   ou une copie de secours ; le chargement est toujours validé par
   `PlayerController` (une sauvegarde incompatible sera refusée).
+- Si « Continuer » découvre une empreinte de contenu/projet/règles incompatible,
+  un dialogue explique le blocage sans afficher le journal d'erreurs brut. Le
+  joueur peut explicitement commencer une **nouvelle partie dans un autre
+  emplacement réellement libre** ; aucune sauvegarde, copie `.bak`, archive
+  `.damaged` ou journal de session longue n'est écrasé. S'il n'existe aucun
+  emplacement libre, le Player explique la situation sans modifier le disque.
+  Ce choix ne permet pas de reprendre l'ancienne progression : elle nécessite
+  les données d'origine ou une migration explicite validée.
 - **Nouvelle partie** conserve la confirmation d'écrasement du slot v2 et le refus
   d'écraser une session longue.
 - **Charger une partie** ouvre un panneau de sélection du nom de campagne, du

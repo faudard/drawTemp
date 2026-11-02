@@ -70,6 +70,32 @@ class TitleMenuGeometryTests(unittest.TestCase):
         self.assertTrue(image.is_file())
 
 
+class PlayerShutdownOrderTests(unittest.TestCase):
+    def test_cleanup_happens_before_destroy_and_is_idempotent(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, call
+        from sporebound.player_app import PlayerApplication
+
+        app = PlayerApplication.__new__(PlayerApplication)
+        app._closing = False
+        app._close_request_job = None
+        app.player = SimpleNamespace(session=None)
+        app.playtest_recorder = None
+        app.root = Mock()
+        app.audio = Mock()
+        app._clear = Mock()
+        lifecycle = Mock()
+        lifecycle.attach_mock(app._clear, "clear")
+        lifecycle.attach_mock(app.audio.close, "stop_audio")
+        lifecycle.attach_mock(app.root.destroy, "destroy_root")
+
+        app.close()
+        app.close()
+        self.assertEqual(lifecycle.mock_calls, [
+            call.clear(), call.stop_audio(), call.destroy_root()
+        ])
+
+
 @unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1", "Requires Tk display")
 class TitleMenuCinematicGuiTests(unittest.TestCase):
     def test_menu_cards_are_live_and_do_not_mutate_game(self):
@@ -106,6 +132,47 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 menu._move_selection(1)
                 self.assertNotEqual(old, menu._selection_index)
                 self.assertIsNone(app.player.session)
+            finally:
+                app.close()
+
+    def test_authored_title_screen_applies_to_real_player_menu(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        from sporebound.title_screen_settings import NAMESPACE, extension_for
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            try:
+                app.project.extensions[NAMESPACE] = extension_for({
+                    "background": "solid", "accent": "#aabbcc",
+                    "panel": "#123456", "show_campaign": False,
+                    "labels": {"new": "Start a Quest"},
+                    "positions": {"new": [0.05, 0.05],
+                                  "logo": [0.01, 0.03]}})
+                app.title_screen()
+                app.root.update()
+                menu = app._title_menu
+                self.assertEqual(menu._accent, "#aabbcc")
+                self.assertEqual(menu._panel_color, "#123456")
+                self.assertEqual(len(menu._hitboxes), 9)
+                texts = [menu.canvas.itemcget(item, "text")
+                         for item in menu.canvas.find_withtag("title_card_new")
+                         if menu.canvas.type(item) == "text"]
+                self.assertIn("Start a Quest", texts)
+                from sporebound.title_screen_layout import resolve_boxes
+                expected = resolve_boxes(
+                    menu.canvas.winfo_width(), menu.canvas.winfo_height(),
+                    title_geometry(menu.canvas.winfo_width(),
+                                   menu.canvas.winfo_height()),
+                    app.project.extensions[NAMESPACE]["data"]["positions"])
+                self.assertEqual(menu._hitboxes["new"], expected["new"])
+                self.assertLess(menu._hitboxes["new"][0], 100)
+                app.root.geometry("800x580")
+                app.root.update()
+                self.assertEqual(len(menu._hitboxes), 9)
+                for bounds in menu._hitboxes.values():
+                    self.assertGreaterEqual(bounds[0], 0)
+                    self.assertLessEqual(bounds[2], menu.canvas.winfo_width())
             finally:
                 app.close()
 
@@ -201,6 +268,30 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 self.assertIsNone(app.player.session)
             finally:
                 app.close()
+
+    def test_quit_is_deferred_and_releases_tk_callbacks(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            app.root.update()
+            menu = app._title_menu
+            triggered = []
+            app._preview_job = app.root.after(30000, lambda: triggered.append(True))
+            menu._execute("quit")
+            self.assertIsNotNone(app._close_request_job)
+            self.assertEqual(app.root.winfo_exists(), 1)
+            # Repeated clicks must not schedule a second teardown.
+            requested = app._close_request_job
+            menu._execute("quit")
+            self.assertEqual(app._close_request_job, requested)
+            app.root.update_idletasks()
+            self.assertEqual(app.root.winfo_exists(), 0)
+            self.assertIsNone(app._preview_job)
+            self.assertEqual(triggered, [])
+            self.assertTrue(app._closing)
+            app.close()  # Reentrant close must remain a no-op.
 
 
 if __name__ == "__main__":
