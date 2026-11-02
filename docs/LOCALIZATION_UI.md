@@ -1,38 +1,27 @@
-# UI language foundation (English first)
+# Localization / internationalization
 
-**Default language: English (`en`)** for a newly created GameProject and a
-fresh Qt Studio installation. French (`fr`) can be selected explicitly.
-Studio: **Tools → Language → English / Français**. Player:
-**Options (F10) → Language**. Each application retains its language choice
-in its existing presentation preferences: Studio QSettings `language`, and
-Player `r57-accessibility.json` per save directory.
+Two distinct domains share the **drawtemp.localization** package:
 
-`drawtemp.localization.ui.ui_text(key, language, **params)` is the common
-presentation-only UI vocabulary. Add new keys in both `UI_STRINGS` mappings.
-Use the stable key in Qt Widgets or `root.ui(key)` in Qt Quick. Unsupported
-language codes and missing translations fall back to English, with no
-dependency on system locale. A missing key itself is returned, making gaps
-visible during development. Do not use translated text for action IDs,
-serialization, event routing, game logic, or replay state.
+1. **Application UI:** Studio + Qt Player labels in `locales/en.json` and `locales/fr.json`, indexed by `locales/manifest.json`. All new UI labels use stable semantic keys. English (`en`) is the default regardless of the operating system's locale.
+2. **Game content:** The existing R57 `game.l10n.json` translation sidecar contains dialogue, campaign names, titles, etc., with a per-project *source language*. Changing UI language must never rewrite source text or change game rules, saves, checkpoints, or replay hashes.
 
-**Two concepts stay separate:** `GameProject.options.language` is the
-authored content's source language, while the editor's language selection and
-the Player accessibility setting control the displayed interface. Existing
-French-language project manifests are loaded unchanged; they are *not*
-silently rewritten as English sources. Player story/dialogue translations
-continue to use R57 `game.l10n.json`, including source drift checks.
-New GameProject instances start with an English source language.
+## Adding a language
 
-Initial UI conversion covers Studio's top-level menus, core file/edit/playtest
-actions, workspace navigation, and the Player's main Options/Pause controls
-and a few primary game labels. Legacy Studio workspaces, Tk windows, and
-other fixed French strings remain to be migrated incrementally. This is **not**
-a claim of full French/English coverage.
+- Copy `drawtemp/localization/locales/en.json` to `<code>.json`, set `locale` to the BCP47-style code, translate values (never change IDs like `menu.file` or placeholders like `{name}`).
+- Register the locale once in `locales/manifest.json` with `{"code": "es", "name": "Español"}`.
+- Run `python -m unittest tests_standalone.test_ui_locale_defaults -v`. `audit_catalogs()` reports missing keys and the loader rejects invalid JSON, duplicate keys, unknown keys and mismatched placeholders. A missing translation safely falls back to English.
+- Call `ui_text("menu.file", ui_language)` in Python/Qt Widgets or `root.ui("player.options")` in QML. Add the keys to `en.json`, then translate in each locale. Never use a translated label as a programmatic ID or persistence value.
 
-Validate with:
-```
-python -m unittest tests_standalone.test_ui_locale_defaults -v
-python -m compileall -q drawtemp/localization drawtemp/studio/qt_shell.py drawtemp/player/qt_app.py
-```
-Qt integration smoke and manual visual overflow review are needed before
-full multilingual UI signoff.
+UI files are embedded in the installed Python package via `pyproject.toml` package data; no absolute source-tree paths or network access required. Files are UTF-8 and read via `importlib.resources` with cached, validated catalogs. No extra dependency is needed.
+
+## User choice
+
+- Studio: **Tools → Language → English / Français**; the selection is stored in `QSettings("DrawTemp", "Studio5")` and can change without restarting.
+- Player: **Options (F10) → Language**; stored in the Player's `r57-accessibility.json` alongside but independent from saves. A fresh Player UI starts in English even if its historical project source is French.
+- Newly created `GameProject` manifests also default to English source text, but pre-existing French projects remain French-authored and are not silently rewritten.
+
+## Status
+
+The catalog migration includes top-level Studio navigation and frequently used Player screens. Specialized Studio workspaces, old Tk windows, and some complex Player HUD/gameplay strings remain to be converted. The R57 per-project Translation Studio is still the correct place for *authored dialogue*; UI JSON is only for application chrome.
+
+Testing: `python -m unittest tests_standalone.test_ui_locale_defaults tests_standalone.test_drawtemp5_r57c -v`, `python -m compileall -q drawtemp/localization drawtemp/studio/qt_shell.py drawtemp/player/qt_app.py`, and offscreen Qt smoke + visual review on Windows/macOS/Linux.

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "default": "en",
+  "languages": [
+    {
+      "code": "en",
+      "name": "English"
+    },
+    {
+      "code": "fr",
+      "name": "Français"
+    }
+  ]
+}

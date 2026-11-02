@@ -25,7 +25,7 @@ class R57CAccessibilityTests(unittest.TestCase):
             path = Path(folder)
             controller = build_controller(reference=True, save_dir=path)
             original = controller.state()
-            self.assertEqual(original["accessibility"]["language"], "fr")
+            self.assertEqual(original["accessibility"]["language"], "en")
             self.assertEqual(original["settings"]["display"]["text_scale"], 1.0)
             controller.new_game()
             controller.save(1)
