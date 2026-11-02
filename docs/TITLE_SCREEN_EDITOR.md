@@ -13,8 +13,16 @@ modifying code. The project/mission map editor remains unchanged.
 3. Choose **Import background image…** to copy a PNG or JPEG into
    `art/title_screen/` beside the project's `.game.json`. JPEG requires
    Pillow; PNG can fall back to native Tk if Pillow is absent.
-4. The right-hand canvas provides a **live visual approximation**, not a
-   playable Player session. It does not create saves or invoke actions.
+4. The right-hand canvas is a **WYSIWYG drag editor** with the same geometry
+   resolver as the Player. Click an object and drag to reposition it. Supported
+   elements: logo, game title, subtitle, each of the six menu action cards,
+   campaign information card and the three-button footer group. The selected
+   element has a blue outline; the element selector and X/Y percent fields
+   allow precise movement. **Undo move / Redo move** (Ctrl+Z/Ctrl+Y while the
+   canvas has focus) and **Reset selected position** are available. Dragging
+   is constrained to visible window bounds. The preview is not a playable
+   Player session and does not invoke save/game actions. The visual design is
+   close to the Player, but text rasterization/background blending may differ.
 5. Choose **Apply changes** and then **Save project…**. The normal global
    Save Project workflow also saves the settings. Undo/Redo, dirty detection
    and interrupted-session recovery use the existing Studio transaction model.
@@ -39,14 +47,23 @@ Optional extension of `GameProject`:
         "panel": "#111a27",
         "text": "#f4ead7",
         "show_campaign": true,
-        "labels": {"new": "Commencer"}
+        "labels": {"new": "Commencer"},
+        "positions": {
+          "title": [0.61, 0.11],
+          "new": [0.50, 0.42],
+          "campaign": [0.03, 0.63]
+        }
       }
     }
   }
 }
 ```
 
-Only project-relative `art/...` image paths are permitted. The extension
+Only project-relative `art/...` image paths are permitted. Layout coordinates
+are normalized `[x,y]` top-left fractions (0.0–1.0); only moved elements
+are stored. Unmodified elements retain the original responsive geometry, while
+moved blocks are clamped to the viewport at runtime. Element IDs remain stable
+across languages and window sizes. The extension
 contains presentation data only: New Game, Continue, Load, Campaigns, Options,
 Quit and their keyboard activation remain wired to their original handlers.
 Hidden campaign card does not disable the Campaigns menu entry. Contrast mode
@@ -62,13 +79,16 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_titl
 ```
 
 Manual gate: import a PNG, apply, save, reopen Studio and the Player,
-verify image and labels, then Undo/Redo, save and reopen; check high contrast,
+verify image and labels; drag every element and check its exact Player position;
+check snap-less movement, X/Y fields, local move undo/redo, reset position,
+global Studio Undo/Redo, save and reopen; check high contrast,
 a custom game without Jeanne and a missing-file fallback. Resizing 800×580,
 1160×820 and full-screen must preserve action hit boxes and keyboard focus.
 
 ### Current boundaries
 
-The first version edits presentation properties and previews the overall
-layout. Drag/drop card positioning, individual action visibility, scene
-animation timelines and exact pixel-parity preview are future enhancements,
-not silently exposed as incomplete controls.
+Elements can be moved but not resized, rotated or hidden individually.
+A menu footer is edited as one group of three linked buttons. Optional
+animations and exact pixel-for-pixel parity of the preview's font rendering
+remain outside this PR; the actual Player uses the same element placement
+resolver and preserves the real action handlers.
