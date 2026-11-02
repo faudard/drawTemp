@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from drawtemp.localization.ui import DEFAULT_LANGUAGE, language_choices, normalize_language, ui_text
+from drawtemp.studio.ads_docking import DockHost
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
 from drawtemp.sdk.reference import reference_project
@@ -232,7 +233,8 @@ class StudioWindow(QMainWindow):
     def _build(self):
         self.workspace_tabs = QStackedWidget()
         self.workspace_tabs.setAccessibleName("Ateliers Studio")
-        self.setCentralWidget(self.workspace_tabs)
+        self.docking = DockHost(self, self.workspace_tabs, central_name="Studio")
+        self._focus_dock_state = None
         self._make_home()
         self._make_resource_dock()
         self._make_inspector_dock()
@@ -326,15 +328,9 @@ class StudioWindow(QMainWindow):
         self.pages["project"] = page
 
     def _dock(self, title, name, widget, area):
-        dock = QDockWidget(title, self)
-        dock.setObjectName(name)
-        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-        dock.setFeatures(QDockWidget.DockWidgetMovable |
-                         QDockWidget.DockWidgetFloatable |
-                         QDockWidget.DockWidgetClosable)
-        dock.setWidget(widget)
-        self.addDockWidget(area, dock)
-        return dock
+        return self.docking.add(
+            title, name, widget, area,
+            auto_hide=name == "r2-inspector-dock")
 
     def _make_resource_dock(self):
         host = QWidget()
@@ -577,6 +573,10 @@ class StudioWindow(QMainWindow):
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             view_menu.addAction(dock.toggleViewAction())
         self._localized_actions = {}
+        focus_action = view_menu.addAction(ui_text("menu.focus_editor"))
+        focus_action.setShortcut("F11")
+        focus_action.triggered.connect(self.toggle_focus_mode)
+        self._localized_actions["menu.focus_editor"] = focus_action
         for name in ("editing", "analysis", "compact"):
             action = view_menu.addAction(ui_text("layout." + name))
             self._localized_actions["layout." + name] = action
@@ -781,10 +781,10 @@ class StudioWindow(QMainWindow):
 
     def _restore_layout(self):
         geometry = self.settings.value("window/geometry")
-        state = self.settings.value("window/docks")
+        state_key = "window/ads_v1" if self.docking.enabled else "window/docks"
         if geometry:
             self.restoreGeometry(geometry)
-        if not (state and self.restoreState(state, 1)):
+        if not self.docking.restore_state(self.settings.value(state_key)):
             preset = str(self.settings.value("window/preset", "editing"))
             self.layout_preset(preset if preset in ("editing", "analysis", "compact")
                                else "editing")
@@ -793,14 +793,26 @@ class StudioWindow(QMainWindow):
         if preset not in ("editing", "analysis", "compact"):
             raise ValueError("Unknown layout preset: " + str(preset))
         self.settings.setValue("window/preset", preset)
-        for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
-            dock.setFloating(False)
-        self.resource_dock.show()
-        self.inspector_dock.setVisible(preset != "compact")
-        self.problems_dock.setVisible(preset == "analysis")
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.resource_dock)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.inspector_dock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.problems_dock)
+        self.docking.show_preset(preset, resource=self.resource_dock,
+                                 inspector=self.inspector_dock,
+                                 problems=self.problems_dock)
+
+    def toggle_focus_mode(self):
+        """F11 hides tool panes without destroying the workspace or selection."""
+        panes = (self.resource_dock, self.inspector_dock, self.problems_dock)
+        if self._focus_dock_state is None:
+            self._focus_dock_state = self.docking.save_state()
+            for dock in panes:
+                if hasattr(dock, "toggleView"):
+                    dock.toggleView(False)
+                else:
+                    dock.setVisible(False)
+            self.statusBar().showMessage("Focus Editor — F11 to restore panels")
+        else:
+            state = self._focus_dock_state
+            self._focus_dock_state = None
+            if not self.docking.restore_state(state):
+                self.layout_preset("editing")
 
     def set_theme(self, theme):
         self.settings.setValue("theme", theme)
@@ -2152,7 +2164,7 @@ class StudioWindow(QMainWindow):
     def _unmount_plugin(self, plugin_id):
         dock = self._plugin_docks.pop(plugin_id, None)
         if dock is not None:
-            self.removeDockWidget(dock)
+            self.docking.remove(dock)
             dock.hide()
             dock.deleteLater()
         for key in tuple(self._plugin_fields):
@@ -2844,7 +2856,11 @@ class StudioWindow(QMainWindow):
             event.ignore()
             return
         self.settings.setValue("window/geometry", self.saveGeometry())
-        self.settings.setValue("window/docks", self.saveState(1))
+        state_key = "window/ads_v1" if self.docking.enabled else "window/docks"
+        # Persist the pre-focus layout rather than the temporary empty view.
+        self.settings.setValue(state_key, self._focus_dock_state
+                               if self._focus_dock_state is not None
+                               else self.docking.save_state())
         self.settings.sync()
         try:
             QApplication.instance().focusChanged.disconnect(
