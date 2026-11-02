@@ -137,6 +137,8 @@ def main(argv=None):
                 "Double-click a character to open it. Searching does not "
                 "replace the current character.")
             self.library_grid.itemDoubleClicked.connect(self.open_library_item)
+            self.library_grid.verticalScrollBar().valueChanged.connect(
+                self.populate_visible_library_icons)
             self.library_open = QPushButton("Open selected character")
             self.library_open.clicked.connect(self.open_selected_library)
             self.library_count = QLabel()
@@ -493,11 +495,9 @@ def main(argv=None):
             self.library_grid.blockSignals(True)
             self.library_grid.clear()
             for key, label in results:
-                cache_key = ("library", key)
-                if cache_key not in self._gallery_cache:
-                    self._gallery_cache[cache_key] = self._character_icon(
-                        self.library_entries[key][1])
-                icon = self._gallery_cache[cache_key]
+                # Render only thumbnails in the viewport. A 1000-character
+                # library must not decode all PNGs before the editor opens.
+                icon = self._gallery_cache.get(("library", key), QIcon())
                 item = QListWidgetItem(icon, label)
                 item.setData(Qt.UserRole, key)
                 item.setToolTip(
@@ -512,6 +512,24 @@ def main(argv=None):
                 f"{len(results)} of {len(self.library_entries)} characters"
                 " | Double-click to open")
             self.library_open.setEnabled(bool(results))
+            QTimer.singleShot(0, self.populate_visible_library_icons)
+
+        def populate_visible_library_icons(self, *_):
+            grid = self.library_grid
+            viewport = grid.viewport().rect()
+            for index in range(grid.count()):
+                item = grid.item(index)
+                key = item.data(Qt.UserRole)
+                cache_key = ("library", key)
+                if cache_key in self._gallery_cache:
+                    continue
+                if not grid.visualItemRect(item).intersects(viewport):
+                    continue
+                if key not in self.library_entries:
+                    continue
+                icon = self._character_icon(self.library_entries[key][1])
+                self._gallery_cache[cache_key] = icon
+                item.setIcon(icon)
 
         def reload_library(self):
             self.library_entries = discover_character_library(root, templates)
