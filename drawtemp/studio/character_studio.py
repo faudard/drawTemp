@@ -13,7 +13,10 @@ from drawtemp.assets.characters import (
     ACTIONS, DIRECTIONS, SLOTS, CharacterError, CharacterSession, diagnostics,
     export_pack, frame, render_frame, starter_library,
 )
-from drawtemp.assets.jeanne_art import build_jeanne_art
+from drawtemp.assets.character_library import (
+    discover_character_library, search_characters,
+)
+from drawtemp.assets.character_looks import available_looks, apply_look
 from drawtemp.assets.character_parts import (
     PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
     active_part, available_parts, ensure_profile, part_paths,
@@ -28,7 +31,7 @@ def main(argv=None):
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--open", type=Path, help="Open an R7 character recipe JSON")
-    parser.add_argument("--template", default="jeanne",
+    parser.add_argument("--template", default="modular_hero",
                         help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
     args = parser.parse_args(argv)
@@ -39,7 +42,8 @@ def main(argv=None):
         from PySide6.QtWidgets import (
             QApplication, QCheckBox, QComboBox, QColorDialog, QDockWidget, QFileDialog, QFormLayout,
             QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
-            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QTabBar, QToolButton,
+            QMainWindow, QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter,
+            QTabBar, QToolButton,
             QVBoxLayout, QWidget,
         )
     except ImportError as exc:
@@ -74,19 +78,35 @@ def main(argv=None):
             self.timer.setSingleShot(True)
             self.timer.timeout.connect(self.advance)
             self.setWindowTitle("DrawTemp 5.0 — Character & Animation Studio")
-            self.resize(1380, 940)
+            self.resize(1580, 930)
+            self.library_entries = discover_character_library(root, templates)
+            self.saved_revision = self.session.revision
+            self._gallery_cache = {}
             self.build_ui()
             self.refresh()
 
         def build_ui(self):
-            self.templates = QComboBox()
-            for key, doc in templates.items():
-                self.templates.addItem(doc["name"], key)
-            initial_key = self.session.document["id"]
-            initial_index = self.templates.findData(initial_key)
-            if initial_index >= 0:
-                self.templates.setCurrentIndex(initial_index)
-            self.templates.currentIndexChanged.connect(self.use_template)
+            self.library_search = QLineEdit()
+            self.library_search.setPlaceholderText("Search characters and templates…")
+            self.library_search.setClearButtonEnabled(True)
+            self.library_search.textChanged.connect(self.refresh_library)
+            self.library_grid = QListWidget()
+            self.library_grid.setViewMode(QListView.IconMode)
+            self.library_grid.setIconSize(QSize(76, 76))
+            self.library_grid.setGridSize(QSize(112, 122))
+            self.library_grid.setResizeMode(QListView.Adjust)
+            self.library_grid.setMovement(QListView.Static)
+            self.library_grid.setWrapping(True)
+            self.library_grid.setToolTip(
+                "Double-click a character to open it. Searching does not "
+                "replace the current character.")
+            self.library_grid.itemDoubleClicked.connect(self.open_library_item)
+            self.library_open = QPushButton("Open selected character")
+            self.library_open.clicked.connect(self.open_selected_library)
+            self.library_count = QLabel()
+            self.library_count.setWordWrap(True)
+            self.library_reload = QPushButton("Refresh library")
+            self.library_reload.clicked.connect(self.reload_library)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
             self.profile_tabs = QTabBar()
@@ -98,10 +118,9 @@ def main(argv=None):
                 index = self.profile_tabs.addTab(PROFILE_LABELS[profile])
                 self.profile_tabs.setTabData(index, profile)
             self.profile_tabs.currentChanged.connect(self.profile_changed)
-            self.add_variant = QPushButton("Dupliquer la tenue")
+            self.add_variant = QPushButton("Duplicate Outfit")
             self.add_variant.clicked.connect(self.duplicate_variant)
-            self.generate_outfits = QPushButton("Créer les 4 tenues de Jeanne…")
-            self.generate_outfits.clicked.connect(self.create_jeanne_outfits)
+
             self.expression = QComboBox()
             self.expression.currentIndexChanged.connect(self.refresh_preview)
             self.add_expression = QPushButton("Ajouter un portrait / une expression…")
@@ -175,6 +194,27 @@ def main(argv=None):
             self.part_grid.currentItemChanged.connect(self.choose_part)
             self.part_status = QLabel()
             self.part_status.setWordWrap(True)
+            self.look_grid = QListWidget()
+            self.look_grid.setViewMode(QListView.IconMode)
+            self.look_grid.setIconSize(QSize(72, 72))
+            self.look_grid.setGridSize(QSize(108, 104))
+            self.look_grid.setResizeMode(QListView.Adjust)
+            self.look_grid.setMovement(QListView.Static)
+            self.look_grid.setWrapping(True)
+            self.look_grid.itemClicked.connect(self.choose_look)
+            self.look_hint = QLabel("Ready-made looks (editable). Select to apply.")
+            self.look_hint.setWordWrap(True)
+            self.face_canvas = QLabel("Face / portrait")
+            self.face_canvas.setAlignment(Qt.AlignCenter)
+            self.face_canvas.setMinimumSize(145, 145)
+            self.face_canvas.setStyleSheet(
+                "background: #243142; border-radius: 5px; color: white;")
+            self.direction_canvases = {}
+            self.overview_title = QLabel("CHARACTER OVERVIEW")
+            self.overview_title.setStyleSheet("font-weight: bold; font-size: 15px;")
+            self.character_name = QLabel()
+            self.character_name.setStyleSheet("font-size: 13px;")
+
             self.split_hair = QPushButton("Split legacy Hair into Front + Rear")
             self.split_hair.setToolTip(
                 "Undoable conversion of the old Hair layer. Original artwork "
