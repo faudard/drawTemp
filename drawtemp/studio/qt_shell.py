@@ -60,8 +60,8 @@ DEFAULT_SHORTCUTS = {
     "palette": "Ctrl+Shift+P", "guide": "Ctrl+Shift+G",
     "global_search": "Ctrl+Shift+F",
     "focus_resources": "Ctrl+1",
-    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+Shift+N",
-    "new_project": "Ctrl+N", "new_template": "Ctrl+Alt+N",
+    "focus_inspector": "Ctrl+2", "focus_workspace": "Ctrl+3", "new": "Ctrl+N",
+    "new_project": "Ctrl+Shift+N", "new_template": "Ctrl+Alt+N",
     "playtest": "F5", "export": "Ctrl+Shift+E",
     "go_project": "Ctrl+Alt+1", "go_maps": "Ctrl+Alt+2",
     "go_construction": "Ctrl+Alt+3", "go_actors": "Ctrl+Alt+4",
@@ -293,7 +293,7 @@ class StudioWindow(QMainWindow):
         guide_layout.addWidget(warning)
         panel.addWidget(self.guide_panel)
         for label, callback in (("Nouveau projet…", self.new_document),
-                                ("Nouveau projet multi-genres…", self.new_project)):
+                                ("Assistant multi-genres…", self.new_project)):
             button = QPushButton(label)
             button.setAccessibleName(label)
             button.clicked.connect(callback)
@@ -451,8 +451,8 @@ class StudioWindow(QMainWindow):
 
     def _build_commands(self):
         self._action("new", "Nouveau projet…", self.new_document)
-        self._action("new_project", "Nouveau projet multi-genres…", self.new_project)
-        self._action("new_template", "Projet depuis un modèle rapide…", self.new_project_template)
+        self._action("new_project", "Assistant multi-genres…", self.new_project)
+        self._action("new_template", "Créer depuis un modèle…", self.new_project_template)
         self._action("open", "Ouvrir un projet…", self.open_document)
         self._action("save", "Enregistrer le projet", self.save_document)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
@@ -544,8 +544,11 @@ class StudioWindow(QMainWindow):
 
     def _build_menus(self):
         file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("new_project", "new", "new_template", "open"):
+        for key in ("new", "open"):
             file_menu.addAction(self.commands[key])
+        advanced_menu = file_menu.addMenu("Création avancée")
+        for key in ("new_project", "new_template"):
+            advanced_menu.addAction(self.commands[key])
         self.recent_menu = file_menu.addMenu("Projets récents")
         self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
         for key in ("save", "save_as"):
@@ -2297,14 +2300,20 @@ class StudioWindow(QMainWindow):
         self.create_project(kind, Path(parent) / name)
 
     def new_document(self):
-        """R22: use the canonical CreatorDialog and shared R1 session."""
-        if self._r49_playtest.active:
+        """Create a blank project using the compact RPG-Maker-style dialog."""
+        if self._r49_playtest.active or not self._confirm_leave():
             return False
-        from drawtemp.studio.r15_creator import CreatorDialog
-        dialog = CreatorDialog(self)
+        from drawtemp.studio.simple_project_dialog import SimpleProjectDialog
+        dialog = SimpleProjectDialog(self, settings=self.settings)
         if dialog.exec() != QDialog.Accepted or dialog.created_content_path is None:
             return False
-        return self.open_path(dialog.created_content_path)
+        try:
+            fresh = AuthoringSession.open(dialog.created_content_path)
+        except (AuthoringError, OSError, ValueError) as exc:
+            self.report_error(exc)
+            return False
+        self._install_document(fresh, dialog.created_content_path)
+        return True
 
     def new_project(self):
         """R28: guided multi-genre flow without a second Studio session."""
