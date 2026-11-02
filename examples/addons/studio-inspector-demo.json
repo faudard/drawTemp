@@ -1,0 +1,50 @@
+{
+  "schema_version": 3,
+  "id": "studio-inspector-demo",
+  "name": "Studio Inspector Demo",
+  "namespace": "org.drawtemp.examples.studioinspector",
+  "version": "1.0.0",
+  "kind": "editor",
+  "sdk": {
+    "min_api": "1.0.0",
+    "max_api": "2.0.0",
+    "required_features": [
+      "addons-foundation.v1"
+    ]
+  },
+  "capabilities": [
+    "studio.dock",
+    "studio.menu"
+  ],
+  "permissions": [
+    "project.read"
+  ],
+  "dependencies": [],
+  "contributions": [
+    {
+      "id": "overview",
+      "point": "studio.dock",
+      "config": {
+        "title": "Project Overview",
+        "fields": [
+          "project.title",
+          "project.campaign_count",
+          "content.mission_count"
+        ]
+      }
+    },
+    {
+      "id": "open-events",
+      "point": "studio.menu",
+      "config": {
+        "label": "Open Event Editor",
+        "command": "go_events"
+      }
+    }
+  ],
+  "rights": {
+    "license": "MIT",
+    "origin": "DrawTemp sample manifest metadata",
+    "redistributable": true
+  }
+}
