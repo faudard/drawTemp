@@ -87,31 +87,29 @@ class StudioHistoryGuiTests(unittest.TestCase):
                     title_entry = label.master.grid_slaves(row=0, column=1)[0]
                     previous_title = title_entry.get()
 
-                    # File actions moved from the old button row into
-                    # the Studio's real "Fichier" menu. Exercise that UI.
-                    file_button = next(
-                        w for w in widgets if isinstance(w, ttk.Menubutton)
-                        and w.cget("text") == "Fichier ▾")
-                    file_menu = root.nametowidget(file_button.cget("menu"))
+                    # File/Edit are native Tk menubar cascades, not buttons.
+                    from tests_standalone.studio_gui_actions import menu_named
+                    file_menu = menu_named(root, "File")
+                    edit_menu = menu_named(root, "Edit")
                     entries = {
                         file_menu.entrycget(i, "label"): i
                         for i in range(file_menu.index("end") + 1)
                         if file_menu.type(i) == "command"
                     }
-                    self.assertIn("Nouvelle mission", entries)
-                    file_menu.invoke(entries["Nouvelle mission"])
+                    self.assertIn("New Mission…", entries)
+                    file_menu.invoke(entries["New Mission…"])
                     root.update()
                     title_entry.delete(0, "end")
                     title_entry.insert(0, "Jeanne — Studio 3.7.21B")
                     buttons["Appliquer configuration"].invoke()
                     root.update()
 
-                    buttons["Annuler"].invoke()  # Undo project, keep new mission.
+                    edit_menu.invoke("Undo")  # Undo project, keep new mission.
                     root.update()
                     self.assertEqual(title_entry.get(), previous_title)
-                    buttons["Annuler"].invoke()  # Undo mission.
+                    edit_menu.invoke("Undo")  # Undo mission.
                     root.update()
-                    buttons["Enregistrer tout"].invoke()
+                    file_menu.invoke("Save Project")
                     root.update()
                     previous_content = json.loads(content_path.read_text(encoding="utf-8"))
                     self.assertNotIn("history_gate",
@@ -119,10 +117,10 @@ class StudioHistoryGuiTests(unittest.TestCase):
                     self.assertEqual(json.loads(project_path.read_text(
                         encoding="utf-8"))["title"], previous_title)
 
-                    buttons["Rétablir"].invoke()
-                    buttons["Rétablir"].invoke()
+                    edit_menu.invoke("Redo")
+                    edit_menu.invoke("Redo")
                     root.update()
-                    buttons["Enregistrer tout"].invoke()
+                    file_menu.invoke("Save Project")
                     root.update()
                     authored = json.loads(content_path.read_text(encoding="utf-8"))
                     self.assertIn("history_gate",
