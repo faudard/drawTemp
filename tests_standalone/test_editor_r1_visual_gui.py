@@ -3,6 +3,7 @@
 Runs in the existing Linux Tk/Xvfb editor CI job. Uses real map pointer
 events, an entity inspector, a contextual gate-event wizard and history UI.
 """
+from tests_standalone.studio_gui_actions import menu_named
 from copy import deepcopy
 import json
 import os
@@ -58,7 +59,7 @@ class VisualR1Acceptance(unittest.TestCase):
                     self.assertEqual(len(sources), 1)
                     source = sources[0]
                     self.assertTrue(all(x in buttons for x in (
-                        'Annuler', 'Rétablir', 'Enregistrer tout',
+                        'Annuler', 'Rétablir',
                         'Créer événement lié à la porte')))
                     canvas = next(w for w in widgets if isinstance(w, tk.Canvas))
                     mission_box = next(w for w in widgets
@@ -187,7 +188,7 @@ class VisualR1Acceptance(unittest.TestCase):
 
                     # Saving exposes the other side of the single transaction:
                     # GameProject must contain its referenced cinematic.
-                    buttons['Enregistrer tout'].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     saved_project = json.loads(
                         store.project_path.read_text(encoding='utf-8'))
@@ -205,7 +206,7 @@ class VisualR1Acceptance(unittest.TestCase):
                     buttons['Annuler'].invoke()
                     root.update()
                     self.assertEqual(content(), snapshots[3])
-                    buttons['Enregistrer tout'].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     project_after_undo = json.loads(store.project_path.read_text(
                         encoding='utf-8'))
@@ -219,7 +220,7 @@ class VisualR1Acceptance(unittest.TestCase):
                         buttons['Rétablir'].invoke()
                         root.update()
                         self.assertEqual(content(), expected)
-                    buttons['Enregistrer tout'].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     self.assertEqual(
                         json.loads(path.read_text(encoding='utf-8')),
