@@ -75,7 +75,7 @@ fails, the Player retains a graphical fallback.
 ```sh
 python -m unittest tests_standalone.test_title_screen_settings -v
 python -m unittest tests_standalone.test_title_menu_cinematic -v
-SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_title_menu_cinematic -v
+SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_title_menu_cinematic tests_standalone.test_title_screen_studio -v
 ```
 
 Manual gate: import a PNG, apply, save, reopen Studio and the Player,
