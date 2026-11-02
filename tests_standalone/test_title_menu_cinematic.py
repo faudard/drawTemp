@@ -27,6 +27,11 @@ class TitleMenuGeometryTests(unittest.TestCase):
                 self.assertLess(layout["campaign"][2], layout["menu_x"])
                 self.assertLessEqual(layout["footer_y"] + layout["footer_height"], height)
 
+    def test_medium_layout_leaves_room_for_labels(self):
+        layout = title_geometry(1158, 852)
+        self.assertGreaterEqual(layout["menu_width"], 440)
+        self.assertLess(layout["campaign"][2], layout["menu_x"])
+
     def test_native_cover_crop_exactly_fills_window(self):
         # Previously the no-Pillow fallback drew a 640x900 image at natural
         # size, leaving broad empty strips around the title illustration.
@@ -162,6 +167,31 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
             finally:
                 app.close()
 
+    def test_default_card_labels_do_not_overlap_arrows(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            try:
+                for size in ("800x580", "1158x852"):
+                    app.root.geometry(size)
+                    app.root.update()
+                    menu = app._title_menu
+                    for action in menu.ACTIONS:
+                        key, label = action[:2]
+                        right = menu._hitboxes[key][2]
+                        for item in menu.canvas.find_withtag("title_card_" + key):
+                            if menu.canvas.type(item) != "text":
+                                continue
+                            if menu.canvas.itemcget(item, "text") != label:
+                                continue
+                            bounds = menu.canvas.bbox(item)
+                            self.assertIsNotNone(bounds)
+                            self.assertLessEqual(bounds[2], right - 25)
+            finally:
+                app.close()
+
     def test_jeanne_art_fills_viewport_without_pillow(self):
         from sporebound.player_app import PlayerApplication
         root = Path(__file__).resolve().parents[1]
@@ -215,6 +245,7 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 if find_spec("PIL") is not None:
                     self.assertIsNotNone(menu._stage_path)
                     self.assertTrue(menu._stage_path.is_file())
+                    self.assertEqual(menu._stage_path.name, "jeanne_menu_stage.jpg")
                 else:
                     self.assertIsNotNone(menu._backdrop_native)
                 for size in ("800x580", "1160x820"):
