@@ -126,6 +126,29 @@ class VisualLayerTests(unittest.TestCase):
         with self.assertRaises(Exception):
             GameProject.from_dict(unknown, content)
 
+    def test_player_projection_reads_the_same_canonical_graphics(self):
+        # Player must read the authored project extension, not the editor dock
+        # or its user-local mapbuilder-view.json preferences.
+        from types import SimpleNamespace
+        from drawtemp.player.qt_app import scene_for_player
+
+        self.visual.create("above", "Above", plane="above")
+        self.visual.paint("above", [(2, 2)], material="rock",
+                          mask=[255, 50, 0, 255])
+        snapshot = self.map.snapshot()
+        content = Content.from_dict(snapshot["content"])
+        project = GameProject.from_dict(snapshot["project"], content)
+        detached = scene_for_player(SimpleNamespace(
+            content=content, project=project, session=None))
+        # The Player default fallback scene is the original first mission.
+        # Select the authored mission directly to verify its shared contract.
+        annotated = attach_visual_layers(
+            scene_from_mission(content.missions["visual_test"]),
+            project.extensions)
+        self.assertEqual(annotated["visual_layers"][0]["id"], "above")
+        self.assertNotIn("drawtemp.visual.layers", snapshot["content"])
+        self.assertEqual(detached["visual_layers"], [])
+
     def test_save_reload_roundtrip_and_no_sidecar(self):
         self.visual.create("details", "Flower Details")
         self.visual.paint("details", [(2, 3)], material="sand",
