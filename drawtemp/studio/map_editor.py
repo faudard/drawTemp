@@ -185,7 +185,9 @@ class MapWindow(QMainWindow):
         root.editHoverLeft.connect(self._hover_left)
         root.buildingPicked.connect(self._on_building_pick)
         self.viewport = viewport
-        self.setCentralWidget(viewport)
+        # Keep the ONE R3/QML viewport; ADS only changes QWidget geometry.
+        from .ads_docking import DockHost
+        self.docking = DockHost(self, viewport, central_name="Map Viewport")
 
         if project is not None:
             from drawtemp.assets.qt_browser import AssetBrowser
@@ -275,6 +277,11 @@ class MapWindow(QMainWindow):
         self.construction.level_changed.connect(self._construction_view)
         self.construction.cutaway_changed.connect(self._construction_view)
         self.statusBar().showMessage("Viewport Qt Quick partagé R3 · édition R5")
+        from PySide6.QtCore import QSettings
+        self._dock_settings = QSettings("DrawTemp", "MapEditor5")
+        self.docking.restore_state(
+            self._dock_settings.value("window/ads_v1" if self.docking.enabled
+                                      else "window/native_v1"))
         self.editor_mode.currentTextChanged.connect(self.set_editor_mode)
         self.refresh_maps()
 
@@ -517,11 +524,10 @@ class MapWindow(QMainWindow):
             self._safe(self.events.delete_selected)
 
     def _dock(self, title, widget, area):
-        dock = QDockWidget(title, self)
-        dock.setObjectName(title)
-        dock.setWidget(widget)
-        self.addDockWidget(area, dock)
-        return dock
+        # Contextual right-side tools stay available as narrow vertical tabs.
+        return self.docking.add(
+            title, "map-" + title, widget, area,
+            auto_hide=area == Qt.RightDockWidgetArea)
 
     def _safe(self, operation):
         try:
@@ -1322,6 +1328,10 @@ class MapWindow(QMainWindow):
                 return
         if self._r52_side_view is not None:
             self._r52_side_view.close()
+        self._dock_settings.setValue(
+            "window/ads_v1" if self.docking.enabled else "window/native_v1",
+            self.docking.save_state())
+        self._dock_settings.sync()
         event.accept()
 
 
