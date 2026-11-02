@@ -572,10 +572,11 @@ class StudioWindow(QMainWindow):
             self.workspaces_menu.addAction(self.commands["go_" + identifier])
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             view_menu.addAction(dock.toggleViewAction())
-        focus_action = view_menu.addAction("Focus Editor (F11)")
+        self._localized_actions = {}
+        focus_action = view_menu.addAction(ui_text("menu.focus_editor"))
         focus_action.setShortcut("F11")
         focus_action.triggered.connect(self.toggle_focus_mode)
-        self._localized_actions = {}
+        self._localized_actions["menu.focus_editor"] = focus_action
         for name in ("editing", "analysis", "compact"):
             action = view_menu.addAction(ui_text("layout." + name))
             self._localized_actions["layout." + name] = action
@@ -802,7 +803,10 @@ class StudioWindow(QMainWindow):
         if self._focus_dock_state is None:
             self._focus_dock_state = self.docking.save_state()
             for dock in panes:
-                dock.toggleView(False)
+                if hasattr(dock, "toggleView"):
+                    dock.toggleView(False)
+                else:
+                    dock.setVisible(False)
             self.statusBar().showMessage("Focus Editor — F11 to restore panels")
         else:
             state = self._focus_dock_state

@@ -205,7 +205,8 @@ class MapWindow(QMainWindow):
         self.tileset_panel.materialSelected.connect(self._select_tileset_material)
         self.tileset_dock = self._dock("Tileset 2D", self.tileset_panel,
                                       Qt.LeftDockWidgetArea)
-        self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
+        if not self.docking.enabled:
+            self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
         self.maps_dock.raise_()
         self.tileset_dock.hide()
 
@@ -246,7 +247,8 @@ class MapWindow(QMainWindow):
                                       Qt.RightDockWidgetArea)
         self._make_event_dock()
         # Both contextual panels share one column; preserve map canvas width.
-        self.tabifyDockWidget(self.layers_dock, self.events_dock)
+        if not self.docking.enabled:
+            self.tabifyDockWidget(self.layers_dock, self.events_dock)
         self.layers_dock.raise_()
         self.events_dock.hide()
         self._make_generator_dock()
@@ -326,7 +328,8 @@ class MapWindow(QMainWindow):
 
     def _connect_viewport_inputs(self, root):
         """The same R5 paint/hover contract exists in both Qt Quick views."""
-        root.setProperty("interactionMode", "edit")
+        root.setProperty("interactionMode",
+                         "select" if self._editing_mode == "Events" else "edit")
         root.setProperty("showLegend", False)
         root.strokeStarted.connect(self.begin_stroke)
         root.strokeMoved.connect(self.extend_stroke)
