@@ -709,7 +709,7 @@ class PlayerApplication(JeanneChapterUiMixin):
         message = (
             "La sauvegarde de l'emplacement %s a été créée avec une autre "
             "version du contenu, du projet ou des règles du jeu. Aucune "
-            "copie de secours compatible n'a été trouvée.\\n\\n"
+            "copie de secours compatible n'a été trouvée.\n\n"
             "Pour reprendre cette progression, rouvrez la version exacte "
             "des fichiers utilisée lors de la sauvegarde. Aucune sauvegarde "
             "n'a été modifiée." % slot
@@ -718,14 +718,14 @@ class PlayerApplication(JeanneChapterUiMixin):
         if free_slot is None:
             self.messagebox.showwarning(
                 "Sauvegarde incompatible",
-                message + "\\n\\nAucun emplacement libre n'est disponible. "
+                message + "\n\nAucun emplacement libre n'est disponible. "
                 "Conservez les anciennes sauvegardes avant toute intervention."
             )
             return True
 
         if self.messagebox.askyesno(
                 "Sauvegarde incompatible",
-                message + "\\n\\nVoulez-vous commencer une NOUVELLE partie "
+                message + "\n\nVoulez-vous commencer une NOUVELLE partie "
                 "dans l'emplacement libre %s ? La sauvegarde de "
                 "l'emplacement %s sera conservée." % (free_slot, slot)):
             self.slot_var.set(str(free_slot))
