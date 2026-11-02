@@ -167,6 +167,10 @@ def create_bridge(controller, renderer):
         def uiText(self, key, language):
             return ui_text(key, language)
 
+        @Slot(str, str, "QVariantMap", result=str)
+        def uiFormat(self, key, language, values):
+            return ui_text(key, language, **values)
+
         @Slot(str)
         def selectLanguage(self, language):
             self.settings_update(self.controller.set_accessibility,
