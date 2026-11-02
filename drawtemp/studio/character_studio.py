@@ -1483,7 +1483,8 @@ def main(argv=None):
                         "Main overview should always be visible")
                     assert not window.timeline_dock.isVisible(), (
                         "Advanced animation tools must start collapsed")
-                    assert window.look_grid.count() >= 5, (
+                    expected_looks = (4 if window._uses_storybook() else 5)
+                    assert window.look_grid.count() >= expected_looks, (
                         "Starting looks must be visible")
                     assert not hasattr(window, "generate_outfits"), (
                         "Jeanne-specific outfit UI must not return")
