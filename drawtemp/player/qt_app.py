@@ -63,6 +63,14 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         data = json.loads(source.read_text(encoding="utf-8"))
         content = Content.from_dict(data, rules=authored_rules_for_document(data))
         project = GameProject.load(manifest, content)
+        # Compiled v3 game.event hooks are ordinary StoryBook effects. Verify
+        # their R24.E receipts before constructing a Player or loading slots;
+        # no external addon registry or executable code is required at runtime.
+        from drawtemp.sdk.event_addons import verify_runtime_event_receipts
+        event_errors = verify_runtime_event_receipts(project)
+        if event_errors:
+            raise ValueError("Native event addon preflight refused Player: " +
+                             "; ".join(event_errors))
         project_manifest = manifest
     else:
         resource = files("sporebound").joinpath("content")
