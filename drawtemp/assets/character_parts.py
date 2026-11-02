@@ -121,26 +121,89 @@ def set_part_style(document, variant_id, slot, *, offset=None,
     # The caller's CharacterSession.edit validates atomically after mutation.
 
 
-def modular_starter():
-    """A transparent authoring base plus an existing four-way body asset.
+# Editable appearance presets. These are starting points, never restrictions
+# on hair, clothing, or other choices. They use the SAME directional parts
+# catalog and canonical recipe as all custom characters.
+PROFILE_PRESETS = ("male", "female", "kid")
+PROFILE_LABELS = {"male": "Male", "female": "Female", "kid": "Kid"}
+PROFILE_PARTS = {
+    "male": {
+        "body": "classic", "head_shape": "wide", "ears": "round",
+        "face": "determined", "eyes": "friendly", "iris": "round",
+        "pupil": "round", "brows": "straight", "nose": "round",
+        "mouth": "neutral", "hair": "tuft", "facial_hair": "moustache",
+        "bottom": "trousers", "top": "vest",
+    },
+    "female": {
+        "body": "slim", "head_shape": "round", "ears": "round",
+        "face": "friendly", "eyes": "big", "iris": "large",
+        "pupil": "round", "brows": "arched", "nose": "tiny",
+        "mouth": "smile", "hair": "braids",
+        "bottom": "kilt", "top": "poncho",
+    },
+    "kid": {
+        "body": "slim", "head_shape": "round", "ears": "round",
+        "skin_spots": "freckles", "face": "friendly", "eyes": "cute",
+        "iris": "large", "pupil": "round", "brows": "soft",
+        "nose": "button", "mouth": "grin", "hair": "tuft",
+        "bottom": "shorts", "top": "hoodie",
+    },
+}
+PROFILE_TINTS = {
+    "male": {"hair": "#c99c73", "top": "#7aa9c5"},
+    "female": {"hair": "#c69a65", "top": "#b9a5e2"},
+    "kid": {"hair": "#e4ba76", "top": "#87cdb5"},
+}
 
-    Do NOT synthesize 'walk' or 'attack' by duplicating idle artwork.
-    Those clips can be authored using the existing R7 animation timeline.
+
+def profile_variant(profile):
+    """Author one ready-to-edit profile using the repository's actual parts.
+
+    This is a static directional appearance. Animation frames other than idle
+    are NOT synthesized from idle PNGs. Missing actions remain diagnosed.
     """
     from .characters import frame
+    _check(profile in PROFILE_PRESETS, "Unknown character profile: " + str(profile))
+    layers = [{
+        "slot": slot,
+        "paths": part_paths(slot, name),
+        "offset": [0, 0],
+        "tint": PROFILE_TINTS[profile].get(slot, "#ffffff"),
+        "opacity": 255,
+    } for slot, _ in PART_CATEGORIES
+      if (name := PROFILE_PARTS[profile].get(slot)) is not None]
+    # A genuine, authored fully-transparent image, rather than painted fakes.
+    idle = {direction: [frame(
+        (PART_ROOT / "accessory" /
+         f"none_{DIRECTION_SUFFIXES[direction]}.png").as_posix())]
+        for direction in DIRECTIONS}
+    return {
+        "name": PROFILE_LABELS[profile],
+        "expressions": {},
+        "clips": {"idle": {"loop": True, "directions": idle}},
+        "layers": layers,
+    }
+
+
+def ensure_profile(document, profile):
+    """Create a missing profile without touching existing outfits or sprites.
+
+    Allows opening an earlier Modular Hero JSON that only had 'default':
+    switching to a profile adds an independent, undoable variation.
+    """
+    _check(document.get("id") == "modular_hero" and
+           document.get("size") == [192, 192],
+           "Profiles are available on the Modular Hero 192x192 template")
+    _check(profile in PROFILE_PRESETS, "Unknown character profile")
+    if profile not in document["variants"]:
+        _check(len(document["variants"]) < 32, "Too many character variants")
+        document["variants"][profile] = profile_variant(profile)
+
+
+def modular_starter():
+    """Three independent appearance profiles, one compatible Recipe v1."""
     return validate({
         "version": 1, "id": "modular_hero", "name": "Modular Hero",
         "size": [192, 192], "pivot": [96, 191],
-        "variants": {"default": {
-            "name": "Default", "expressions": {},
-            "clips": {"idle": {"loop": True, "directions": {
-                direction: [frame(
-                    (PART_ROOT / "accessory" /
-                     f"none_{DIRECTION_SUFFIXES[direction]}.png").as_posix())]
-                for direction in DIRECTIONS}}},
-            "layers": [{
-                "slot": "body", "paths": part_paths("body", "classic"),
-                "offset": [0, 0], "tint": "#ffffff", "opacity": 255,
-            }],
-        }},
+        "variants": {key: profile_variant(key) for key in PROFILE_PRESETS},
     })
