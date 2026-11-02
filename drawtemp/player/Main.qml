@@ -437,8 +437,7 @@ ApplicationWindow {
                             Button {
                                 objectName: "r51-equip-" + modelData.id
                                 Layout.fillWidth: true
-                                text: "Équiper " + modelData.name +
-                                      " (" + modelData.slot + " ×" + modelData.count + ")"
+                                text: root.ui("player.inventory.equip_formatted", {item: modelData.name, slot: modelData.slot, count: modelData.count})
                                 enabled: root.authoredInventoryPayload.can_equip &&
                                          !pausePopup.opened && !optionsPopup.opened
                                 Accessible.name: text
@@ -453,7 +452,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 property string equippedId:
                                     (root.authoredInventoryPayload.equipped || {})[modelData] || ""
-                                text: "Retirer " + modelData + " : " + equippedId
+                                text: root.ui("player.inventory.unequip", {slot: modelData, item: equippedId})
                                 enabled: equippedId.length > 0 &&
                                          !pausePopup.opened && !optionsPopup.opened
                                 Accessible.name: text
@@ -694,8 +693,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                     }
                     Label {
-                        text: "Réplique " + (root.playerData.dialogue_line.index + 1) +
-                              " / " + root.playerData.dialogue_line.count
+                        text: root.ui("player.title.line_progress", {index: root.playerData.dialogue_line.index + 1, count: root.playerData.dialogue_line.count})
                         visible: root.playerData.dialogue_line.count > 1
                         color: root.muted
                         font.pixelSize: 13 * root.textScale
@@ -1049,7 +1047,7 @@ ApplicationWindow {
             }
 
             Label {
-                text: "RPG CLASSIQUE · " + (root.playerData.rpg.id || "") +
+                text: root.ui("player.title.rpg", {name: root.playerData.rpg.id || ""}) +
                       " · Tour " + (root.playerData.rpg.round || 1)
                 color: root.gold
                 font.bold: true
@@ -1095,7 +1093,7 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Action : A attaque · G garde · S compétence · I potion · F fuite" +
+                text: root.ui("player.title.rpg_actions") +
                       ((root.playerData.rpg.combos || []).length ? " · C combo" : "")
                 color: root.muted
                 wrapMode: Text.WordWrap
@@ -1134,7 +1132,7 @@ ApplicationWindow {
                 Accessible.name: root.ui("player.campaign.hero_skill")
             }
             Label {
-                text: "Combo coopératif · plusieurs héros dépensent leurs PM"
+                text: root.ui("player.title.coop_combo")
                 color: root.muted
                 wrapMode: Text.WordWrap
                 visible: r41Action.currentValue === "combo"
@@ -1149,7 +1147,7 @@ ApplicationWindow {
                 Accessible.name: "Combo coopératif exécutable au tour actuel"
             }
             Label {
-                text: "Partenaires en récupération : " +
+                text: root.ui("player.title.party_recover") +
                       (root.playerData.rpg.combo_skip || []).join(", ")
                 color: root.muted
                 visible: (root.playerData.rpg.combo_skip || []).length > 0
@@ -1304,7 +1302,7 @@ ApplicationWindow {
                                 model: root.playerData.route_links || []
                                 Button {
                                     objectName: "r41-route-" + modelData.id
-                                    text: "Aller à " + modelData.title
+                                    text: root.ui("player.title.travel_to", {name: modelData.title})
                                     Layout.fillWidth: true
                                     enabled: !root.inputLocked
                                     Accessible.name: "Voyager vers " + modelData.title
@@ -1369,7 +1367,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 visible: Boolean(root.playerData.rpg_quest.ready)
                                 enabled: !root.inputLocked
-                                Accessible.name: "Récupérer la récompense de la quête"
+                                Accessible.name: root.ui("player.title.quest_reward")
                                 onClicked: player.claimRpgQuest()
                             }
                         }
@@ -1381,7 +1379,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 6
                             Label {
-                                text: "GROUPE RPG · " +
+                                text: root.ui("player.title.rpg_group_label") + " · " +
                                       root.playerData.party.active.length + "/" +
                                       root.playerData.party.capacity + " actifs"
                                 color: root.gold
@@ -1391,7 +1389,7 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: ((root.playerData.r53_hybrid || {}).members || []).length > 0
-                                text: "R53 · Leader et formation"
+                                text: root.ui("player.title.formation")
                                 color: root.gold
                                 Accessible.description: text
                             }
@@ -1415,9 +1413,9 @@ ApplicationWindow {
                                 delegate: Button {
                                     Layout.fillWidth: true
                                     objectName: "r41-recruit-" + modelData.id
-                                    text: "Recruter · " + modelData.name
+                                    text: root.ui("player.title.recruit", {name: modelData.name})
                                     enabled: !root.inputLocked
-                                    Accessible.name: "Recruter " + modelData.name
+                                    Accessible.name: root.ui("player.title.recruit_accessible", {name: modelData.name})
                                     onClicked: player.recruitPartyMember(modelData.id)
                                 }
                             }
@@ -1443,7 +1441,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 6
                             Label {
-                                text: "ÉQUIPEMENT RPG · STOCK DE CAMPAGNE"
+                                text: root.ui("player.title.rpg_gear")
                                 color: root.gold
                                 font.bold: true
                                 Layout.fillWidth: true
@@ -1492,7 +1490,7 @@ ApplicationWindow {
                         }
                         Label {
                             visible: renderer.characterOutfits.length > 1
-                            text: "TENUE · aperçu visuel (non sauvegardé)"
+                            text: root.ui("player.title.outfit")
                             color: root.gold
                             font.bold: true
                             Layout.fillWidth: true
@@ -1529,7 +1527,7 @@ ApplicationWindow {
                             spacing: 8
                             Label {
                                 Layout.fillWidth: true
-                                text: "WORLD ATLAS · " + (root.playerData.world_atlas.region_title || "")
+                                text: root.ui("player.title.atlas") + " · " + (root.playerData.world_atlas.region_title || "")
                                 color: root.gold
                                 font.bold: true
                                 wrapMode: Text.WordWrap
@@ -1537,7 +1535,7 @@ ApplicationWindow {
                             }
                             Label {
                                 Layout.fillWidth: true
-                                text: "Régions visitées : " +
+                                text: root.ui("player.title.visited_regions") +
                                       root.playerData.world_atlas.visited_regions.length + " / " +
                                       root.playerData.world_atlas.region_total +
                                       " · accessibles : " +
@@ -1548,7 +1546,7 @@ ApplicationWindow {
                             }
                             Label {
                                 Layout.fillWidth: true
-                                text: "Biome : " + (root.playerData.world_atlas.biome || "") +
+                                text: root.ui("player.title.biome") + (root.playerData.world_atlas.biome || "") +
                                       " · Vue : " + (root.playerData.world_atlas.projection || "")
                                 color: root.muted
                                 wrapMode: Text.WordWrap
@@ -1578,7 +1576,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 8
                             Label {
-                                text: "MONDE VIVANT · JOUR " +
+                                text: root.ui("player.title.world") + " " +
                                       (root.playerData.living_world ?
                                        root.playerData.living_world.day + 1 : 1)
                                 color: root.gold
@@ -1637,7 +1635,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 8
                             Label {
-                                text: "SURVIE & ARTISANAT · TICK " +
+                                text: root.ui("player.title.survival") + " " +
                                       (survivalHud.stats.tick || 0)
                                 color: root.gold
                                 font.bold: true
@@ -1784,7 +1782,7 @@ ApplicationWindow {
                             spacing: 8
 
                             Label {
-                                text: "FERME & VILLAGE · JOUR " +
+                                text: root.ui("player.title.farming") + " " +
                                       (root.playerData.village.day + 1)
                                 color: root.gold
                                 font.bold: true
@@ -1793,7 +1791,7 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: root.playerData.village.season !== ""
-                                text: "Saison : " + root.playerData.village.season +
+                                text: root.ui("player.title.season") + root.playerData.village.season +
                                       (root.playerData.village.weather ?
                                        " · météo : " + root.playerData.village.weather : "")
                                 color: root.ivory
@@ -1831,7 +1829,7 @@ ApplicationWindow {
                                     }
                                     Button {
                                         objectName: "r62Harvest-" + modelData.id
-                                        text: "Récolter · " + modelData.id
+                                        text: root.ui("player.title.farm_harvest", {name: modelData.id})
                                         Layout.fillWidth: true
                                         enabled: !root.inputLocked && modelData.can_harvest
                                         visible: modelData.crop !== ""
@@ -1955,7 +1953,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 8
                             Label {
-                                text: "SYSTEM DESIGNER · TICK " +
+                                text: root.ui("player.title.economy") + " " +
                                       (root.playerData.systems ?
                                        root.playerData.systems.tick : 0)
                                 color: root.gold
@@ -2378,7 +2376,7 @@ ApplicationWindow {
             Button { text: root.ui("player.battle.move_preview"); onClicked: player.preview("move") }
             Button { text: root.ui("player.battle.attack_preview"); onClicked: player.preview("attack") }
             Button {
-                text: "Utiliser " + (root.playerData.tactical.skill || "attaque")
+                text: root.ui("player.battle.use_skill", {name: root.playerData.tactical.skill || root.ui("player.battle.attack_name")})
                 enabled: !!(root.playerData && root.playerData.tactical &&
                             root.playerData.tactical.focus &&
                             root.playerData.tactical.focus.can_target === true)
@@ -2465,7 +2463,7 @@ ApplicationWindow {
                                               root.playerData.selected[1])
             }
             Label {
-                text: "Niveau de l'unité : " + (
+                text: root.ui("player.battle.unit_level") + (
                     (root.playerData.battle.unit_levels || {})[
                         root.playerData.battle.active] || 0)
                 color: root.muted
@@ -2890,9 +2888,11 @@ ApplicationWindow {
                             id: languageSelect
                             objectName: "r57-player-language"
                             Accessible.name: root.ui("player.language")
-                            model: ["English", "Français", "Pseudo accents", "Pseudo RTL"]
-                            currentIndex: ["en", "fr", "qps-ploc", "qps-plocm"].indexOf(root.playerData.language)
-                            onActivated: player.selectLanguage(["en", "fr", "qps-ploc", "qps-plocm"][currentIndex])
+                            model: player.uiLanguageChoices
+                            textRole: "name"
+                            valueRole: "code"
+                            currentIndex: indexOfValue(root.playerData.language)
+                            onActivated: player.selectLanguage(currentValue)
                         }
                     }
                     Label { text: root.ui("player.text_size"); color: root.ivory }

@@ -163,6 +163,15 @@ def create_bridge(controller, renderer):
                     cinematic["frame"], access)
             return result
 
+        @Property("QVariantList", constant=True)
+        def uiLanguageChoices(self):
+            # Locale choices are declared in JSON, not hard-coded in QML.
+            from drawtemp.localization.ui import language_choices
+            choices = [{"code": code, "name": name} for code, name in language_choices()]
+            choices += [{"code": "qps-ploc", "name": "Pseudo accents"},
+                        {"code": "qps-plocm", "name": "Pseudo RTL"}]
+            return choices
+
         @Slot(str, str, result=str)
         def uiText(self, key, language):
             return ui_text(key, language)

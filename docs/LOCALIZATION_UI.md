@@ -17,7 +17,7 @@ UI files are embedded in the installed Python package via `pyproject.toml` packa
 ## User choice
 
 - Studio: **Tools → Language → English / Français**; the selection is stored in `QSettings("DrawTemp", "Studio5")` and can change without restarting.
-- Player: **Options (F10) → Language**; stored in the Player's `r57-accessibility.json` alongside but independent from saves. A fresh Player UI starts in English even if its historical project source is French.
+- Player: **Options (F10) → Language**; available languages are generated from the JSON manifest, with QA pseudo-locales added separately. Choice is stored in `r57-accessibility.json` independently from game saves. A fresh UI starts in English, even when its historical project content was authored in French.
 - Newly created `GameProject` manifests also default to English source text, but pre-existing French projects remain French-authored and are not silently rewritten.
 
 ## Status
