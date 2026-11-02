@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import re
+from uuid import uuid4
 
 from .game_session import GameSession, digest
 from .model import RuleError, require
@@ -146,6 +147,58 @@ class SessionStore:
                         write_json(self.backup, old_data)
         write_json(self.path, checkpoint)
         return self.path
+
+    def restart(self, session: GameSession):
+        """Start a new generation after explicit confirmation, retaining old bytes.
+
+        This is deliberately distinct from save(): gameplay autosaves must
+        never bypass identity/replay validation. An incompatible or damaged
+        primary/backup can be replaced only through this explicit action, and
+        both files are archived byte-for-byte before the active slot changes.
+        Returns the archive directory, or None for a previously empty slot.
+        """
+        require(isinstance(session, GameSession), "Expected GameSession")
+        record = session.recording()
+        GameSession.from_recording(record, session.content, session.project,
+                                   rules=session.rules)
+        checkpoint = {"kind": "session_checkpoint", "version": self.VERSION,
+                      "sequence": 1, "previous": None, "session": record}
+        checkpoint["digest"] = digest(checkpoint)
+        require(len(json_text(checkpoint).encode("utf-8"))
+                <= self.max_bytes, "Checkpoint exceeds size limit")
+        self._decode(checkpoint, session.content, session.project,
+                     rules=session.rules)
+
+        originals = {}
+        for source in (self.path, self.backup):
+            require(not source.is_symlink(), "Refusing to replace a save symlink")
+            if source.exists():
+                require(source.is_file(), "Save evidence is not a regular file")
+                originals[source] = source.read_bytes()
+
+        archive = None
+        if originals:
+            archive_root = self.path.parent / "archived_sessions"
+            require(not archive_root.is_symlink(), "Archive path is a symlink")
+            archive = archive_root / (self.path.stem + "-" + uuid4().hex)
+            archive.mkdir(parents=True, exist_ok=False)
+            for source, payload in originals.items():
+                archived = archive / source.name
+                write_bytes(archived, payload)
+                require(archived.read_bytes() == payload,
+                        "Archived save verification failed")
+            # If another process changed the slot while archiving, do not
+            # publish a replacement based on an out-of-date snapshot.
+            for source, payload in originals.items():
+                require(source.is_file() and not source.is_symlink()
+                        and source.read_bytes() == payload,
+                        "Save changed during archive")
+
+        # write_json uses fsync + atomic replace. A failed archive never alters
+        # the active slot; old backup bytes stay in their archive even after
+        # normal autosave eventually rotates the active backup.
+        write_json(self.path, checkpoint)
+        return archive
 
     def migrate_v1(self, content, project, *, rules=None, expected_campaign_id=None):
         """Explicit, lossless envelope migration: game_session v1 -> checkpoint v2.
