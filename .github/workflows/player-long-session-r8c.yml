@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - 'sporebound/player_controller.py'
+      - 'sporebound/persistence.py'
       - 'sporebound/player_app.py'
       - 'sporebound/long_session.py'
       - 'sporebound/session_lock.py'
       - 'tests_standalone/test_long_session_player_r8.py'
+      - 'tests_standalone/test_player_new_game_restart.py'
       - 'docs/PLAYER_LONG_SESSION_R8C.md'
       - '.github/workflows/player-long-session-r8c.yml'
   workflow_dispatch:
@@ -35,4 +37,5 @@ jobs:
           python -m unittest discover -s tests_standalone -p test_long_session_r8.py -v
           python -m unittest discover -s tests_standalone -p test_persistence_v2.py -v
           python -m unittest discover -s tests_standalone -p test_player_controller.py -v
+          python -m unittest discover -s tests_standalone -p test_player_new_game_restart.py -v
           python -m unittest discover -s tests_standalone -p test_save_contract.py -v
