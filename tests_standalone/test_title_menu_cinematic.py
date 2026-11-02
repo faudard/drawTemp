@@ -82,7 +82,9 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 app.project.extensions[NAMESPACE] = extension_for({
                     "background": "solid", "accent": "#aabbcc",
                     "panel": "#123456", "show_campaign": False,
-                    "labels": {"new": "Start a Quest"}})
+                    "labels": {"new": "Start a Quest"},
+                    "positions": {"new": [0.05, 0.05],
+                                  "logo": [0.01, 0.03]}})
                 app.title_screen()
                 app.root.update()
                 menu = app._title_menu
@@ -93,6 +95,20 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                          for item in menu.canvas.find_withtag("title_card_new")
                          if menu.canvas.type(item) == "text"]
                 self.assertIn("Start a Quest", texts)
+                from sporebound.title_screen_layout import resolve_boxes
+                expected = resolve_boxes(
+                    menu.canvas.winfo_width(), menu.canvas.winfo_height(),
+                    title_geometry(menu.canvas.winfo_width(),
+                                   menu.canvas.winfo_height()),
+                    app.project.extensions[NAMESPACE]["data"]["positions"])
+                self.assertEqual(menu._hitboxes["new"], expected["new"])
+                self.assertLess(menu._hitboxes["new"][0], 100)
+                app.root.geometry("800x580")
+                app.root.update()
+                self.assertEqual(len(menu._hitboxes), 9)
+                for bounds in menu._hitboxes.values():
+                    self.assertGreaterEqual(bounds[0], 0)
+                    self.assertLessEqual(bounds[2], menu.canvas.winfo_width())
             finally:
                 app.close()
 
