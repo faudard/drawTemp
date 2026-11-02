@@ -18,6 +18,7 @@ from sporebound.studio_transaction import StudioTransactionStore
 from drawtemp.sdk.construction import ConstructionWorkspace
 from drawtemp.studio.r18_context import ContextCommandError, require_context
 from .map_authoring import MapStudio, SURFACE_PALETTE
+from .visual_layer_authoring import VisualLayerStudio
 from .map_event_session import MapEventSession
 
 try:
@@ -46,6 +47,7 @@ class MapWindow(QMainWindow):
                  character_pack=None, character_variant=None):
         super().__init__()
         self.studio = studio or MapStudio.reference()
+        self.visual_layers_editor = VisualLayerStudio(self.studio)
         self.setWindowTitle("DrawTemp 5.0 — Éditeur de cartes R5")
         self.resize(1400, 820)
         self.stroke = []
@@ -134,6 +136,14 @@ class MapWindow(QMainWindow):
         self.material.addItems(list(SURFACE_PALETTE))
         toolbar.addWidget(QLabel(" Surface "))
         toolbar.addWidget(self.material)
+        # Data-only add-on presets reconfigure the existing canonical R5 brush.
+        # No custom stroke executor is registered or called.
+        self.addon_brushes = QComboBox(self)
+        self.addon_brushes.setObjectName("studio-addon-brush-presets")
+        self.addon_brushes.setAccessibleName("Add-on brush presets")
+        self.addon_brushes.addItem("Add-on brushes", None)
+        self.addon_brushes.setVisible(False)
+        toolbar.addWidget(self.addon_brushes)
         self.additive_selection = QCheckBox("Ajouter à la sélection")
         self.additive_selection.setObjectName("r5_selection_additive")
         self.additive_selection.setToolTip("Conserver les cellules déjà sélectionnées, même disjointes")
@@ -205,7 +215,8 @@ class MapWindow(QMainWindow):
         self.tileset_panel.materialSelected.connect(self._select_tileset_material)
         self.tileset_dock = self._dock("Tileset 2D", self.tileset_panel,
                                       Qt.LeftDockWidgetArea)
-        self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
+        if not self.docking.enabled:
+            self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
         self.maps_dock.raise_()
         self.tileset_dock.hide()
 
@@ -246,9 +257,20 @@ class MapWindow(QMainWindow):
                                       Qt.RightDockWidgetArea)
         self._make_event_dock()
         # Both contextual panels share one column; preserve map canvas width.
-        self.tabifyDockWidget(self.layers_dock, self.events_dock)
+        if not self.docking.enabled:
+            self.tabifyDockWidget(self.layers_dock, self.events_dock)
         self.layers_dock.raise_()
         self.events_dock.hide()
+        # Keep Events on the canonical viewport; graphics use an independent dock.
+        self.functional_layers_dock = self.layers_dock
+        from .visual_layers_dock import VisualLayersDock
+        self.visual_layers_panel = VisualLayersDock(
+            self.visual_layers_editor, self.refresh, self)
+        self.visual_layers_dock = self._dock(
+            "Graphic Layers 2D", self.visual_layers_panel, Qt.RightDockWidgetArea)
+        if not self.docking.enabled:
+            self.tabifyDockWidget(self.functional_layers_dock, self.visual_layers_dock)
+        self.visual_layers_dock.hide()
         self._make_generator_dock()
         self._make_prefab_dock()
 
@@ -284,6 +306,7 @@ class MapWindow(QMainWindow):
         self.mode.currentIndexChanged.connect(self._construction_mode)
         self.projection_choice.currentIndexChanged.connect(self.change_projection)
         self.material.currentTextChanged.connect(self.tileset_panel.set_material)
+        self.addon_brushes.currentIndexChanged.connect(self._select_addon_brush)
         self.tileset_panel.set_material(self.material.currentText())
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
@@ -326,7 +349,8 @@ class MapWindow(QMainWindow):
 
     def _connect_viewport_inputs(self, root):
         """The same R5 paint/hover contract exists in both Qt Quick views."""
-        root.setProperty("interactionMode", "edit")
+        root.setProperty("interactionMode",
+                         "select" if self._editing_mode == "Events" else "edit")
         root.setProperty("showLegend", False)
         root.strokeStarted.connect(self.begin_stroke)
         root.strokeMoved.connect(self.extend_stroke)
@@ -377,6 +401,11 @@ class MapWindow(QMainWindow):
             return
         self._connect_viewport_inputs(self.viewport.rootObject())
         self.tileset_dock.setVisible(mode == "top_down")
+        self.visual_layers_dock.setVisible(mode == "top_down")
+        if mode == "top_down" and self._editing_mode == "Editor":
+            self.visual_layers_dock.raise_()
+        else:
+            self.functional_layers_dock.raise_()
         if mode == "top_down":
             self.tileset_dock.raise_()
         else:
@@ -679,6 +708,9 @@ class MapWindow(QMainWindow):
         loaded = MapStudio.open(path)
         self.studio = loaded
         self.layers_panel.set_workspace(loaded.layers)
+        self.events = MapEventSession(loaded)
+        self.visual_layers_editor = VisualLayerStudio(loaded)
+        self.visual_layers_panel.set_editor(self.visual_layers_editor)
         self.selection = []
         self.cancel_transform()
         self.refresh_maps()
@@ -1248,6 +1280,48 @@ class MapWindow(QMainWindow):
             return
         self._safe(lambda: self.studio.set_objective(self.objective.currentText()))
 
+
+    def set_addon_brush_presets(self, presets):
+        """Replace external preset metadata; no mutation or scene reconstruction."""
+        selected = self.addon_brushes.currentData()
+        identity = (selected["addon_id"], selected["id"]) if selected else None
+        self.addon_brushes.blockSignals(True)
+        self.addon_brushes.clear()
+        self.addon_brushes.addItem("Add-on brushes", None)
+        for preset in presets:
+            # The Studio validates point config; a standalone MapWindow must
+            # still refuse unsupported tool payloads.
+            from drawtemp.studio.addon_points import validate_studio_contribution
+            validated = validate_studio_contribution({
+                "id": preset["id"], "point": "studio.tool",
+                "config": {key: preset[key] for key in
+                           ("label", "material", "radius", "shape")},
+            })
+            self.addon_brushes.addItem(validated["config"]["label"], dict(preset))
+        target = 0
+        if identity is not None:
+            for i in range(1, self.addon_brushes.count()):
+                value = self.addon_brushes.itemData(i)
+                if (value["addon_id"], value["id"]) == identity:
+                    target = i
+                    break
+        self.addon_brushes.setCurrentIndex(target)
+        self.addon_brushes.blockSignals(False)
+        self.addon_brushes.setVisible(self.addon_brushes.count() > 1)
+
+    def _select_addon_brush(self, index):
+        preset = self.addon_brushes.itemData(index)
+        if not preset:
+            return
+        self.tools.setCurrentText("Pinceau")
+        self.material.setCurrentText(preset["material"])
+        self.brush_radius.setValue(preset["radius"])
+        index = self.brush_shape.findData(preset["shape"])
+        if index >= 0:
+            self.brush_shape.setCurrentIndex(index)
+        self.statusBar().showMessage(
+            "Add-on brush preset: " + preset["label"] + " (native Map Studio brush)")
+
     def _tool(self):
         return self.tools.currentText()
 
@@ -1259,9 +1333,12 @@ class MapWindow(QMainWindow):
         }.get(self._tool(), "surface:" + self.material.currentText())
 
     def _render_scene(self):
-        """Render exactly the Content mission edited by R5, with R3 projection."""
-        content = Content.from_dict(self.studio.snapshot()["content"])
-        return scene_from_mission(content.missions[self.studio.mission_id])
+        """Same validated R3 scene and optional GameProject graphic layers."""
+        from sporebound.visual_layers import attach_visual_layers
+        snapshot = self.studio.snapshot()
+        content = Content.from_dict(snapshot["content"])
+        scene = scene_from_mission(content.missions[self.studio.mission_id])
+        return attach_visual_layers(scene, snapshot["project"].get("extensions", {}))
 
     def cancel_stroke(self):
         self.stroke = []
@@ -1293,6 +1370,20 @@ class MapWindow(QMainWindow):
             self.dungeon.set_position(x, y)
             self.statusBar().showMessage(
                 "R27 : interaction positionnée en ({}, {}). Valider dans le panneau.".format(x, y))
+            return
+        if (self.renderer.projection_mode == "top_down"
+                and self._editing_mode == "Editor"
+                and self.visual_layers_panel.editing()):
+            layer_id = self.visual_layers_panel.selected_id()
+            if not layer_id:
+                self.statusBar().showMessage("Choose or create a graphic layer first.")
+                return
+            choice = self.visual_layers_panel.mode.currentText()
+            operation = {"Layer Paint": "paint", "Mask Paint": "mask",
+                         "Layer Erase": "erase"}[choice]
+            self._safe(lambda: self.visual_layers_editor.paint(
+                layer_id, cells, material=self.material.currentText(),
+                mask=self.visual_layers_panel.mask_values(), operation=operation))
             return
         tool = self._tool()
         first, last = cells[0], cells[-1]
@@ -1345,6 +1436,7 @@ class MapWindow(QMainWindow):
                 self.pending_generation.revision != self.studio.authoring.revision):
             self.cancel_generation()
         self.layers_panel.set_mission(self.studio.mission_id)
+        self.visual_layers_panel.refresh()
         if hasattr(self, "construction"):
             workspace = self.construction.workspace
             if (workspace.authoring is not self.studio.authoring or

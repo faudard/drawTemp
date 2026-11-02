@@ -63,6 +63,14 @@ def build_controller(*, save_dir=None, reference=False, content_path=None,
         data = json.loads(source.read_text(encoding="utf-8"))
         content = Content.from_dict(data, rules=authored_rules_for_document(data))
         project = GameProject.load(manifest, content)
+        # Compiled v3 game.event hooks are ordinary StoryBook effects. Verify
+        # their R24.E receipts before constructing a Player or loading slots;
+        # no external addon registry or executable code is required at runtime.
+        from drawtemp.sdk.event_addons import verify_runtime_event_receipts
+        event_errors = verify_runtime_event_receipts(project)
+        if event_errors:
+            raise ValueError("Native event addon preflight refused Player: " +
+                             "; ".join(event_errors))
         project_manifest = manifest
     else:
         resource = files("sporebound").joinpath("content")
@@ -100,28 +108,36 @@ def scene_for_player(controller):
     Current Battle and exploration views come exclusively from the R1
     Simulation snapshot. Outside gameplay, show the first authored map.
     """
+    # Canonical project graphic stack is shared with the Studio; no save data.
+    from sporebound.visual_layers import attach_visual_layers
+
+    def decorated(scene):
+        return attach_visual_layers(scene, controller.project.extensions)
+
     if controller.session is not None:
         snapshot = controller.session.snapshot()
         if snapshot.battle is not None:
             mission_id = snapshot.battle["mission_id"]
-            return scene_from_mission(controller.content.missions[mission_id], snapshot)
+            return decorated(scene_from_mission(
+                controller.content.missions[mission_id], snapshot))
         # While the RPG menu overlays the game, retain the SAME R3 world scene.
         # No duplicated viewport, portal cursor or renderer state is introduced.
         if snapshot.mode == "rpg":
             routed = controller.session.rpg_route_state(
                 expected_revision=snapshot.revision)
             if routed is not None:
-                return scene_from_exploration(thaw(routed),
-                                              revision=snapshot.revision)
+                return decorated(scene_from_exploration(
+                    thaw(routed), revision=snapshot.revision))
         if snapshot.exploration is not None and (
                 not snapshot.exploration["completed"] or
                 controller.session.world_atlas_state()["enabled"]):
             world = controller.session.living_world_state(
                 scene=snapshot.exploration["scene_id"])
-            return scene_from_exploration(
+            return decorated(scene_from_exploration(
                 snapshot.exploration, revision=snapshot.revision,
-                living_world=thaw(world) if world is not None else None)
-    return scene_from_mission(next(iter(controller.content.missions.values())))
+                living_world=thaw(world) if world is not None else None))
+    return decorated(scene_from_mission(
+        next(iter(controller.content.missions.values()))))
 
 
 def create_bridge(controller, renderer):

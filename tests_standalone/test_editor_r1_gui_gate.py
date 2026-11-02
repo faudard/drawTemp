@@ -4,6 +4,7 @@ The four edits are entered through the existing JSON authoring pane (no new UI
 or synthetic command stack). Undo/redo/save are exercised through real buttons;
 the Player loads the actual saved Content/GameProject pair.
 """
+from tests_standalone.studio_gui_actions import menu_named
 from copy import deepcopy
 import json
 import os
@@ -151,7 +152,7 @@ class R1StudioGuiGate(unittest.TestCase):
                     self.assertEqual(observed(current(), project),
                                      ((9, 9), 'Éclaireuse R1', 'r1_door_b', 12))
 
-                    buttons['Enregistrer tout'].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     persisted = json.loads(path.read_text(encoding='utf-8'))
                     persisted_project = json.loads(
@@ -215,7 +216,7 @@ class R1StudioGuiGate(unittest.TestCase):
                     self.assertEqual(title_entry.get(), edited_project['title'])
                     buttons = {w.cget('text'): w for w in widgets
                                if isinstance(w, ttk.Button)}
-                    buttons['Enregistrer tout'].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     self.assertEqual(
                         json.loads(path.read_text(encoding='utf-8')), draft)

@@ -13,7 +13,14 @@ from drawtemp.assets.characters import (
     ACTIONS, DIRECTIONS, SLOTS, CharacterError, CharacterSession, diagnostics,
     export_pack, frame, render_frame, starter_library,
 )
-from drawtemp.assets.jeanne_art import build_jeanne_art
+from drawtemp.assets.character_library import (
+    discover_character_library, search_characters,
+)
+from drawtemp.assets.character_looks import available_looks, apply_look
+from drawtemp.assets.storybook_art import (
+    build as build_storybook_assets, storybook_starter,
+    available_storybook_looks, apply_storybook_look,
+)
 from drawtemp.assets.character_parts import (
     PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
     active_part, available_parts, ensure_profile, part_paths,
@@ -28,7 +35,7 @@ def main(argv=None):
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--open", type=Path, help="Open an R7 character recipe JSON")
-    parser.add_argument("--template", default="jeanne",
+    parser.add_argument("--template", default="storybook_hero",
                         help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
     args = parser.parse_args(argv)
@@ -39,7 +46,8 @@ def main(argv=None):
         from PySide6.QtWidgets import (
             QApplication, QCheckBox, QComboBox, QColorDialog, QDockWidget, QFileDialog, QFormLayout,
             QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
-            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QTabBar, QToolButton,
+            QMainWindow, QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter,
+            QTabBar, QToolButton,
             QVBoxLayout, QWidget,
         )
     except ImportError as exc:
@@ -52,7 +60,14 @@ def main(argv=None):
                      str(exc) + ")")
 
     root = args.root.resolve()
+    # The source collection is versioned and deterministically materialized
+    # as genuine four-direction PNG art; never overwrite existing work.
+    try:
+        build_storybook_assets(root)
+    except OSError as exc:
+        parser.error("Unable to prepare original sprite library: " + str(exc))
     templates = starter_library()
+    templates["storybook_hero"] = storybook_starter()
     if not args.open and args.template not in templates:
         parser.error("Unknown character template: " + args.template)
     if args.open:
@@ -73,20 +88,74 @@ def main(argv=None):
             self.timer = QTimer(self)
             self.timer.setSingleShot(True)
             self.timer.timeout.connect(self.advance)
-            self.setWindowTitle("DrawTemp 5.0 — Character & Animation Studio")
-            self.resize(1380, 940)
+            self.setWindowTitle("DrawTemp — Character Studio")
+            self.setStyleSheet("""
+                QMainWindow, QDockWidget { background-color: #eaf0f6; }
+                QWidget { color: #25374b; font-size: 12px; }
+                QLabel { color: #25374b; }
+                QListWidget, QLineEdit, QComboBox, QSpinBox {
+                    background: #ffffff; color: #22374a;
+                    border: 1px solid #bdcbd9; border-radius: 5px;
+                    padding: 4px;
+                }
+                QListWidget::item:selected { background: #cce2ff; color: #173854; }
+                QListWidget::item:hover { background: #eef5ff; }
+                QPushButton, QToolButton {
+                    border: 1px solid #b3c4d4; border-radius: 5px;
+                    background: #f7faff; padding: 5px 9px;
+                }
+                QPushButton:hover, QToolButton:hover {
+                    background: #dcecff; border-color: #7399c6;
+                }
+                QPushButton:pressed, QToolButton:pressed { background: #bcd9ff; }
+                QDockWidget::title {
+                    background: #d9e6f3; color: #213a55;
+                    padding: 7px; font-weight: 600;
+                }
+                QTabBar::tab {
+                    padding: 9px 18px; margin-right: 3px;
+                    border: 1px solid #b6c9db;
+                    background: #e0eaf4; color: #34536a;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                }
+                QTabBar::tab:selected {
+                    background: #ffffff; color: #154f83;
+                    border-bottom: 2px solid #3b86cd;
+                }
+            """)
+            self.resize(1580, 930)
+            self.library_entries = discover_character_library(root, templates)
+            self.saved_revision = self.session.revision
+            self._gallery_cache = {}
             self.build_ui()
             self.refresh()
 
         def build_ui(self):
-            self.templates = QComboBox()
-            for key, doc in templates.items():
-                self.templates.addItem(doc["name"], key)
-            initial_key = self.session.document["id"]
-            initial_index = self.templates.findData(initial_key)
-            if initial_index >= 0:
-                self.templates.setCurrentIndex(initial_index)
-            self.templates.currentIndexChanged.connect(self.use_template)
+            self.library_search = QLineEdit()
+            self.library_search.setPlaceholderText("Search characters and templates…")
+            self.library_search.setClearButtonEnabled(True)
+            self.library_search.textChanged.connect(self.refresh_library)
+            self.library_search.returnPressed.connect(self.open_selected_library)
+            self.library_grid = QListWidget()
+            self.library_grid.setViewMode(QListView.IconMode)
+            self.library_grid.setIconSize(QSize(76, 76))
+            self.library_grid.setGridSize(QSize(112, 122))
+            self.library_grid.setResizeMode(QListView.Adjust)
+            self.library_grid.setMovement(QListView.Static)
+            self.library_grid.setWrapping(True)
+            self.library_grid.setToolTip(
+                "Double-click a character to open it. Searching does not "
+                "replace the current character.")
+            self.library_grid.itemDoubleClicked.connect(self.open_library_item)
+            self.library_grid.verticalScrollBar().valueChanged.connect(
+                self.populate_visible_library_icons)
+            self.library_open = QPushButton("Open selected character")
+            self.library_open.clicked.connect(self.open_selected_library)
+            self.library_count = QLabel()
+            self.library_count.setWordWrap(True)
+            self.library_reload = QPushButton("Refresh library")
+            self.library_reload.clicked.connect(self.reload_library)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
             self.profile_tabs = QTabBar()
@@ -98,10 +167,9 @@ def main(argv=None):
                 index = self.profile_tabs.addTab(PROFILE_LABELS[profile])
                 self.profile_tabs.setTabData(index, profile)
             self.profile_tabs.currentChanged.connect(self.profile_changed)
-            self.add_variant = QPushButton("Dupliquer la tenue")
+            self.add_variant = QPushButton("Duplicate Outfit")
             self.add_variant.clicked.connect(self.duplicate_variant)
-            self.generate_outfits = QPushButton("Créer les 4 tenues de Jeanne…")
-            self.generate_outfits.clicked.connect(self.create_jeanne_outfits)
+
             self.expression = QComboBox()
             self.expression.currentIndexChanged.connect(self.refresh_preview)
             self.add_expression = QPushButton("Ajouter un portrait / une expression…")
@@ -175,6 +243,27 @@ def main(argv=None):
             self.part_grid.currentItemChanged.connect(self.choose_part)
             self.part_status = QLabel()
             self.part_status.setWordWrap(True)
+            self.look_grid = QListWidget()
+            self.look_grid.setViewMode(QListView.IconMode)
+            self.look_grid.setIconSize(QSize(72, 72))
+            self.look_grid.setGridSize(QSize(108, 104))
+            self.look_grid.setResizeMode(QListView.Adjust)
+            self.look_grid.setMovement(QListView.Static)
+            self.look_grid.setWrapping(True)
+            self.look_grid.itemClicked.connect(self.choose_look)
+            self.look_hint = QLabel("Ready-made looks (editable). Select to apply.")
+            self.look_hint.setWordWrap(True)
+            self.face_canvas = QLabel("Face / portrait")
+            self.face_canvas.setAlignment(Qt.AlignCenter)
+            self.face_canvas.setMinimumSize(145, 145)
+            self.face_canvas.setStyleSheet(
+                "background: #243142; border-radius: 5px; color: white;")
+            self.direction_canvases = {}
+            self.overview_title = QLabel("CHARACTER OVERVIEW")
+            self.overview_title.setStyleSheet("font-weight: bold; font-size: 15px;")
+            self.character_name = QLabel()
+            self.character_name.setStyleSheet("font-size: 13px;")
+
             self.split_hair = QPushButton("Split legacy Hair into Front + Rear")
             self.split_hair.setToolTip(
                 "Undoable conversion of the old Hair layer. Original artwork "
@@ -199,54 +288,48 @@ def main(argv=None):
             self.pose_grid.setWrapping(True)
             self.pose_grid.itemClicked.connect(self.choose_pose)
 
-            library_box = QWidget()
-            left = QVBoxLayout(library_box)
-            left.addWidget(QLabel("Modèles existants"))
-            left.addWidget(self.templates)
-            left.addWidget(self.profile_tabs)
-            left.addWidget(QLabel("Tenues / variantes"))
-            left.addWidget(self.variants, 1)
-            left.addWidget(self.add_variant)
-            left.addWidget(self.generate_outfits)
-            left.addWidget(QLabel("Portraits / expressions"))
-            left.addWidget(self.expression)
-            left.addWidget(self.add_expression)
-            left.addWidget(QLabel("Appearance categories"))
-            left.addWidget(self.part_category, 2)
-            left.addWidget(QLabel("Contrôle artistique"))
-            left.addWidget(self.diagnostics_box)
+            # Three permanent editor regions, similar to the reference
+            # character generator. The preview NEVER gets hidden by tools.
+            category_box = QWidget()
+            category_layout = QVBoxLayout(category_box)
+            category_layout.setContentsMargins(8, 8, 8, 8)
+            category_layout.addWidget(QLabel("Appearance"))
+            category_layout.addWidget(self.part_category, 7)
+            category_layout.addWidget(QLabel("Outfits / Variants"))
+            category_layout.addWidget(self.variants, 2)
+            category_layout.addWidget(self.add_variant)
+            category_layout.addWidget(QLabel("Expressions"))
+            category_layout.addWidget(self.expression)
+            category_layout.addWidget(self.add_expression)
+            category_layout.addWidget(self.diagnostics_box, 1)
 
-            editor_box = QWidget()
-            middle = QVBoxLayout(editor_box)
-            toolbar = QHBoxLayout()
-            toolbar.addWidget(QLabel("Orientation"))
-            toolbar.addWidget(self.direction)
-            toolbar.addWidget(QLabel("Action"))
-            toolbar.addWidget(self.action)
-            middle.addLayout(toolbar)
-            middle.addWidget(QLabel("Variation — select an existing part"))
-            middle.addWidget(self.part_grid, 2)
-            middle.addWidget(self.part_status)
-            middle.addWidget(self.split_hair)
-            controls = QHBoxLayout()
-            controls.addWidget(QLabel("Color"))
-            controls.addWidget(self.part_color)
-            controls.addWidget(QLabel("Alpha"))
-            controls.addWidget(self.part_opacity)
-            middle.addLayout(controls)
+            variation_box = QWidget()
+            variation_layout = QVBoxLayout(variation_box)
+            variation_layout.setContentsMargins(8, 8, 8, 8)
+            variation_layout.addWidget(QLabel("Variation"))
+            variation_layout.addWidget(self.part_grid, 5)
+            variation_layout.addWidget(self.part_status)
+            variation_layout.addWidget(self.split_hair)
+            color_controls = QHBoxLayout()
+            color_controls.addWidget(QLabel("Color"))
+            color_controls.addWidget(self.part_color)
+            color_controls.addWidget(QLabel("Alpha"))
+            color_controls.addWidget(self.part_opacity)
+            variation_layout.addLayout(color_controls)
             palette = QHBoxLayout()
             for color in ("#ffffff", "#f8ce9d", "#b87652", "#412a24",
                           "#ffd359", "#71b7e3", "#d875b7", "#8e5ecb",
                           "#44885a", "#2e2e36"):
                 swatch = QToolButton()
                 swatch.setToolTip(color)
-                swatch.setFixedSize(24, 24)
-                swatch.setStyleSheet("background-color: " + color + ";")
+                swatch.setFixedSize(22, 22)
+                swatch.setStyleSheet(
+                    "QToolButton { background-color: " + color +
+                    "; border: 1px solid #73808e; }")
                 swatch.clicked.connect(
                     lambda checked=False, value=color: self.apply_part_style(tint=value))
                 palette.addWidget(swatch)
-            palette.addStretch()
-            middle.addLayout(palette)
+            variation_layout.addLayout(palette)
             offsets = QHBoxLayout()
             offsets.addWidget(QLabel("Offset X"))
             offsets.addWidget(self.part_x)
@@ -256,76 +339,443 @@ def main(argv=None):
                                   ("↓", 0, 1), ("→", 1, 0)):
                 move = QToolButton()
                 move.setText(label)
-                move.setToolTip("Move selected element by one pixel")
+                move.setToolTip("Move selected element 1 px (Ctrl+Z to undo)")
                 move.clicked.connect(
                     lambda checked=False, x=dx, y=dy: self.move_part(x, y))
                 offsets.addWidget(move)
-            middle.addLayout(offsets)
-            middle.addWidget(QLabel("Preview"))
-            self.canvas.setMinimumSize(280, 260)
-            middle.addWidget(self.canvas, 4)
-            middle.addWidget(self.status)
-            middle.addWidget(self.onion)
-            middle.addWidget(self.play)
-            middle.addWidget(QLabel("Existing poses — click to inspect"))
-            middle.addWidget(self.pose_grid, 2)
+            variation_layout.addLayout(offsets)
+            variation_layout.addWidget(QLabel("Ready-made looks"))
+            variation_layout.addWidget(self.look_grid, 4)
+            variation_layout.addWidget(self.look_hint)
 
-            edit_box = QWidget()
-            right = QVBoxLayout(edit_box)
-            right.addWidget(QLabel("Timeline — sélectionnez une image"))
-            right.addWidget(self.timeline, 1)
-            right.addWidget(self.make_clip)
-            buttons = QHBoxLayout()
-            buttons.addWidget(self.add_key)
-            buttons.addWidget(self.remove_key)
-            right.addLayout(buttons)
+            overview_box = QWidget()
+            overview = QVBoxLayout(overview_box)
+            overview.setContentsMargins(10, 8, 10, 8)
+            overview.addWidget(self.overview_title)
+            overview.addWidget(self.character_name)
+            overview.addWidget(self.profile_tabs)
+            scene = QHBoxLayout()
+            scene.addWidget(self.canvas, 3)
+            face_col = QVBoxLayout()
+            face_col.addWidget(QLabel("Face / Portrait"))
+            face_col.addWidget(self.face_canvas, 1)
+            face_col.addWidget(QLabel("View / Action"))
+            face_col.addWidget(self.direction)
+            face_col.addWidget(self.action)
+            face_col.addWidget(self.play)
+            face_col.addWidget(self.onion)
+            face_col.addStretch()
+            scene.addLayout(face_col, 1)
+            overview.addLayout(scene, 4)
+
+            overview.addWidget(QLabel("FOUR DIRECTIONS · live overview"))
+            directions_row = QHBoxLayout()
+            for direction, label in (("south", "Front"), ("north", "Back"),
+                                     ("east", "Right"), ("west", "Left")):
+                direction_box = QVBoxLayout()
+                thumb = QLabel()
+                thumb.setAlignment(Qt.AlignCenter)
+                thumb.setMinimumHeight(96)
+                thumb.setStyleSheet(
+                    "background: #293648; border-radius: 5px; color: white;")
+                direction_box.addWidget(thumb, 1)
+                text_label = QLabel(label)
+                text_label.setAlignment(Qt.AlignCenter)
+                direction_box.addWidget(text_label)
+                directions_row.addLayout(direction_box, 1)
+                self.direction_canvases[direction] = thumb
+            overview.addLayout(directions_row, 2)
+            overview.addWidget(QLabel("Existing poses / animations"))
+            overview.addWidget(self.pose_grid, 2)
+            overview.addWidget(self.status)
+
+            center = QSplitter(Qt.Horizontal)
+            center.addWidget(category_box)
+            center.addWidget(variation_box)
+            center.addWidget(overview_box)
+            center.setStretchFactor(0, 1)
+            center.setStretchFactor(1, 2)
+            center.setStretchFactor(2, 3)
+            center.setSizes([220, 385, 650])
+            center.setChildrenCollapsible(False)
+            self.setCentralWidget(center)
+
+            # Searchable scalable library (replaces the original combobox).
+            library_panel = QWidget()
+            library_layout = QVBoxLayout(library_panel)
+            library_layout.addWidget(self.library_search)
+            library_layout.addWidget(self.library_grid, 1)
+            library_layout.addWidget(self.library_count)
+            library_layout.addWidget(self.library_open)
+            library_layout.addWidget(self.library_reload)
+            self.library_dock = QDockWidget("Character Library", self)
+            self.library_dock.setObjectName("CharacterLibraryDock")
+            self.library_dock.setWidget(library_panel)
+            self.library_dock.setAllowedAreas(
+                Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+            self.addDockWidget(Qt.LeftDockWidgetArea, self.library_dock)
+
+            # Timeline and source-PNG tools exist for advanced authoring only.
+            # They must never replace or obscure the character overview.
+            tools_panel = QWidget()
+            tools_layout = QVBoxLayout(tools_panel)
+            tools_layout.addWidget(QLabel("Timeline — select a keyframe"))
+            tools_layout.addWidget(self.timeline, 1)
+            tools_layout.addWidget(self.make_clip)
+            key_buttons = QHBoxLayout()
+            key_buttons.addWidget(self.add_key)
+            key_buttons.addWidget(self.remove_key)
+            tools_layout.addLayout(key_buttons)
             form = QFormLayout()
-            form.addRow("Durée", self.duration)
-            form.addRow("Offset X", self.offset_x)
-            form.addRow("Offset Y", self.offset_y)
+            form.addRow("Duration", self.duration)
+            form.addRow("Frame Offset X", self.offset_x)
+            form.addRow("Frame Offset Y", self.offset_y)
             source_row = QWidget()
             source_layout = QHBoxLayout(source_row)
             source_layout.setContentsMargins(0, 0, 0, 0)
             source_layout.addWidget(self.source)
             source_layout.addWidget(self.browse_source)
-            form.addRow("Fichier source", source_row)
-            form.addRow("Région atlas", self.region)
-            right.addLayout(form)
-            right.addWidget(self.add_layer)
-            right.addStretch()
+            form.addRow("PNG source", source_row)
+            form.addRow("Atlas region", self.region)
+            tools_layout.addLayout(form)
+            tools_layout.addWidget(self.add_layer)
+            self.timeline_dock = QDockWidget("Animation Tools", self)
+            self.timeline_dock.setObjectName("CharacterAnimationDock")
+            self.timeline_dock.setWidget(tools_panel)
+            self.addDockWidget(Qt.BottomDockWidgetArea, self.timeline_dock)
+            self.timeline_dock.hide()
 
-            splitter = QSplitter(Qt.Horizontal)
-            splitter.addWidget(library_box)
-            splitter.addWidget(editor_box)
-            splitter.addWidget(edit_box)
-            splitter.setSizes([250, 770, 310])
-            self.part_category.setCurrentRow(0)
-            self.setCentralWidget(splitter)
-
-            file_menu = self.menuBar().addMenu("&Fichier")
-            def command(text, shortcut, handler):
+            file_menu = self.menuBar().addMenu("&File")
+            def command(text, shortcut, handler, menu=file_menu):
                 action = QAction(text, self)
                 if shortcut:
                     action.setShortcut(QKeySequence(shortcut))
                 action.triggered.connect(handler)
-                file_menu.addAction(action)
+                menu.addAction(action)
                 return action
-            command("Ouvrir une fiche…", "Ctrl+O", self.open_recipe)
-            command("Enregistrer", "Ctrl+S", self.save_recipe)
-            command("Exporter un atlas…", "Ctrl+E", self.export)
-            edit_menu = self.menuBar().addMenu("&Édition")
-            for label, shortcut, handler in (
-                ("Annuler", "Ctrl+Z", self.undo), ("Rétablir", "Ctrl+Shift+Z", self.redo)):
-                action = QAction(label, self)
-                action.setShortcut(QKeySequence(shortcut))
-                action.triggered.connect(handler)
-                edit_menu.addAction(action)
-            self.statusBar().showMessage("R7 | Le rendu Player Qt sera raccordé par R3/R12.")
+            command("&New Character…", "Ctrl+N", self.new_character)
+            command("&Open Character…", "Ctrl+O", self.open_recipe)
+            command("&Save", "Ctrl+S", self.save_recipe)
+            command("&Export Atlas…", "Ctrl+E", self.export)
+            edit_menu = self.menuBar().addMenu("&Edit")
+            command("&Undo", "Ctrl+Z", self.undo, edit_menu)
+            command("&Redo", "Ctrl+Shift+Z", self.redo, edit_menu)
+            view_menu = self.menuBar().addMenu("&View")
+            view_menu.addAction(self.library_dock.toggleViewAction())
+            view_menu.addAction(self.timeline_dock.toggleViewAction())
+            command("Search Character Library", "Ctrl+L",
+                    lambda: self.library_search.setFocus(), view_menu)
+            self.part_category.setCurrentRow(0)
+            self.refresh_library()
+            self.statusBar().showMessage(
+                "Character Studio | Select parts, edit colors and offsets. "
+                "Preview and four directions remain visible.")
+
+        def _character_icon(self, document, variant=None, action="idle"):
+            """Only genuine rendered sprites are used for gallery thumbnails."""
+            try:
+                variant = variant or next(iter(document["variants"]))
+                clips = document["variants"][variant]["clips"]
+                if action not in clips:
+                    action = next(iter(clips))
+                directions = clips[action]["directions"]
+                direction = next((key for key in ("south", "east", "north", "west")
+                                  if directions.get(key)), None)
+                if direction is None:
+                    return QIcon()
+                source = render_frame(document, variant, action, direction, 0, root)
+                memory = io.BytesIO()
+                source.save(memory, format="PNG")
+                image = QPixmap()
+                image.loadFromData(memory.getvalue(), "PNG")
+                return QIcon(image)
+            except (ValueError, OSError, KeyError, StopIteration):
+                return QIcon()
+
+        def refresh_library(self, *_):
+            """Filter by name/ID without changing what the user is editing."""
+            previous = self.library_grid.currentItem()
+            key_before = previous.data(Qt.UserRole) if previous else None
+            results = search_characters(
+                self.library_entries, self.library_search.text())
+            visible_keys = {key for key, _ in results}
+            if key_before not in visible_keys:
+                current_id = self.session.document["id"]
+                candidate = "starter:" + current_id
+                key_before = candidate if candidate in visible_keys else None
+            self.library_grid.blockSignals(True)
+            self.library_grid.clear()
+            for key, label in results:
+                # Render only thumbnails in the viewport. A 1000-character
+                # library must not decode all PNGs before the editor opens.
+                icon = self._gallery_cache.get(("library", key), QIcon())
+                item = QListWidgetItem(icon, label)
+                item.setData(Qt.UserRole, key)
+                item.setToolTip(
+                    label + "\n" + key + "\nDouble-click to open")
+                self.library_grid.addItem(item)
+                if key == key_before:
+                    self.library_grid.setCurrentItem(item)
+            if self.library_grid.currentRow() < 0 and self.library_grid.count():
+                self.library_grid.setCurrentRow(0)
+            self.library_grid.blockSignals(False)
+            self.library_count.setText(
+                f"{len(results)} of {len(self.library_entries)} characters"
+                " | Double-click to open")
+            self.library_open.setEnabled(bool(results))
+            QTimer.singleShot(0, self.populate_visible_library_icons)
+
+        def populate_visible_library_icons(self, *_):
+            grid = self.library_grid
+            viewport = grid.viewport().rect()
+            for index in range(grid.count()):
+                item = grid.item(index)
+                key = item.data(Qt.UserRole)
+                cache_key = ("library", key)
+                if cache_key in self._gallery_cache:
+                    continue
+                if not grid.visualItemRect(item).intersects(viewport):
+                    continue
+                if key not in self.library_entries:
+                    continue
+                icon = self._character_icon(self.library_entries[key][1])
+                self._gallery_cache[cache_key] = icon
+                item.setIcon(icon)
+
+        def reload_library(self):
+            self.library_entries = discover_character_library(root, templates)
+            self._gallery_cache.clear()
+            self.refresh_library()
+
+        def _confirm_replace(self):
+            if self.session.revision == self.saved_revision:
+                return True
+            return QMessageBox.question(
+                self, "Unsaved changes",
+                "Open another character and discard your unsaved changes?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            ) == QMessageBox.Yes
+
+        def open_selected_library(self):
+            item = self.library_grid.currentItem()
+            if item is not None:
+                self.open_library_item(item)
+
+        def open_library_item(self, item):
+            key = item.data(Qt.UserRole)
+            record = self.library_entries.get(key)
+            if record is None or not self._confirm_replace():
+                return
+            try:
+                self.stop()
+                self.session = CharacterSession(record[1])
+                self.path = (root / key[len("file:"):]
+                             if key.startswith("file:") else None)
+                self.art_root = root
+                self.saved_revision = self.session.revision
+                self.refresh()
+                self.statusBar().showMessage("Opened " + record[0])
+            except (KeyError, CharacterError, ValueError) as exc:
+                QMessageBox.warning(self, "Character library", str(exc))
+
+        def new_character(self):
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            if not self._confirm_replace():
+                return
+            name, ok = QInputDialog.getText(
+                self, "New Character", "Character name", text="New Hero")
+            if not ok or not name.strip():
+                return
+            identifier = re.sub(r"[^a-z0-9]+", "_", name.strip().casefold())
+            identifier = identifier.strip("_")[:60]
+            if not identifier or not identifier[0].isalpha():
+                QMessageBox.warning(
+                    self, "Character name", "Name needs at least one Latin letter.")
+                return
+            doc = templates["storybook_hero"].copy()
+            doc["id"] = identifier
+            doc["name"] = name.strip()
+            self.stop()
+            self.session = CharacterSession(doc)
+            self.path = None
+            self.art_root = root
+            self.saved_revision = 0
+            self.refresh()
+
+        def _uses_storybook(self):
+            doc = self.session.document
+            if doc["id"] == "storybook_hero":
+                return True
+            return any(
+                "storybook_v1_" in path
+                for variant in doc["variants"].values()
+                for layer in variant["layers"]
+                for path in layer["paths"].values()
+            )
+
+        def _look_icon(self, look):
+            storybook = self._uses_storybook()
+            key = ("look", storybook, look["id"])
+            if key not in self._gallery_cache:
+                from copy import deepcopy
+                doc = deepcopy(templates[
+                    "storybook_hero" if storybook else "modular_hero"])
+                try:
+                    if storybook:
+                        apply_storybook_look(doc, look["profile"], look["id"])
+                    else:
+                        apply_look(doc, look["profile"], look["id"], root)
+                    self._gallery_cache[key] = self._character_icon(
+                        doc, look["profile"])
+                except (CharacterError, ValueError, OSError):
+                    self._gallery_cache[key] = QIcon()
+            return self._gallery_cache[key]
+
+        def refresh_looks(self):
+            self.look_grid.blockSignals(True)
+            self.look_grid.clear()
+            doc = self.session.document
+            enabled = doc["size"] == [192, 192] and self.art_root == root
+            self.look_grid.setEnabled(enabled)
+            profile = self.active_variant()
+            if enabled:
+                catalog = (available_storybook_looks if self._uses_storybook()
+                           else available_looks)
+                looks = catalog(
+                    profile if profile in PROFILE_PRESETS else None)
+                for look in looks:
+                    icon = self._look_icon(look)
+                    item = QListWidgetItem(icon, look["name"])
+                    item.setData(Qt.UserRole, look["id"])
+                    item.setToolTip(
+                        look["profile"].title() + " / " + look["name"] +
+                        "\nUses existing sprites with editable defaults")
+                    self.look_grid.addItem(item)
+                self.look_hint.setText(
+                    f"{len(looks)} original illustrated looks. "
+                    "Select to apply; Ctrl+Z undoes the change."
+                    if self._uses_storybook() else
+                    f"{len(looks)} curated looks using existing parts. "
+                    "Select to apply; Ctrl+Z undoes the change.")
+            else:
+                self.look_hint.setText(
+                    "Looks require a 192×192 Modular Hero. "
+                    "Other character formats remain editable in Animation Tools.")
+            self.look_grid.blockSignals(False)
+
+        def choose_look(self, item):
+            look_id = item.data(Qt.UserRole)
+            if not look_id or not self.look_grid.isEnabled():
+                return
+            look_label = item.text()
+            variant = self.active_variant()
+            try:
+                if self._uses_storybook():
+                    self.session.edit(lambda document:
+                                      apply_storybook_look(document, variant, look_id))
+                else:
+                    self.session.edit(
+                        lambda document: apply_look(document, variant, look_id, root))
+                self.refresh()
+                self.statusBar().showMessage(
+                    "Applied " + look_label + " to " + variant +
+                    "; adjust parts and offsets freely.")
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+
+        def _to_pixmap(self, image, size):
+            # RPG-style alpha checkerboard, drawn underneath actual sprites.
+            from PIL import ImageDraw
+            width, height = image.size
+            checker = Image.new("RGBA", (width, height), "#ffffff")
+            brush = ImageDraw.Draw(checker)
+            tile = max(8, min(width, height) // 12)
+            for row in range(0, height, tile):
+                for column in range(0, width, tile):
+                    if (row // tile + column // tile) % 2:
+                        brush.rectangle(
+                            (column, row, min(width - 1, column + tile - 1),
+                             min(height - 1, row + tile - 1)),
+                            fill="#dde3e8")
+            checker.alpha_composite(image.convert("RGBA"))
+            memory = io.BytesIO()
+            checker.save(memory, format="PNG")
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(memory.getvalue(), "PNG"):
+                return QPixmap()
+            return pixmap.scaled(size, size, Qt.KeepAspectRatio,
+                                 Qt.FastTransformation)
+
+        def refresh_overview(self):
+            """Always show four authored facings plus a face crop/portrait."""
+            doc = self.session.document
+            variant = self.active_variant()
+            action = self.action.currentData()
+            self.character_name.setText(
+                doc["name"] + "  ·  " +
+                doc["variants"][variant]["name"] + "  ·  " +
+                str(doc["size"][0]) + "×" + str(doc["size"][1]))
+            for direction, thumb in self.direction_canvases.items():
+                thumb.clear()
+                frames = doc["variants"][variant]["clips"].get(
+                    action, {}).get("directions", {}).get(direction, ())
+                clip_action = action
+                if not frames:
+                    # Keep the character visible, but never mislabel idle art
+                    # as an authored combat/animation frame.
+                    clip_action = "idle"
+                    frames = doc["variants"][variant]["clips"].get(
+                        "idle", {}).get("directions", {}).get(direction, ())
+                if not frames:
+                    thumb.setText("No art")
+                    continue
+                thumb.setToolTip(
+                    ("Idle reference only — " + action + " is not authored")
+                    if clip_action != action else action.capitalize())
+                try:
+                    frame_no = (min(self.frame_index, len(frames) - 1)
+                                if clip_action == action else 0)
+                    image = render_frame(
+                        doc, variant, clip_action, direction,
+                        frame_no, self.art_root)
+                    thumb.setPixmap(self._to_pixmap(image, 126))
+                except (ValueError, OSError, KeyError) as exc:
+                    thumb.setText("Missing asset")
+            # Face panel: existing authored expression takes precedence.
+            self.face_canvas.clear()
+            expr = self.expression.currentData()
+            portrait = doc["variants"][variant]["expressions"].get(expr, "")
+            if portrait:
+                pixmap = QPixmap(str(self.art_root / portrait))
+                if not pixmap.isNull():
+                    self.face_canvas.setPixmap(
+                        pixmap.scaled(158, 158, Qt.KeepAspectRatio,
+                                      Qt.SmoothTransformation))
+                    return
+            for action_name in ("idle", action):
+                frames = doc["variants"][variant]["clips"].get(
+                    action_name, {}).get("directions", {}).get("south", ())
+                if not frames:
+                    continue
+                try:
+                    image = render_frame(
+                        doc, variant, action_name, "south", 0, self.art_root)
+                    width, height = image.size
+                    head = image.crop((0, 0, width, max(1, round(height * 0.68))))
+                    self.face_canvas.setPixmap(self._to_pixmap(head, 154))
+                    self.face_canvas.setToolTip(
+                        "Crop of the actual sprite (not a separate authored portrait)")
+                    return
+                except (OSError, ValueError, KeyError):
+                    continue
+            self.face_canvas.setText("No face art")
 
         def sync_profile_tabs(self):
             """Tabs are only for Modular Hero, not arbitrary RPG actors."""
             doc = self.session.document
-            visible = doc["id"] == "modular_hero" and doc["size"] == [192, 192]
+            visible = (doc["size"] == [192, 192]
+                       and bool(set(PROFILE_PRESETS) & set(doc["variants"])))
             self.profile_tabs.setVisible(visible)
             self.profile_tabs.blockSignals(True)
             active = self.active_variant() if visible else None
@@ -338,7 +788,7 @@ def main(argv=None):
             if index < 0:
                 return
             doc = self.session.document
-            if doc["id"] != "modular_hero" or doc["size"] != [192, 192]:
+            if doc["size"] != [192, 192]:
                 return
             profile = self.profile_tabs.tabData(index)
             if profile not in PROFILE_PRESETS:
@@ -415,7 +865,8 @@ def main(argv=None):
                         except (OSError, ValueError):
                             pass
                     item = QListWidgetItem(icon,
-                                           name.replace("_", " ").title())
+                                           name.removeprefix("storybook_v1_")
+                                               .replace("_", " ").title())
                     item.setData(Qt.UserRole, name)
                     self.part_grid.addItem(item)
                 selected_name = None
@@ -589,16 +1040,20 @@ def main(argv=None):
             self.refresh_expressions()
             self.refresh_timeline()
             self.refresh_parts()
+            self.refresh_looks()
             self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
+            warnings = len(problems) - errors
             self.diagnostics_box.setText(
-                f"{errors} erreur(s), {len(problems)-errors} avertissement(s)\n" +
-                "\n".join(f"• {p['code']} {p.get('variant','')} {p.get('action','')}"
-                          for p in problems[:7]))
+                f"Art QA · {errors} incomplete / {warnings} warnings")
+            self.diagnostics_box.setToolTip(
+                "\n".join(f"{p['code']} {p.get('variant', '')} "
+                          f"{p.get('action', '')} {p.get('direction', '')}"
+                          for p in problems[:25]))
             self.setWindowTitle(
-                "DrawTemp 5.0 — " + document["name"] +
-                ("  ●" if self.path is None else " — " + self.path.name))
+                "DrawTemp — Character Studio — " + document["name"] +
+                ("" if self.path is None else " — " + self.path.name))
 
         def refresh_expressions(self):
             active = self.expression.currentData()
@@ -620,6 +1075,7 @@ def main(argv=None):
             self.refresh_expressions()
             self.refresh_timeline()
             self.refresh_parts()
+            self.refresh_looks()
             self.refresh_pose_grid()
 
         def reset_frame(self, *_):
@@ -661,12 +1117,14 @@ def main(argv=None):
             self.refresh_preview()
 
         def refresh_preview(self, *_):
+            # Overview persists even when a single pose or portrait is absent.
+            self.refresh_overview()
             self.canvas.clear()
             expression = self.expression.currentData()
             if expression:
                 path = self.session.document["variants"][self.active_variant()]\
                        ["expressions"][expression]
-                picture = QPixmap(str(root / path))
+                picture = QPixmap(str(self.art_root / path))
                 if not picture.isNull():
                     self.canvas.setPixmap(picture.scaled(
                         360, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -675,8 +1133,23 @@ def main(argv=None):
                     self.status.setText("Portrait introuvable : " + path)
                 return
             if not self.active_clip():
-                self.canvas.setText("Action non dessinée\nAjoutez des poses à la fiche.")
-                self.status.setText("R7 : pose manquante")
+                doc = self.session.document
+                variant = self.active_variant()
+                direction = self.direction.currentData()
+                fallback = doc["variants"][variant]["clips"].get(
+                    "idle", {}).get("directions", {}).get(direction, ())
+                if fallback:
+                    try:
+                        idle_image = render_frame(
+                            doc, variant, "idle", direction, 0, self.art_root)
+                        self.canvas.setPixmap(self._to_pixmap(idle_image, 360))
+                    except (OSError, KeyError, ValueError):
+                        self.canvas.setText("Missing sprite")
+                else:
+                    self.canvas.setText("No sprite for this view")
+                self.status.setText(
+                    self.action.currentData() +
+                    " has no authored animation; idle reference only")
                 return
             try:
                 image = render_frame(
@@ -691,12 +1164,7 @@ def main(argv=None):
                     ghost.putalpha(ghost.getchannel("A").point(lambda a: a // 4))
                     ghost.alpha_composite(image)
                     image = ghost
-                memory = io.BytesIO()
-                image.save(memory, format="PNG")
-                pixmap = QPixmap()
-                pixmap.loadFromData(memory.getvalue(), "PNG")
-                self.canvas.setPixmap(pixmap.scaled(
-                    300, 300, Qt.KeepAspectRatio, Qt.FastTransformation))
+                self.canvas.setPixmap(self._to_pixmap(image, 360))
                 self.status.setText(
                     f"{self.active_variant()} / {self.action.currentData()}"
                     f" / {self.direction.currentData()} / image {self.frame_index+1}")
@@ -863,23 +1331,23 @@ def main(argv=None):
             from PySide6.QtWidgets import QInputDialog
             from copy import deepcopy
             name, ok = QInputDialog.getText(
-                self, "Nouvelle tenue", "Identifiant (ex. peasant ou armor)")
+                self, "Duplicate Outfit", "New outfit identifier (e.g. armor)")
             name = name.strip()
             if not ok or not name:
                 return
             try:
                 def transform(doc):
                     if name in doc["variants"]:
-                        raise CharacterError("Cette tenue existe déjà")
+                        raise CharacterError("An outfit with this ID already exists")
                     doc["variants"][name] = deepcopy(doc["variants"][self.active_variant()])
                     doc["variants"][name]["name"] = name.capitalize()
                 self.session.edit(transform)
                 self.refresh()
                 self.variants.setCurrentRow(list(self.session.document["variants"]).index(name))
                 self.statusBar().showMessage(
-                    "Tenue clonée : remplacez ses sprites/calques pour créer un art distinct.")
+                    "Outfit copied. Edit its appearance to create distinct art.")
             except CharacterError as exc:
-                QMessageBox.warning(self, "Variante", str(exc))
+                QMessageBox.warning(self, "Outfit", str(exc))
 
         def configure_layer(self):
             from PySide6.QtWidgets import QInputDialog
@@ -921,18 +1389,11 @@ def main(argv=None):
             except CharacterError as exc:
                 QMessageBox.warning(self, "Calque", str(exc))
 
-        def use_template(self, *_):
-            key = self.templates.currentData()
-            if key in templates:
-                self.stop()
-                self.session = CharacterSession(templates[key])
-                self.path = None
-                self.art_root = root
-                self.refresh()
-
         def open_recipe(self):
+            if not self._confirm_replace():
+                return
             path, _ = QFileDialog.getOpenFileName(
-                self, "Ouvrir un personnage R7", str(root), "JSON (*.json)")
+                self, "Open Character", str(root), "Character JSON (*.json)")
             if path:
                 try:
                     self.session = CharacterSession(
@@ -942,26 +1403,39 @@ def main(argv=None):
                         self.path.parent if
                         (self.path.parent / "sources/jeanne_atlas.png").is_file()
                         else root)
+                    self.saved_revision = self.session.revision
                     self.refresh()
                 except (OSError, ValueError, KeyError) as exc:
-                    QMessageBox.critical(self, "Fichier invalide", str(exc))
+                    QMessageBox.critical(self, "Invalid Character File", str(exc))
 
         def save_recipe(self):
-            if self.path is None:
+            destination = self.path
+            if destination is None:
+                library_dir = root / "characters"
+                try:
+                    library_dir.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    QMessageBox.critical(self, "Character library", str(exc))
+                    return
                 path, _ = QFileDialog.getSaveFileName(
-                    self, "Enregistrer la fiche", str(root / "jeanne.character.json"),
-                    "JSON (*.json)")
+                    self, "Save Character",
+                    str(library_dir /
+                        (self.session.document["id"] + ".character.json")),
+                    "Character JSON (*.json)")
                 if not path:
                     return
-                self.path = Path(path)
+                destination = Path(path)
             try:
-                self.path.write_text(json.dumps(
+                destination.write_text(json.dumps(
                     self.session.document, ensure_ascii=False, indent=2) + "\n",
                     encoding="utf-8")
-                self.statusBar().showMessage("Fiche enregistrée.")
+                self.path = destination
+                self.saved_revision = self.session.revision
+                self.statusBar().showMessage("Character saved.")
                 self.refresh()
+                self.reload_library()
             except OSError as exc:
-                QMessageBox.critical(self, "Enregistrement", str(exc))
+                QMessageBox.critical(self, "Save failed", str(exc))
 
         def export(self):
             path = QFileDialog.getExistingDirectory(
@@ -974,27 +1448,6 @@ def main(argv=None):
                     f"Atlas exporté : {len(registry['entries'])} ressources")
             except (OSError, ValueError) as exc:
                 QMessageBox.critical(self, "Export", str(exc))
-
-        def create_jeanne_outfits(self):
-            destination = QFileDialog.getExistingDirectory(
-                self, "Atelier artistique de Jeanne (répertoire dédié)",
-                str(root.parent))
-            if not destination:
-                return
-            try:
-                source = Path(destination).resolve()
-                recipe = build_jeanne_art(root, source)
-                self.stop()
-                self.art_root = source
-                self.path = source / "jeanne.character.json"
-                self.session = CharacterSession(recipe)
-                self.refresh()
-                self.variants.setCurrentRow(
-                    list(recipe["variants"]).index("peasant"))
-                self.statusBar().showMessage(
-                    "Quatre tenues construites, atlas Player exporté dans runtime/")
-            except (ValueError, OSError) as exc:
-                QMessageBox.critical(self, "Création Jeanne", str(exc))
 
         def undo(self):
             if self.session.undo():
@@ -1013,7 +1466,7 @@ def main(argv=None):
     if args.smoke:
         def verify_smoke():
             try:
-                if window.session.document["id"] == "modular_hero":
+                if window.session.document["id"] in ("modular_hero", "storybook_hero"):
                     # Exercise actual Qt tab selection, not only construction.
                     assert window.profile_tabs.count() == len(PROFILE_PRESETS)
                     for index, name in enumerate(PROFILE_PRESETS):
@@ -1022,6 +1475,19 @@ def main(argv=None):
                             "Profile tab did not select " + name)
                     assert window.pose_grid.count() == 4, (
                         "Static four-direction poses were not shown")
+                    assert window.library_grid.count() >= 7, (
+                        "Character library not populated")
+                    assert len(window.direction_canvases) == 4, (
+                        "All four permanent facing previews must exist")
+                    assert window.canvas.isVisible(), (
+                        "Main overview should always be visible")
+                    assert not window.timeline_dock.isVisible(), (
+                        "Advanced animation tools must start collapsed")
+                    expected_looks = (4 if window._uses_storybook() else 5)
+                    assert window.look_grid.count() >= expected_looks, (
+                        "Starting looks must be visible")
+                    assert not hasattr(window, "generate_outfits"), (
+                        "Jeanne-specific outfit UI must not return")
             except Exception as exc:
                 smoke_errors.append(str(exc))
             finally:

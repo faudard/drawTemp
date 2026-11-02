@@ -7,7 +7,7 @@ name = "drawtemp-tactics"
 version = "2.0.0a1"
 description = "Jeanne d Arc tactical RPG, player and Game Studio (DrawTemp)"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["Pillow>=10"]
 
 [project.optional-dependencies]
 qt6 = ["PySide6==6.8.3; python_version == '3.12'"]

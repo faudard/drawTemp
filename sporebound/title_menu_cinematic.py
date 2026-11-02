@@ -16,7 +16,8 @@ def title_geometry(width, height):
     width, height = max(800, int(width)), max(580, int(height))
     compact = width < 1070 or height < 680
     margin = 19 if compact else max(32, round(width * .035))
-    menu_left = round(width * (.56 if compact else .61 if width < 1270 else .65))
+    # Leave room for readable command labels at typical desktop resolutions.
+    menu_left = round(width * (.56 if compact else .58 if width < 1270 else .65))
     menu_width = width - menu_left - margin
     menu_top = round(height * (.245 if compact else .29))
     footer_height = 33 if compact else 40
@@ -35,7 +36,8 @@ def title_geometry(width, height):
         cards.append((menu_left, y, menu_left + menu_width, y + h))
         y += h + gap
     box_x = 20 if compact else max(36, round(width * .024))
-    box_w = min(450, max(294, round(width * .29)))
+    # The original stage has a painted placard at the bottom-left.
+    box_w = min(500, max(294, round(width * .36)))
     box_h = max(160, min(243, round(height * .267)))
     box_bottom = height - (54 if compact else 87)
     campaign = (box_x, box_bottom - box_h, box_x + box_w, box_bottom)
@@ -52,20 +54,32 @@ def title_geometry(width, height):
     }
 
 
-def native_cover_crop(source_width, source_height, target_width, target_height):
-    """Integer-nearest-neighbour cover crop for Tk when Pillow is unavailable.
+def render_title_background(source, width, height, menu_x, scenic_width, *,
+                            centering=(0.49, 0.50)):
+    """Pillow cover crop and smooth non-stippled fade, testable without Tk."""
+    from PIL import Image, ImageDraw, ImageOps
 
-    Tk PhotoImage cannot resize proportionally to arbitrary dimensions. Zoom
-    enough to cover the destination, then copy a centered crop into an image
-    with exactly the viewport's dimensions (no unpainted margins).
-    """
-    if min(source_width, source_height, target_width, target_height) <= 0:
-        raise ValueError("image and viewport dimensions must be positive")
-    zoom = max(1, (target_width + source_width - 1) // source_width,
-               (target_height + source_height - 1) // source_height)
-    left = (source_width * zoom - target_width) // 2
-    top = (source_height * zoom - target_height) // 2
-    return zoom, (left, top, left + target_width, top + target_height)
+    if min(width, height, scenic_width) <= 0:
+        raise ValueError("title background dimensions must be positive")
+    scenic_width = min(width, scenic_width)
+    lanczos = (Image.Resampling.LANCZOS if hasattr(Image, "Resampling")
+               else Image.LANCZOS)
+    stage = ImageOps.fit(source, (scenic_width, height), method=lanczos,
+                         centering=centering).convert("RGB")
+    navy = (15, 27, 42)
+    background = Image.new("RGB", (width, height), navy)
+    background.paste(stage, (0, 0))
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+    start = max(0, min(width, round(menu_x * .77)))
+    end = max(start + 1, min(width, round(menu_x + 38)))
+    for x in range(start, end):
+        opacity = round(255 * (x - start) / max(1, end - start - 1))
+        draw.line((x, 0, x, height), fill=opacity)
+    if end < width:
+        draw.rectangle((end, 0, width, height), fill=255)
+    return Image.composite(Image.new("RGB", (width, height), navy),
+                           background, mask)
 
 
 class _ActionProxy:
@@ -190,6 +204,20 @@ class CinematicTitleMenu(TitleMenu):
         if self._stage_path is False:
             return False
         mode = self._appearance["background"]
+        # The trimmed PNG permanently cuts off Jeanne's head. The original
+        # stage art keeps her face and armor visible, and is the preferred
+        # automatic Jeanne background when Pillow is available.
+        if mode == "auto" and any(c["id"] == "jeanne" for c in self.app.project.campaigns):
+            stage_path = (Path(__file__).resolve().parent / "content" / "art" /
+                          "jeanne" / "jeanne_menu_stage.jpg")
+            if stage_path.is_file():
+                try:
+                    from PIL import Image
+                    self._stage_source = Image.open(stage_path).convert("RGB")
+                    self._stage_path = stage_path
+                    return True
+                except (ImportError, OSError, ValueError):
+                    pass
         if mode == "auto" and self._backdrop_source is not None:
             self._stage_source = self._backdrop_source
             self._stage_path = self._backdrop_path
@@ -200,9 +228,6 @@ class CinematicTitleMenu(TitleMenu):
             if not artwork.is_relative_to(root):
                 self._stage_path = False
                 return False
-        elif mode == "auto" and any(c["id"] == "jeanne" for c in self.app.project.campaigns):
-            artwork = (Path(__file__).resolve().parent / "content" / "art" /
-                       "jeanne" / "jeanne_menu_stage.jpg")
         else:
             self._stage_path = False
             return False
@@ -218,90 +243,51 @@ class CinematicTitleMenu(TitleMenu):
             self._stage_path = False
             return False
 
-    def _paint_native_stage(self, scenic_width, width, height, layout):
-        """Fill the scenic viewport using native Tk even without Pillow."""
-        native = self._backdrop_native
-        if native is None:
-            return False
-        key = ("tk", scenic_width, height)
-        try:
-            if self._stage_size != key:
-                zoom, crop = native_cover_crop(native.width(), native.height(),
-                                               scenic_width, height)
-                scaled = native.zoom(zoom)
-                photo = self.tk.PhotoImage(master=self.app.root,
-                                           width=scenic_width, height=height)
-                photo.tk.call(str(photo), "copy", str(scaled),
-                              "-from", *crop, "-to", 0, 0)
-                self._stage_photo = photo
-                self._stage_size = key
-            self.canvas.create_image(0, 0, anchor="nw",
-                                     image=self._stage_photo, tags="art")
-        except self.tk.TclError:
-            self._stage_photo = None
-            self._stage_size = None
-            return False
-
-        # Approximate the Pillow feather using stippled Tk bands, followed by
-        # the opaque menu surface. These are visual-only Canvas elements.
-        start = round(layout["menu_x"] * .77)
-        end = max(start, layout["menu_x"] - 8)
-        patterns = ("gray12", "gray25", "gray50", "gray75")
-        for index, stipple in enumerate(patterns):
-            x0 = start + (end - start) * index / len(patterns)
-            x1 = start + (end - start) * (index + 1) / len(patterns)
-            self.canvas.create_rectangle(x0, 0, x1 + 1, height,
-                                         fill="#0f1c2b", stipple=stipple,
-                                         outline="", tags="art")
-        self.canvas.create_rectangle(layout["menu_x"] - 8, 0, width, height,
-                                     fill="#0f1c2b", outline="", tags="art")
-        return True
-
     def _paint_stage(self, width, height, layout):
         c = self.canvas
-        c.create_rectangle(0, 0, width, height, fill="#000000" if self.contrast else "#101b2a", outline="", tags="art")
+        c.create_rectangle(0, 0, width, height,
+                           fill="#000000" if self.contrast else "#101b2a",
+                           outline="", tags="art")
         if self.contrast or self._appearance["background"] == "solid":
             return
-        scenic_width = min(width, round(width * (.73 if not layout["compact"] else .69)))
+
+        scenic_width = min(width, round(width *
+                           (.73 if not layout["compact"] else .69)))
         if self._load_stage():
-            size = ("pillow", width, height, scenic_width)
-            if size != self._stage_size:
-                from PIL import Image, ImageDraw, ImageOps, ImageTk
-                stage = ImageOps.fit(
-                    self._stage_source, (scenic_width, height),
-                    method=Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS,
-                    centering=(.49, .50))
-                background = Image.new("RGB", (width, height), (15, 27, 42))
-                background.paste(stage, (0, 0))
-                # Blend the artwork naturally into the navy right-hand menu.
-                mask = Image.new("L", (width, height), 0)
-                draw = ImageDraw.Draw(mask)
-                start = round(layout["menu_x"] * .77)
-                end = round(layout["menu_x"] + 38)
-                for x in range(start, min(width, end)):
-                    blend = round(255 * (x - start) / max(1, end - start))
-                    draw.line((x, 0, x, height), fill=blend)
-                draw.rectangle((min(width,end), 0, width, height), fill=255)
-                background = Image.composite(
-                    Image.new("RGB", (width, height), (15, 27, 42)), background, mask)
-                self._stage_photo = ImageTk.PhotoImage(background, master=self.app.root)
-                self._stage_size = size
-            c.create_image(0, 0, anchor="nw", image=self._stage_photo, tags="art")
-            return
-        if self._backdrop_native is not None and self._paint_native_stage(
-                scenic_width, width, height, layout):
-            return
-        if self._backdrop_source is not None or self._backdrop_native is not None:
-            # Retain the bundled PNG fallback when Pillow is absent.
-            self._paint_backdrop(0, scenic_width, height)
-        else:
-            for i in range(45):
-                y = height * i/45
-                c.create_rectangle(0, y, scenic_width, y+height/45+1,
-                                   fill="#%02x%02x%02x" % (24+i//5, 35+i//5, 53+i//6),
-                                   outline="", tags="art")
-            self._castle(scenic_width*.74, height*.67, scenic_width*.48, height*.34)
-        c.create_rectangle(layout["menu_x"]-8, 0, width, height,
+            key = (width, height, layout["menu_x"], scenic_width)
+            if key != self._stage_size:
+                try:
+                    from PIL import ImageTk
+                    backdrop = render_title_background(
+                        self._stage_source, width, height,
+                        layout["menu_x"], scenic_width,
+                        centering=((0.16, 0.50) if self._stage_path is not None
+                                   and self._stage_path.name == "jeanne_menu_stage.jpg"
+                                   else (0.49, 0.50)))
+                    self._stage_photo = ImageTk.PhotoImage(
+                        backdrop, master=self.app.root)
+                    self._stage_size = key
+                except (ImportError, OSError, ValueError, self.tk.TclError):
+                    # Failed artwork / absent Pillow: always use clean vectors.
+                    self._stage_photo = None
+                    self._stage_size = None
+                    self._stage_source = None
+                    self._stage_path = False
+            if self._stage_photo is not None:
+                c.create_image(0, 0, anchor="nw",
+                               image=self._stage_photo, tags="art")
+                return
+
+        # Deterministic vector scenery, never pixelated Tk bitmap scaling.
+        for i in range(45):
+            y = height * i / 45
+            c.create_rectangle(
+                0, y, scenic_width, y + height / 45 + 1,
+                fill="#%02x%02x%02x" % (24 + i // 5, 35 + i // 5, 53 + i // 6),
+                outline="", tags="art")
+        self._castle(scenic_width * .74, height * .67,
+                     scenic_width * .48, height * .34)
+        c.create_rectangle(layout["menu_x"] - 8, 0, width, height,
                            fill="#0f1c2b", outline="", tags="art")
 
     def _font(self, family, size, weight=None):
@@ -379,7 +365,7 @@ class CinematicTitleMenu(TitleMenu):
         has_save = self._saved()
         self._hitboxes = {}
         for index, ((key,label,subtitle,icon), rect) in enumerate(zip(self.ACTIONS,layout["cards"])):
-            label = self._appearance["labels"].get(key, label)
+            label = self._appearance["labels"].get(key) or self.app._t("tk.title." + key)
             x0,y0,x1,y1=rect
             h = y1-y0
             tag="title_card_"+key
@@ -388,17 +374,32 @@ class CinematicTitleMenu(TitleMenu):
             c.create_rectangle(x0,y0,x1,y1,fill=self._panel_color if not focused else "#1c324d",
                                outline=self._accent if focused else "#b18a51",
                                width=3 if focused else 1, tags=("art",tag))
-            icon_width = min(93, max(63,round(layout["menu_width"]*.19)))
+            icon_width = min(78, max(54, round(layout["menu_width"] * .16)))
             c.create_rectangle(x0+1,y0+1,x0+icon_width,y1-1,
                                fill="#203249",outline="",tags=("art",tag))
             self._icon(icon,x0+icon_width/2,y0+h/2,min(h*.29,26),tag)
             tx=x0+icon_width+13
-            title_size=max(13,min(round((21 if layout["compact"] else 26)*self.scale),round(h*.37)))
-            c.create_text(tx,y0+h*(.33 if h>66 else .34),text=label,anchor="w",
-                          fill=self._text_color if not disabled else "#94a1ae",
-                          font=("Georgia",title_size,"bold"),tags=("art",tag))
-            sub = ("Aucune sauvegarde" if disabled else
-                   self._resume_caption() if key=="continue" else subtitle)
+            title_size=max(10,min(round((18 if layout["compact"] else 21)*self.scale),
+                                  round(h*.30)))
+            title_item = c.create_text(
+                tx, y0+h*.33, text=label, anchor="w",
+                fill=self._text_color if not disabled else "#94a1ae",
+                font=("Georgia", title_size, "bold"), tags=("art",tag))
+            # Keep both default and authored labels inside the active card.
+            right_limit = x1 - 29
+            bounds = c.bbox(title_item)
+            while bounds is not None and bounds[2] > right_limit and title_size > 10:
+                title_size -= 1
+                c.itemconfigure(title_item, font=("Georgia",title_size,"bold"))
+                bounds = c.bbox(title_item)
+            if bounds is not None and bounds[2] > right_limit:
+                short = label
+                while len(short) > 1 and c.bbox(title_item)[2] > right_limit:
+                    short = short[:-1]
+                    c.itemconfigure(title_item,text=short.rstrip()+"…")
+            sub = (self.app._t("tk.title.no_save") if disabled else
+                   self._resume_caption() if key=="continue"
+                   else self.app._t("tk.title." + key + ".detail"))
             c.create_text(tx,y0+h*.71,text=sub,anchor="w",
                           fill=MUTED if not disabled else "#7f8894",
                           width=max(80,x1-tx-32),
@@ -466,7 +467,7 @@ class CinematicTitleMenu(TitleMenu):
         tag="title_campaign_change"
         c.create_rectangle(bx0,by0,bx1,by1,fill="#132236",outline=self._accent,
                            width=1,tags=("art",tag))
-        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  Changer de campagne",
+        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  " + self.app._t("tk.title.change_campaign"),
                       fill=self._text_color,font=self._font("Georgia",10),tags=("art",tag))
         self._region(tag,(bx0,by0,bx1,by1),key="choose")
 
@@ -477,12 +478,13 @@ class CinematicTitleMenu(TitleMenu):
         y=layout["footer_y"]
         h=layout["footer_height"]
         gap=6 if layout["compact"] else 9
-        widths=(w*.48,w*.245,w*.275)
-        labels=(("advanced","⚒  Outils avancés" if not layout["compact"] else "⚒  Outils"),
-                ("credits","♙  Crédits"),("help","?  Aide"))
+        available_width = max(0, w - 2*gap)
+        widths=(available_width*.48,available_width*.245,available_width*.275)
+        labels=(("advanced","⚒  " + self.app._t("tk.title.advanced" if not layout["compact"] else "tk.title.advanced_compact")),
+                ("credits","♙  " + self.app._t("tk.title.credits")),("help","?  " + self.app._t("tk.title.help")))
         for i,((key,label),cw) in enumerate(zip(labels,widths)):
             xx=x+sum(widths[:i])+gap*i
-            xx1=xx+cw-(gap if i==2 else 0)
+            xx1=xx+cw
             tag="title_footer_"+key
             c.create_rectangle(xx,y,xx1,y+h,fill="#101a29",outline="#b18a51",tags=("art",tag))
             c.create_text((xx+xx1)/2,y+h/2,text=label,fill=self._text_color,
@@ -521,16 +523,16 @@ class CinematicTitleMenu(TitleMenu):
             c.tag_raise(self.overlay_window)
 
     def open_credits(self):
-        parent=self._open_overlay("Crédits")
+        parent=self._open_overlay(self.app._t("tk.title.credits"))
         self.tk.Label(parent,text="Jeanne d’Arc — Les Cendres du Royaume\n"
                     "Jeu de rôle tactique développé avec DrawTemp.\n"
                     "Illustrations et univers créés pour le projet.",
                     bg=PANEL,fg=self._text_color,justify="left",font=self._font("Georgia",12),
                     wraplength=500).pack(fill="x",pady=16)
-        self._panel_button(parent,"Retour",self._close_overlay).pack(fill="x",pady=8)
+        self._panel_button(parent,self.app._t("tk.title.back"),self._close_overlay).pack(fill="x",pady=8)
 
     def open_help(self):
-        parent=self._open_overlay("Aide")
+        parent=self._open_overlay(self.app._t("tk.title.help"))
         info=("Cliquez sur une entrée du menu ou utilisez les flèches ↑/↓ puis Entrée.\n\n"
               "Continuer : charge l'emplacement sélectionné.\n"
               "Nouvelle partie : démarre une aventure ; confirmation si nécessaire.\n"
@@ -539,4 +541,4 @@ class CinematicTitleMenu(TitleMenu):
               "Échap : fermer ce panneau.")
         self.tk.Label(parent,text=info,bg=PANEL,fg=self._text_color,justify="left",
                       wraplength=495,font=self._font("Segoe UI",11)).pack(fill="x",pady=12)
-        self._panel_button(parent,"Retour",self._close_overlay).pack(fill="x",pady=8)
+        self._panel_button(parent,self.app._t("tk.title.back"),self._close_overlay).pack(fill="x",pady=8)

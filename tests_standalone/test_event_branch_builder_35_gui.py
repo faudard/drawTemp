@@ -1,4 +1,5 @@
 """3.5 real Tk map→visual choice creation, preview, Save All and atomic Undo."""
+from tests_standalone.studio_gui_actions import menu_named
 import json
 import os
 from pathlib import Path
@@ -74,7 +75,7 @@ class VisualBranchWizardGUITests(unittest.TestCase):
                     self.assertFalse(wizard.winfo_exists(), errors.call_args_list)
                     all_buttons = {w.cget('text'): w for w in descendants(root)
                                    if isinstance(w, ttk.Button)}
-                    all_buttons['Enregistrer tout'].invoke()
+                    all_menu_named(root, "File").invoke("Save Project")
                     root.update()
                     document = json.loads(content_path.read_text(encoding='utf-8'))
                     project = json.loads(project_path.read_text(encoding='utf-8'))
@@ -86,7 +87,7 @@ class VisualBranchWizardGUITests(unittest.TestCase):
                     self.assertEqual(json.loads(json.dumps(Content.from_dict(document).to_dict())), document)
                     all_buttons['Annuler'].invoke()
                     root.update()
-                    all_buttons['Enregistrer tout'].invoke()
+                    all_menu_named(root, "File").invoke("Save Project")
                     root.update()
                     reset_content = json.loads(content_path.read_text(encoding='utf-8'))
                     reset_project = json.loads(project_path.read_text(encoding='utf-8'))
@@ -97,7 +98,7 @@ class VisualBranchWizardGUITests(unittest.TestCase):
                     self.assertFalse(reset_project.get('story'))
                     all_buttons['Rétablir'].invoke()
                     root.update()
-                    all_buttons['Enregistrer tout'].invoke()
+                    all_menu_named(root, "File").invoke("Save Project")
                     root.update()
                     restored = json.loads(content_path.read_text(encoding='utf-8'))
                     self.assertIn('fork_join_gui',

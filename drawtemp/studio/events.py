@@ -140,6 +140,27 @@ class EventStudio:
                     start_ms=start_ms, duration_ms=duration_ms,
                     fields=fields)))
 
+    def addon_event_catalogue(self, manager):
+        """Expose enabled native hook definitions to the event authoring UI."""
+        from drawtemp.sdk.event_addons import event_addon_catalogue
+        return event_addon_catalogue(manager)
+
+    def preview_addon_events(self, manager, addon_id):
+        """Revision-bound diff for an explicitly enabled add-on."""
+        from drawtemp.sdk.event_addons import preview_event_addon
+        return preview_event_addon(
+            manager, self.session, addon_id,
+            expected_revision=self.session.revision,
+        )
+
+    def install_addon_events(self, manager, addon_id):
+        """Compile through R24.E; exactly one native AuthoringSession commit."""
+        from drawtemp.sdk.event_addons import install_event_addon
+        return install_event_addon(
+            manager, self.session, addon_id,
+            expected_revision=self.session.revision,
+        )
+
     def add_story_effect(self, mission_id, scene_id, choice_id, kind, fields):
         """Change a REAL StoryBook choice's variables/items as one R1 transaction."""
         payload = story_effect(kind, fields)

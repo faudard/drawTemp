@@ -1,0 +1,50 @@
+{
+  "schema_version": 3,
+  "id": "asterion-event-addon",
+  "name": "Asterion Event Add-on",
+  "namespace": "org.drawtemp.examples.eventaddon",
+  "version": "1.0.0",
+  "kind": "game",
+  "sdk": {
+    "min_api": "1.0.0",
+    "max_api": "2.0.0",
+    "required_features": [
+      "addons-foundation.v1",
+      "event-addons.v1"
+    ]
+  },
+  "capabilities": [
+    "game.event"
+  ],
+  "permissions": [
+    "events.write"
+  ],
+  "dependencies": [],
+  "contributions": [
+    {
+      "id": "scan-reward",
+      "point": "game.event",
+      "config": {
+        "trigger": "story.choice",
+        "scene": "briefing",
+        "choice": "launch",
+        "effects": [
+          {
+            "kind": "set_flag",
+            "flag": "addon_scan_ready",
+            "value": true
+          },
+          {
+            "kind": "gold",
+            "amount": 5
+          }
+        ]
+      }
+    }
+  ],
+  "rights": {
+    "license": "MIT",
+    "origin": "DrawTemp original Asterion example data",
+    "redistributable": true
+  }
+}

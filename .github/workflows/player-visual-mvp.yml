@@ -6,6 +6,11 @@ on:
       - 'sporebound/exploration_iso_view.py'
       - 'sporebound/player_visual_theme.py'
       - 'sporebound/player_app.py'
+      - 'sporebound/player_ui_language.py'
+      - 'sporebound/title_menu_cinematic.py'
+      - 'drawtemp/localization/**'
+      - 'tests_standalone/test_player_ui_language.py'
+      - 'tests_standalone/test_player_ui_language_gui.py'
       - 'tests_standalone/test_exploration_iso_view.py'
       - 'tests_standalone/test_exploration_iso_view_gui.py'
       - 'tests_standalone/test_player_visual_theme.py'
@@ -31,9 +36,9 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Headless visual and narrative contracts
         run: |
-          python -m unittest tests_standalone.test_exploration_iso_view tests_standalone.test_player_visual_theme tests_standalone.test_player_immersive_map tests_standalone.test_jeanne_prologue -v
+          python -m unittest tests_standalone.test_exploration_iso_view tests_standalone.test_player_visual_theme tests_standalone.test_player_immersive_map tests_standalone.test_jeanne_prologue tests_standalone.test_player_ui_language -v
       - name: Compile presentation modules
-        run: python -m compileall -q sporebound/exploration_iso_view.py sporebound/player_visual_theme.py sporebound/player_app.py
+        run: python -m compileall -q sporebound/exploration_iso_view.py sporebound/player_visual_theme.py sporebound/player_app.py sporebound/player_ui_language.py
       - name: Actual Tk map render and diamond picking
         if: runner.os == 'Linux'
-        run: xvfb-run -a env SPOREBOUND_GUI_SMOKE=1 python -m unittest tests_standalone.test_exploration_iso_view_gui -v
+        run: xvfb-run -a env SPOREBOUND_GUI_SMOKE=1 python -m unittest tests_standalone.test_exploration_iso_view_gui tests_standalone.test_player_ui_language_gui -v

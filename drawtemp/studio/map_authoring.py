@@ -182,8 +182,13 @@ class MapStudio:
         return result
 
     def duplicate(self, new_id, name):
+        """Copy tactical map + optional graphic stack in ONE canonical undo step."""
+        from sporebound.visual_layers import VISUAL_NS, from_extensions
+
         current = self.mission_id
-        def transform(content):
+
+        def transform(content, project):
+            before = deepcopy(content)
             src = _mission(content, current)
             if any(m["id"] == new_id for m in content["missions"]):
                 raise RuleError("Map identifier already in use")
@@ -191,8 +196,22 @@ class MapStudio:
             copy = deepcopy(src)
             copy.update(id=new_id, name=name, next_missions=[])
             content["missions"].append(copy)
-            return content
-        result = self._change(transform, kind="map-duplicate")
+            self.layers.assert_editable(before, content)
+
+            result = deepcopy(project)
+            if VISUAL_NS in result.get("extensions", {}):
+                catalog = from_extensions(result["extensions"])
+                if current in catalog["missions"]:
+                    catalog["missions"][new_id] = deepcopy(catalog["missions"][current])
+                    result["extensions"][VISUAL_NS]["data"] = catalog
+                    result["extensions"][VISUAL_NS]["references"] = [
+                        {"kind": "mission", "id": mid}
+                        for mid in sorted(catalog["missions"])
+                        if catalog["missions"][mid]]
+            return content, result
+
+        result = self.authoring.apply(self.authoring.preview_pair(
+            transform, kind="map-duplicate", mission_id=current))
         self.mission_id = new_id
         return result
 

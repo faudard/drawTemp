@@ -116,6 +116,10 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        # Canonical, opt-in graphics are validated for both Studio and Player.
+        from .visual_layers import VISUAL_NS, validate_visual_layers
+        if VISUAL_NS in self.extensions:
+            validate_visual_layers(self.extensions[VISUAL_NS]["data"], content)
         from .title_screen_settings import NAMESPACE as TITLE_NAMESPACE, validate_title_screen
         if TITLE_NAMESPACE in self.extensions:
             validate_title_screen(self.extensions[TITLE_NAMESPACE]["data"])

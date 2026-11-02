@@ -410,6 +410,11 @@ def render_items(scene, camera, projection=IsoProjection(), selected=None,
                                                   else (x + y) * 100),
                      **({"autotileKey": tile_key(index.tiles, x, y)}
                         if top_down else {})})
+    # Project-owned graphic sprites are cosmetic R3 depth-sorted rows only.
+    if top_down and scene.get("visual_layers"):
+        from sporebound.visual_layers import projected_layer_rows
+        rows.extend(projected_layer_rows(scene, projection,
+                                         (lo_x, hi_x, lo_y, hi_y)))
     for o in scene["objects"]:
         x, y = o["x"], o["y"]
         if lo_x - 1 <= x <= hi_x + 1 and lo_y - 1 <= y <= hi_y + 1:

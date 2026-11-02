@@ -1,4 +1,5 @@
 """World Map Studio end-to-end Tk smoke with real shared history/save."""
+from tests_standalone.studio_gui_actions import menu_named
 import json
 import os
 from pathlib import Path
@@ -80,7 +81,7 @@ class WorldMapGUITests(TestCase):
                     redone = next(n for n in studio_world.owner.project.world["nodes"]
                                   if n["mission"] == mid)
                     self.assertEqual((redone["x"], redone["y"]), (px+36, py+22))
-                    buttons["Enregistrer tout"].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     content = Content.load(source)
                     reloaded = GameProject.load(source.with_suffix(".game.json"),
