@@ -90,7 +90,7 @@ class TitleScreenStudio:
         self.ttk.Button(buttons, text="Apply changes",
                         command=lambda: owner._run(self.apply)).pack(fill="x", pady=2)
         self.ttk.Button(buttons, text="Save project…",
-                        command=lambda: owner._run(owner.save_project)).pack(
+                        command=lambda: owner._run(self.save)).pack(
                             fill="x", pady=2)
         self.ttk.Button(buttons, text="Restore defaults",
                         command=self.defaults).pack(fill="x", pady=2)
@@ -166,6 +166,11 @@ class TitleScreenStudio:
         self.owner.project_status.config(
             text="Title Screen applied. Save the game project to persist changes.")
         self.owner.refresh()
+
+    def save(self):
+        # Saving directly from this tab must include edits not yet applied.
+        self.apply()
+        self.owner.save_project()
 
     def import_image(self):
         from tkinter import filedialog
