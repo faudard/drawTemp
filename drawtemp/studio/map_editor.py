@@ -231,8 +231,13 @@ class MapWindow(QMainWindow):
         # Editor-only layers share the canonical mission, not the Player save.
         from .map_layers_dock import MapLayersDock
         self.layers_panel = MapLayersDock(self.studio.layers, self.refresh)
-        self._dock("Calques", self.layers_panel, Qt.RightDockWidgetArea)
+        self.layers_dock = self._dock("Calques", self.layers_panel,
+                                      Qt.RightDockWidgetArea)
         self._make_event_dock()
+        # Both contextual panels share one column; preserve map canvas width.
+        self.tabifyDockWidget(self.layers_dock, self.events_dock)
+        self.layers_dock.raise_()
+        self.events_dock.hide()
         self._make_generator_dock()
         self._make_prefab_dock()
 
@@ -411,6 +416,10 @@ class MapWindow(QMainWindow):
         self.cancel_transform()
         self._construction_mode()
         self.events_dock.setVisible(mode == "Events")
+        if mode == "Events":
+            self.events_dock.raise_()
+        else:
+            self.layers_dock.raise_()
         self.viewport.rootObject().setProperty("showEventMarkers", mode == "Events")
         if mode == "Events":
             self.viewport.rootObject().setProperty("selectionCells", [])
