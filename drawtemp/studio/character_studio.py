@@ -17,7 +17,7 @@ from drawtemp.assets.jeanne_art import build_jeanne_art
 from drawtemp.assets.character_parts import (
     PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
     active_part, available_parts, ensure_profile, part_paths,
-    set_part, set_part_style,
+    set_part, set_part_style, upgrade_legacy_hair,
 )
 
 
@@ -175,6 +175,11 @@ def main(argv=None):
             self.part_grid.currentItemChanged.connect(self.choose_part)
             self.part_status = QLabel()
             self.part_status.setWordWrap(True)
+            self.split_hair = QPushButton("Split legacy Hair into Front + Rear")
+            self.split_hair.setToolTip(
+                "Undoable conversion of the old Hair layer. Original artwork "
+                "is preserved; separate edits become possible.")
+            self.split_hair.clicked.connect(self.split_selected_legacy_hair)
             self.part_color = QPushButton("Choose color…")
             self.part_color.clicked.connect(self.choose_color)
             self.part_opacity = QSpinBox()
@@ -222,6 +227,7 @@ def main(argv=None):
             middle.addWidget(QLabel("Variation — select an existing part"))
             middle.addWidget(self.part_grid, 2)
             middle.addWidget(self.part_status)
+            middle.addWidget(self.split_hair)
             controls = QHBoxLayout()
             controls.addWidget(QLabel("Color"))
             controls.addWidget(self.part_color)
@@ -350,6 +356,22 @@ def main(argv=None):
                 self.statusBar().showMessage(str(exc))
                 self.sync_profile_tabs()
 
+        def split_selected_legacy_hair(self):
+            variant = self.active_variant()
+            try:
+                self.session.edit(
+                    lambda doc: upgrade_legacy_hair(doc, variant, root))
+                for index in range(self.part_category.count()):
+                    if self.part_category.item(index).data(Qt.UserRole) == "front_hair":
+                        self.part_category.setCurrentRow(index)
+                        break
+                self.refresh()
+                self.statusBar().showMessage(
+                    "Legacy Hair split. Front/Rear have separate offsets "
+                    "and colors. Ctrl+Z to undo.")
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+
         def selected_part_slot(self):
             item = self.part_category.currentItem()
             return item.data(Qt.UserRole) if item else None
@@ -376,7 +398,7 @@ def main(argv=None):
                 except CharacterError:
                     variants = ()
                 for name in variants:
-                    icon_path = root / part_paths(slot, name)["south"]
+                    icon_path = root / part_paths(slot, name, root)["south"]
                     item = QListWidgetItem(QIcon(str(icon_path)),
                                            name.replace("_", " ").title())
                     item.setData(Qt.UserRole, name)
@@ -384,17 +406,26 @@ def main(argv=None):
                 selected_name = None
                 if layer is not None:
                     path = layer["paths"].get("south", "")
-                    expected_prefix = f"assets/hero_parts/{slot}/"
-                    if path.startswith(expected_prefix) and path.endswith("_front.png"):
-                        selected_name = Path(path).stem[:-len("_front")]
+                    if path.endswith("_front.png"):
+                        candidate = Path(path).stem[:-len("_front")]
+                        if candidate in variants and path == part_paths(
+                                slot, candidate, root)["south"]:
+                            selected_name = candidate
                 for i in range(self.part_grid.count()):
                     item = self.part_grid.item(i)
                     if item.data(Qt.UserRole) == selected_name:
                         self.part_grid.setCurrentRow(i)
                         break
+                prefix = ""
+                if slot == "front_hair":
+                    prefix = ("Legacy source: upper-fringe approximation. "
+                              "Independently painted PNGs are preferred. ")
+                elif slot == "rear_hair":
+                    prefix = ("Legacy source: full hair behind the head. "
+                              "Independently painted PNGs are preferred. ")
                 self.part_status.setText(
-                    f"{len(variants)} variants | All four directions | "
-                    "Select a piece to edit its color and position")
+                    prefix + f"{len(variants)} variants | 4 directions | "
+                    "Independent color and offset for selected piece")
             else:
                 self.part_status.setText(
                     "Visual modular parts use a 192 x 192 canvas and repository "
@@ -413,6 +444,8 @@ def main(argv=None):
                 spin.blockSignals(False)
             tint = layer["tint"] if layer else "#ffffff"
             self.part_color.setStyleSheet("background-color: " + tint + ";")
+            self.split_hair.setVisible(
+                enabled and active_part(doc, variant, "hair") is not None)
 
         def choose_part(self, item, previous):
             if item is None or not self.part_grid.isEnabled():
@@ -420,7 +453,7 @@ def main(argv=None):
             slot = self.selected_part_slot()
             name = item.data(Qt.UserRole)
             current = active_part(self.session.document, self.active_variant(), slot)
-            expected = part_paths(slot, name) if name is not None else None
+            expected = part_paths(slot, name, root) if name is not None else None
             if (current is None and name is None) or (
                     current is not None and current["paths"] == expected):
                 return
