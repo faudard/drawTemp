@@ -415,7 +415,7 @@ def main(argv=None):
             view_menu.addAction(self.library_dock.toggleViewAction())
             view_menu.addAction(self.timeline_dock.toggleViewAction())
             command("Search Character Library", "Ctrl+L",
-                    self.library_search.setFocus, view_menu)
+                    lambda: self.library_search.setFocus(), view_menu)
             self.part_category.setCurrentRow(0)
             self.refresh_library()
             self.statusBar().showMessage(
@@ -650,7 +650,8 @@ def main(argv=None):
         def sync_profile_tabs(self):
             """Tabs are only for Modular Hero, not arbitrary RPG actors."""
             doc = self.session.document
-            visible = doc["id"] == "modular_hero" and doc["size"] == [192, 192]
+            visible = (doc["size"] == [192, 192]
+                       and bool(set(PROFILE_PRESETS) & set(doc["variants"])))
             self.profile_tabs.setVisible(visible)
             self.profile_tabs.blockSignals(True)
             active = self.active_variant() if visible else None
@@ -663,7 +664,7 @@ def main(argv=None):
             if index < 0:
                 return
             doc = self.session.document
-            if doc["id"] != "modular_hero" or doc["size"] != [192, 192]:
+            if doc["size"] != [192, 192]:
                 return
             profile = self.profile_tabs.tabData(index)
             if profile not in PROFILE_PRESETS:
@@ -914,6 +915,7 @@ def main(argv=None):
             self.refresh_expressions()
             self.refresh_timeline()
             self.refresh_parts()
+            self.refresh_looks()
             self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
@@ -922,8 +924,8 @@ def main(argv=None):
                 "\n".join(f"• {p['code']} {p.get('variant','')} {p.get('action','')}"
                           for p in problems[:7]))
             self.setWindowTitle(
-                "DrawTemp 5.0 — " + document["name"] +
-                ("  ●" if self.path is None else " — " + self.path.name))
+                "DrawTemp — Character Studio — " + document["name"] +
+                ("" if self.path is None else " — " + self.path.name))
 
         def refresh_expressions(self):
             active = self.expression.currentData()
@@ -945,6 +947,7 @@ def main(argv=None):
             self.refresh_expressions()
             self.refresh_timeline()
             self.refresh_parts()
+            self.refresh_looks()
             self.refresh_pose_grid()
 
         def reset_frame(self, *_):
@@ -986,12 +989,14 @@ def main(argv=None):
             self.refresh_preview()
 
         def refresh_preview(self, *_):
+            # Overview persists even when a single pose or portrait is absent.
+            self.refresh_overview()
             self.canvas.clear()
             expression = self.expression.currentData()
             if expression:
                 path = self.session.document["variants"][self.active_variant()]\
                        ["expressions"][expression]
-                picture = QPixmap(str(root / path))
+                picture = QPixmap(str(self.art_root / path))
                 if not picture.isNull():
                     self.canvas.setPixmap(picture.scaled(
                         360, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -1246,16 +1251,9 @@ def main(argv=None):
             except CharacterError as exc:
                 QMessageBox.warning(self, "Calque", str(exc))
 
-        def use_template(self, *_):
-            key = self.templates.currentData()
-            if key in templates:
-                self.stop()
-                self.session = CharacterSession(templates[key])
-                self.path = None
-                self.art_root = root
-                self.refresh()
-
         def open_recipe(self):
+            if not self._confirm_replace():
+                return
             path, _ = QFileDialog.getOpenFileName(
                 self, "Ouvrir un personnage R7", str(root), "JSON (*.json)")
             if path:
@@ -1267,6 +1265,7 @@ def main(argv=None):
                         self.path.parent if
                         (self.path.parent / "sources/jeanne_atlas.png").is_file()
                         else root)
+                    self.saved_revision = self.session.revision
                     self.refresh()
                 except (OSError, ValueError, KeyError) as exc:
                     QMessageBox.critical(self, "Fichier invalide", str(exc))
@@ -1283,7 +1282,8 @@ def main(argv=None):
                 self.path.write_text(json.dumps(
                     self.session.document, ensure_ascii=False, indent=2) + "\n",
                     encoding="utf-8")
-                self.statusBar().showMessage("Fiche enregistrée.")
+                self.saved_revision = self.session.revision
+                self.statusBar().showMessage("Character saved.")
                 self.refresh()
             except OSError as exc:
                 QMessageBox.critical(self, "Enregistrement", str(exc))
@@ -1299,27 +1299,6 @@ def main(argv=None):
                     f"Atlas exporté : {len(registry['entries'])} ressources")
             except (OSError, ValueError) as exc:
                 QMessageBox.critical(self, "Export", str(exc))
-
-        def create_jeanne_outfits(self):
-            destination = QFileDialog.getExistingDirectory(
-                self, "Atelier artistique de Jeanne (répertoire dédié)",
-                str(root.parent))
-            if not destination:
-                return
-            try:
-                source = Path(destination).resolve()
-                recipe = build_jeanne_art(root, source)
-                self.stop()
-                self.art_root = source
-                self.path = source / "jeanne.character.json"
-                self.session = CharacterSession(recipe)
-                self.refresh()
-                self.variants.setCurrentRow(
-                    list(recipe["variants"]).index("peasant"))
-                self.statusBar().showMessage(
-                    "Quatre tenues construites, atlas Player exporté dans runtime/")
-            except (ValueError, OSError) as exc:
-                QMessageBox.critical(self, "Création Jeanne", str(exc))
 
         def undo(self):
             if self.session.undo():
@@ -1347,6 +1326,14 @@ def main(argv=None):
                             "Profile tab did not select " + name)
                     assert window.pose_grid.count() == 4, (
                         "Static four-direction poses were not shown")
+                    assert window.library_grid.count() >= 7, (
+                        "Character library not populated")
+                    assert len(window.direction_canvases) == 4, (
+                        "All four permanent facing previews must exist")
+                    assert window.canvas.isVisible(), (
+                        "Main overview should always be visible")
+                    assert not hasattr(window, "generate_outfits"), (
+                        "Jeanne-specific outfit UI must not return")
             except Exception as exc:
                 smoke_errors.append(str(exc))
             finally:
