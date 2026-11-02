@@ -16,7 +16,8 @@ def title_geometry(width, height):
     width, height = max(800, int(width)), max(580, int(height))
     compact = width < 1070 or height < 680
     margin = 19 if compact else max(32, round(width * .035))
-    menu_left = round(width * (.56 if compact else .61 if width < 1270 else .65))
+    # Leave room for readable command labels at typical desktop resolutions.
+    menu_left = round(width * (.56 if compact else .58 if width < 1270 else .65))
     menu_width = width - menu_left - margin
     menu_top = round(height * (.245 if compact else .29))
     footer_height = 33 if compact else 40
@@ -35,7 +36,8 @@ def title_geometry(width, height):
         cards.append((menu_left, y, menu_left + menu_width, y + h))
         y += h + gap
     box_x = 20 if compact else max(36, round(width * .024))
-    box_w = min(450, max(294, round(width * .29)))
+    # The original stage has a painted placard at the bottom-left.
+    box_w = min(500, max(294, round(width * .36)))
     box_h = max(160, min(243, round(height * .267)))
     box_bottom = height - (54 if compact else 87)
     campaign = (box_x, box_bottom - box_h, box_x + box_w, box_bottom)
@@ -190,7 +192,21 @@ class CinematicTitleMenu(TitleMenu):
         if self._stage_path is False:
             return False
         mode = self._appearance["background"]
-        if mode == "auto" and self._backdrop_source is not None:
+        # The trimmed PNG permanently cuts off Jeanne's head. The original
+        # stage art keeps her face and armor visible, and is the preferred
+        # automatic Jeanne background when Pillow is available.
+        if mode == "auto" and any(c["id"] == "jeanne" for c in self.app.project.campaigns):
+            stage_path = (Path(__file__).resolve().parent / "content" / "art" /
+                          "jeanne" / "jeanne_menu_stage.jpg")
+            if stage_path.is_file():
+                try:
+                    from PIL import Image
+                    self._stage_source = Image.open(stage_path).convert("RGB")
+                    self._stage_path = stage_path
+                    return True
+                except (ImportError, OSError, ValueError):
+                    pass
+        if self._backdrop_source is not None:
             self._stage_source = self._backdrop_source
             self._stage_path = self._backdrop_path
             return True
@@ -200,9 +216,6 @@ class CinematicTitleMenu(TitleMenu):
             if not artwork.is_relative_to(root):
                 self._stage_path = False
                 return False
-        elif mode == "auto" and any(c["id"] == "jeanne" for c in self.app.project.campaigns):
-            artwork = (Path(__file__).resolve().parent / "content" / "art" /
-                       "jeanne" / "jeanne_menu_stage.jpg")
         else:
             self._stage_path = False
             return False
@@ -270,7 +283,10 @@ class CinematicTitleMenu(TitleMenu):
                 stage = ImageOps.fit(
                     self._stage_source, (scenic_width, height),
                     method=Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS,
-                    centering=(.49, .50))
+                    # Favor Jeanne on the left rather than the central castle.
+                    centering=((.16, .50) if self._stage_path is not None and
+                               self._stage_path.name == "jeanne_menu_stage.jpg"
+                               else (.49, .50)))
                 background = Image.new("RGB", (width, height), (15, 27, 42))
                 background.paste(stage, (0, 0))
                 # Blend the artwork naturally into the navy right-hand menu.
@@ -388,15 +404,29 @@ class CinematicTitleMenu(TitleMenu):
             c.create_rectangle(x0,y0,x1,y1,fill=self._panel_color if not focused else "#1c324d",
                                outline=self._accent if focused else "#b18a51",
                                width=3 if focused else 1, tags=("art",tag))
-            icon_width = min(93, max(63,round(layout["menu_width"]*.19)))
+            icon_width = min(78, max(54,round(layout["menu_width"]*.16)))
             c.create_rectangle(x0+1,y0+1,x0+icon_width,y1-1,
                                fill="#203249",outline="",tags=("art",tag))
             self._icon(icon,x0+icon_width/2,y0+h/2,min(h*.29,26),tag)
             tx=x0+icon_width+13
-            title_size=max(13,min(round((21 if layout["compact"] else 26)*self.scale),round(h*.37)))
-            c.create_text(tx,y0+h*(.33 if h>66 else .34),text=label,anchor="w",
-                          fill=self._text_color if not disabled else "#94a1ae",
-                          font=("Georgia",title_size,"bold"),tags=("art",tag))
+            title_size=max(10,min(round((18 if layout["compact"] else 21)*self.scale),
+                                  round(h*.30)))
+            title_id = c.create_text(tx,y0+h*.33,text=label,anchor="w",
+                                     fill=self._text_color if not disabled else "#94a1ae",
+                                     font=("Georgia",title_size,"bold"),tags=("art",tag))
+            # Measure actual Tk font metrics so long labels never invade the
+            # arrow region, including custom labels from the title editor.
+            right_limit = x1-29
+            bbox = c.bbox(title_id)
+            while bbox is not None and bbox[2] > right_limit and title_size > 10:
+                title_size -= 1
+                c.itemconfigure(title_id,font=("Georgia",title_size,"bold"))
+                bbox = c.bbox(title_id)
+            if bbox is not None and bbox[2] > right_limit:
+                short = label
+                while len(short) > 1 and c.bbox(title_id)[2] > right_limit:
+                    short = short[:-1]
+                    c.itemconfigure(title_id,text=short.rstrip()+"…")
             sub = ("Aucune sauvegarde" if disabled else
                    self._resume_caption() if key=="continue" else subtitle)
             c.create_text(tx,y0+h*.71,text=sub,anchor="w",
@@ -477,12 +507,13 @@ class CinematicTitleMenu(TitleMenu):
         y=layout["footer_y"]
         h=layout["footer_height"]
         gap=6 if layout["compact"] else 9
-        widths=(w*.48,w*.245,w*.275)
+        available_width = max(0, w - 2*gap)
+        widths=(available_width*.48,available_width*.245,available_width*.275)
         labels=(("advanced","⚒  Outils avancés" if not layout["compact"] else "⚒  Outils"),
                 ("credits","♙  Crédits"),("help","?  Aide"))
         for i,((key,label),cw) in enumerate(zip(labels,widths)):
             xx=x+sum(widths[:i])+gap*i
-            xx1=xx+cw-(gap if i==2 else 0)
+            xx1=xx+cw
             tag="title_footer_"+key
             c.create_rectangle(xx,y,xx1,y+h,fill="#101a29",outline="#b18a51",tags=("art",tag))
             c.create_text((xx+xx1)/2,y+h/2,text=label,fill=self._text_color,
