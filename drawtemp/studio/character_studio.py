@@ -14,6 +14,11 @@ from drawtemp.assets.characters import (
     export_pack, frame, render_frame, starter_library,
 )
 from drawtemp.assets.jeanne_art import build_jeanne_art
+from drawtemp.assets.character_parts import (
+    PART_CATEGORIES, PROFILE_PRESETS, PROFILE_LABELS,
+    active_part, available_parts, ensure_profile, part_paths,
+    set_part, set_part_style,
+)
 
 
 def main(argv=None):
@@ -23,16 +28,18 @@ def main(argv=None):
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--open", type=Path, help="Open an R7 character recipe JSON")
+    parser.add_argument("--template", default="jeanne",
+                        help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
     args = parser.parse_args(argv)
 
     try:
-        from PySide6.QtCore import Qt, QTimer
-        from PySide6.QtGui import QAction, QKeySequence, QPixmap
+        from PySide6.QtCore import Qt, QTimer, QSize
+        from PySide6.QtGui import QAction, QKeySequence, QPixmap, QIcon, QColor
         from PySide6.QtWidgets import (
-            QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog, QFormLayout,
-            QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter,
+            QApplication, QCheckBox, QComboBox, QColorDialog, QDockWidget, QFileDialog, QFormLayout,
+            QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
+            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QTabBar, QToolButton,
             QVBoxLayout, QWidget,
         )
     except ImportError as exc:
@@ -46,10 +53,12 @@ def main(argv=None):
 
     root = args.root.resolve()
     templates = starter_library()
+    if not args.open and args.template not in templates:
+        parser.error("Unknown character template: " + args.template)
     if args.open:
         recipe = json.loads(args.open.read_text(encoding="utf-8"))
     else:
-        recipe = templates["jeanne"]
+        recipe = templates[args.template]
 
     class Workbench(QMainWindow):
         def __init__(self):
@@ -65,7 +74,7 @@ def main(argv=None):
             self.timer.setSingleShot(True)
             self.timer.timeout.connect(self.advance)
             self.setWindowTitle("DrawTemp 5.0 — Character & Animation Studio")
-            self.resize(1240, 820)
+            self.resize(1380, 940)
             self.build_ui()
             self.refresh()
 
@@ -73,9 +82,22 @@ def main(argv=None):
             self.templates = QComboBox()
             for key, doc in templates.items():
                 self.templates.addItem(doc["name"], key)
+            initial_key = self.session.document["id"]
+            initial_index = self.templates.findData(initial_key)
+            if initial_index >= 0:
+                self.templates.setCurrentIndex(initial_index)
             self.templates.currentIndexChanged.connect(self.use_template)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
+            self.profile_tabs = QTabBar()
+            self.profile_tabs.setExpanding(True)
+            self.profile_tabs.setToolTip(
+                "Editable starting appearances. All parts remain available "
+                "to Male, Female and Kid; profiles are independent.")
+            for profile in PROFILE_PRESETS:
+                index = self.profile_tabs.addTab(PROFILE_LABELS[profile])
+                self.profile_tabs.setTabData(index, profile)
+            self.profile_tabs.currentChanged.connect(self.profile_changed)
             self.add_variant = QPushButton("Dupliquer la tenue")
             self.add_variant.clicked.connect(self.duplicate_variant)
             self.generate_outfits = QPushButton("Créer les 4 tenues de Jeanne…")
@@ -136,10 +158,47 @@ def main(argv=None):
             self.diagnostics_box = QLabel()
             self.diagnostics_box.setWordWrap(True)
 
+            # RPG Maker-style visual part selection, with canonical R7 layers.
+            self.part_category = QListWidget()
+            for slot, label in PART_CATEGORIES:
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, slot)
+                self.part_category.addItem(item)
+            self.part_category.currentRowChanged.connect(self.refresh_parts)
+            self.part_grid = QListWidget()
+            self.part_grid.setViewMode(QListView.IconMode)
+            self.part_grid.setIconSize(QSize(58, 58))
+            self.part_grid.setGridSize(QSize(94, 88))
+            self.part_grid.setResizeMode(QListView.Adjust)
+            self.part_grid.setMovement(QListView.Static)
+            self.part_grid.setWrapping(True)
+            self.part_grid.currentItemChanged.connect(self.choose_part)
+            self.part_status = QLabel()
+            self.part_status.setWordWrap(True)
+            self.part_color = QPushButton("Choose color…")
+            self.part_color.clicked.connect(self.choose_color)
+            self.part_opacity = QSpinBox()
+            self.part_opacity.setRange(0, 255)
+            self.part_opacity.editingFinished.connect(self.apply_part_style)
+            self.part_x = QSpinBox()
+            self.part_y = QSpinBox()
+            for spin in (self.part_x, self.part_y):
+                spin.setRange(-4096, 4096)
+                spin.editingFinished.connect(self.apply_part_style)
+            self.pose_grid = QListWidget()
+            self.pose_grid.setViewMode(QListView.IconMode)
+            self.pose_grid.setIconSize(QSize(58, 58))
+            self.pose_grid.setGridSize(QSize(90, 96))
+            self.pose_grid.setResizeMode(QListView.Adjust)
+            self.pose_grid.setMovement(QListView.Static)
+            self.pose_grid.setWrapping(True)
+            self.pose_grid.itemClicked.connect(self.choose_pose)
+
             library_box = QWidget()
             left = QVBoxLayout(library_box)
             left.addWidget(QLabel("Modèles existants"))
             left.addWidget(self.templates)
+            left.addWidget(self.profile_tabs)
             left.addWidget(QLabel("Tenues / variantes"))
             left.addWidget(self.variants, 1)
             left.addWidget(self.add_variant)
@@ -147,6 +206,8 @@ def main(argv=None):
             left.addWidget(QLabel("Portraits / expressions"))
             left.addWidget(self.expression)
             left.addWidget(self.add_expression)
+            left.addWidget(QLabel("Appearance categories"))
+            left.addWidget(self.part_category, 2)
             left.addWidget(QLabel("Contrôle artistique"))
             left.addWidget(self.diagnostics_box)
 
@@ -158,10 +219,50 @@ def main(argv=None):
             toolbar.addWidget(QLabel("Action"))
             toolbar.addWidget(self.action)
             middle.addLayout(toolbar)
-            middle.addWidget(self.canvas, 1)
+            middle.addWidget(QLabel("Variation — select an existing part"))
+            middle.addWidget(self.part_grid, 2)
+            middle.addWidget(self.part_status)
+            controls = QHBoxLayout()
+            controls.addWidget(QLabel("Color"))
+            controls.addWidget(self.part_color)
+            controls.addWidget(QLabel("Alpha"))
+            controls.addWidget(self.part_opacity)
+            middle.addLayout(controls)
+            palette = QHBoxLayout()
+            for color in ("#ffffff", "#f8ce9d", "#b87652", "#412a24",
+                          "#ffd359", "#71b7e3", "#d875b7", "#8e5ecb",
+                          "#44885a", "#2e2e36"):
+                swatch = QToolButton()
+                swatch.setToolTip(color)
+                swatch.setFixedSize(24, 24)
+                swatch.setStyleSheet("background-color: " + color + ";")
+                swatch.clicked.connect(
+                    lambda checked=False, value=color: self.apply_part_style(tint=value))
+                palette.addWidget(swatch)
+            palette.addStretch()
+            middle.addLayout(palette)
+            offsets = QHBoxLayout()
+            offsets.addWidget(QLabel("Offset X"))
+            offsets.addWidget(self.part_x)
+            offsets.addWidget(QLabel("Y"))
+            offsets.addWidget(self.part_y)
+            for label, dx, dy in (("←", -1, 0), ("↑", 0, -1),
+                                  ("↓", 0, 1), ("→", 1, 0)):
+                move = QToolButton()
+                move.setText(label)
+                move.setToolTip("Move selected element by one pixel")
+                move.clicked.connect(
+                    lambda checked=False, x=dx, y=dy: self.move_part(x, y))
+                offsets.addWidget(move)
+            middle.addLayout(offsets)
+            middle.addWidget(QLabel("Preview"))
+            self.canvas.setMinimumSize(280, 260)
+            middle.addWidget(self.canvas, 4)
             middle.addWidget(self.status)
             middle.addWidget(self.onion)
             middle.addWidget(self.play)
+            middle.addWidget(QLabel("Existing poses — click to inspect"))
+            middle.addWidget(self.pose_grid, 2)
 
             edit_box = QWidget()
             right = QVBoxLayout(edit_box)
@@ -191,7 +292,8 @@ def main(argv=None):
             splitter.addWidget(library_box)
             splitter.addWidget(editor_box)
             splitter.addWidget(edit_box)
-            splitter.setSizes([270, 570, 330])
+            splitter.setSizes([250, 770, 310])
+            self.part_category.setCurrentRow(0)
             self.setCentralWidget(splitter)
 
             file_menu = self.menuBar().addMenu("&Fichier")
@@ -214,6 +316,206 @@ def main(argv=None):
                 edit_menu.addAction(action)
             self.statusBar().showMessage("R7 | Le rendu Player Qt sera raccordé par R3/R12.")
 
+        def sync_profile_tabs(self):
+            """Tabs are only for Modular Hero, not arbitrary RPG actors."""
+            doc = self.session.document
+            visible = doc["id"] == "modular_hero" and doc["size"] == [192, 192]
+            self.profile_tabs.setVisible(visible)
+            self.profile_tabs.blockSignals(True)
+            active = self.active_variant() if visible else None
+            index = (PROFILE_PRESETS.index(active)
+                     if active in PROFILE_PRESETS else -1)
+            self.profile_tabs.setCurrentIndex(index)
+            self.profile_tabs.blockSignals(False)
+
+        def profile_changed(self, index):
+            if index < 0:
+                return
+            doc = self.session.document
+            if doc["id"] != "modular_hero" or doc["size"] != [192, 192]:
+                return
+            profile = self.profile_tabs.tabData(index)
+            if profile not in PROFILE_PRESETS:
+                return
+            try:
+                if profile not in doc["variants"]:
+                    # Non-destructive migration of old 'default' characters.
+                    self.session.edit(lambda candidate: ensure_profile(
+                        candidate, profile))
+                    self.refresh()
+                ids = list(self.session.document["variants"])
+                if profile in ids:
+                    self.variants.setCurrentRow(ids.index(profile))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+                self.sync_profile_tabs()
+
+        def selected_part_slot(self):
+            item = self.part_category.currentItem()
+            return item.data(Qt.UserRole) if item else None
+
+        def refresh_parts(self, *_):
+            """Show actual four-direction variations, never fabricated art."""
+            slot = self.selected_part_slot()
+            self.part_grid.blockSignals(True)
+            self.part_grid.clear()
+            if slot is None:
+                self.part_grid.blockSignals(False)
+                return
+            doc = self.session.document
+            variant = self.active_variant()
+            layer = active_part(doc, variant, slot)
+            enabled = doc["size"] == [192, 192] and self.art_root == root
+            self.part_grid.setEnabled(enabled)
+            if enabled:
+                none = QListWidgetItem("None")
+                none.setData(Qt.UserRole, None)
+                self.part_grid.addItem(none)
+                try:
+                    variants = available_parts(root, slot)
+                except CharacterError:
+                    variants = ()
+                for name in variants:
+                    icon_path = root / part_paths(slot, name)["south"]
+                    item = QListWidgetItem(QIcon(str(icon_path)),
+                                           name.replace("_", " ").title())
+                    item.setData(Qt.UserRole, name)
+                    self.part_grid.addItem(item)
+                selected_name = None
+                if layer is not None:
+                    path = layer["paths"].get("south", "")
+                    expected_prefix = f"assets/hero_parts/{slot}/"
+                    if path.startswith(expected_prefix) and path.endswith("_front.png"):
+                        selected_name = Path(path).stem[:-len("_front")]
+                for i in range(self.part_grid.count()):
+                    item = self.part_grid.item(i)
+                    if item.data(Qt.UserRole) == selected_name:
+                        self.part_grid.setCurrentRow(i)
+                        break
+                self.part_status.setText(
+                    f"{len(variants)} variants | All four directions | "
+                    "Select a piece to edit its color and position")
+            else:
+                self.part_status.setText(
+                    "Visual modular parts use a 192 x 192 canvas and repository "
+                    "assets. Choose the Modular Hero template to enable them.")
+            self.part_grid.blockSignals(False)
+            active = enabled and layer is not None
+            for control in (self.part_color, self.part_opacity, self.part_x, self.part_y):
+                control.setEnabled(active)
+            for spin, value in (
+                (self.part_x, layer["offset"][0] if layer else 0),
+                (self.part_y, layer["offset"][1] if layer else 0),
+                (self.part_opacity, layer["opacity"] if layer else 255),
+            ):
+                spin.blockSignals(True)
+                spin.setValue(value)
+                spin.blockSignals(False)
+            tint = layer["tint"] if layer else "#ffffff"
+            self.part_color.setStyleSheet("background-color: " + tint + ";")
+
+        def choose_part(self, item, previous):
+            if item is None or not self.part_grid.isEnabled():
+                return
+            slot = self.selected_part_slot()
+            name = item.data(Qt.UserRole)
+            current = active_part(self.session.document, self.active_variant(), slot)
+            expected = part_paths(slot, name) if name is not None else None
+            if (current is None and name is None) or (
+                    current is not None and current["paths"] == expected):
+                return
+            try:
+                vid = self.active_variant()
+                self.session.edit(
+                    lambda doc: set_part(doc, vid, slot, name, root))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+            self.refresh_parts()
+            self.refresh_pose_grid()
+            self.refresh_preview()
+
+        def choose_color(self):
+            layer = active_part(self.session.document, self.active_variant(),
+                                self.selected_part_slot())
+            if layer is None:
+                return
+            color = QColorDialog.getColor(
+                QColor(layer["tint"]), self, "Selected element color")
+            if color.isValid():
+                self.apply_part_style(tint=color.name())
+
+        def apply_part_style(self, *, tint=None):
+            slot = self.selected_part_slot()
+            if slot is None or not self.part_grid.isEnabled():
+                return
+            old = active_part(self.session.document, self.active_variant(), slot)
+            if old is None:
+                return
+            vid = self.active_variant()
+            offset = [self.part_x.value(), self.part_y.value()]
+            opacity = self.part_opacity.value()
+            color = tint if tint is not None else old["tint"]
+            if (old["offset"] == offset and old["opacity"] == opacity
+                    and old["tint"] == color):
+                return
+            try:
+                self.session.edit(lambda doc: set_part_style(
+                    doc, vid, slot, offset=offset, opacity=opacity, tint=color))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+            self.refresh_parts()
+            self.refresh_pose_grid()
+            self.refresh_preview()
+
+        def move_part(self, dx, dy):
+            if not self.part_grid.isEnabled():
+                return
+            slot = self.selected_part_slot()
+            if slot is None or active_part(
+                    self.session.document, self.active_variant(), slot) is None:
+                return
+            self.part_x.setValue(max(-4096, min(4096, self.part_x.value() + dx)))
+            self.part_y.setValue(max(-4096, min(4096, self.part_y.value() + dy)))
+            self.apply_part_style()
+
+        def refresh_pose_grid(self):
+            """All existing posture/direction combinations; no animation copies."""
+            self.pose_grid.clear()
+            doc = self.session.document
+            variant = self.active_variant()
+            for action in ACTIONS:
+                directions = doc["variants"][variant]["clips"].get(
+                    action, {}).get("directions", {})
+                for direction in DIRECTIONS:
+                    if not directions.get(direction):
+                        continue
+                    try:
+                        image = render_frame(
+                            doc, variant, action, direction, 0, self.art_root)
+                        data = io.BytesIO()
+                        image.save(data, format="PNG")
+                        pixmap = QPixmap()
+                        pixmap.loadFromData(data.getvalue(), "PNG")
+                    except (CharacterError, OSError, KeyError, ValueError):
+                        continue
+                    item = QListWidgetItem(
+                        QIcon(pixmap), action.capitalize() + " / " + direction)
+                    item.setData(Qt.UserRole, (action, direction))
+                    self.pose_grid.addItem(item)
+            if not self.pose_grid.count():
+                self.pose_grid.addItem("No authored postures for this outfit")
+
+        def choose_pose(self, item):
+            choice = item.data(Qt.UserRole)
+            if not choice:
+                return
+            action, direction = choice
+            self.stop()
+            self.action.setCurrentIndex(self.action.findData(action))
+            self.direction.setCurrentIndex(self.direction.findData(direction))
+            self.frame_index = 0
+            self.refresh_timeline()
+
         def active_variant(self):
             vid = self.variants.currentItem()
             return vid.text() if vid else next(iter(self.session.document["variants"]))
@@ -234,8 +536,12 @@ def main(argv=None):
             keys = list(document["variants"])
             self.variants.setCurrentRow(keys.index(selected) if selected in keys else 0)
             self.variants.blockSignals(False)
-            self.refresh_timeline()
+            self.sync_profile_tabs()
+            # Clear stale portrait choice before drawing a different outfit.
             self.refresh_expressions()
+            self.refresh_timeline()
+            self.refresh_parts()
+            self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
             self.diagnostics_box.setText(
@@ -259,10 +565,14 @@ def main(argv=None):
             self.expression.blockSignals(False)
 
         def variant_changed(self, _):
+            self.sync_profile_tabs()
             self.stop()
             self.frame_index = 0
-            self.refresh_timeline()
+            # Clear stale portrait choice before drawing a different outfit.
             self.refresh_expressions()
+            self.refresh_timeline()
+            self.refresh_parts()
+            self.refresh_pose_grid()
 
         def reset_frame(self, *_):
             self.stop()
@@ -395,6 +705,7 @@ def main(argv=None):
             except CharacterError as exc:
                 self.statusBar().showMessage(str(exc))
             self.refresh_timeline()
+            self.refresh_pose_grid()
 
         def change_duration(self):
             self.change_frame("duration_ms", self.duration.value())
@@ -650,9 +961,30 @@ def main(argv=None):
     app = QApplication.instance() or QApplication([sys.argv[0]])
     window = Workbench()
     window.show()
+    smoke_errors = []
     if args.smoke:
-        QTimer.singleShot(120, app.quit)
-    return app.exec()
+        def verify_smoke():
+            try:
+                if window.session.document["id"] == "modular_hero":
+                    # Exercise actual Qt tab selection, not only construction.
+                    assert window.profile_tabs.count() == len(PROFILE_PRESETS)
+                    for index, name in enumerate(PROFILE_PRESETS):
+                        window.profile_tabs.setCurrentIndex(index)
+                        assert window.active_variant() == name, (
+                            "Profile tab did not select " + name)
+                    assert window.pose_grid.count() == 4, (
+                        "Static four-direction poses were not shown")
+            except Exception as exc:
+                smoke_errors.append(str(exc))
+            finally:
+                app.quit()
+        QTimer.singleShot(120, verify_smoke)
+    result = app.exec()
+    if smoke_errors:
+        print("Character Studio smoke failed: " + "; ".join(smoke_errors),
+              file=sys.stderr)
+        return 1
+    return result
 
 
 if __name__ == "__main__":
