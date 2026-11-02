@@ -107,7 +107,7 @@ Pour installer ou mettre à jour l'environnement du Player :
 
 ```sh
 python -m pip install -e .
-python -c "from PIL import Image; print(Image.__version__)"
+python -c "from PIL import __version__; print(__version__)"
 ```
 
 Puis lancer les tests :
