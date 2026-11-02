@@ -121,6 +121,7 @@ class VisualLayersDock(QWidget):
         self._building = True
         self.tree.blockSignals(True)
         self.tree.clear()
+        matched = False
         # Show the highest layer first, while preserving bottom-to-top model.
         for layer in reversed(layers):
             item = QTreeWidgetItem(self.tree)
@@ -130,7 +131,8 @@ class VisualLayersDock(QWidget):
             item.setCheckState(2, Qt.Checked if layer["locked"] else Qt.Unchecked)
             if layer["id"] == selected:
                 self.tree.setCurrentItem(item)
-        if selected is None and self.tree.topLevelItemCount():
+                matched = True
+        if not matched and self.tree.topLevelItemCount():
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
         self.tree.blockSignals(False)
         self._building = False
