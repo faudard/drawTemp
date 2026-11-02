@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
+from drawtemp.localization.ui import DEFAULT_LANGUAGE, language_choices, normalize_language, ui_text
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
 from drawtemp.sdk.reference import reference_project
@@ -37,7 +38,7 @@ from drawtemp.sdk.r24g_semantic_vcs import (
 from drawtemp.studio.plugins import (
     StudioPluginError, StudioPluginRegistry, read_studio_manifest,
 )
-from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, EN, recent_projects, workspace_host)
+from drawtemp.studio.r18_navigation import (WORKSPACES, LABELS, recent_projects, workspace_host)
 from drawtemp.studio.r49_experience import (
     OperationTimings, audit_command_bindings, measure_studio, resolve_shortcuts,
 )
@@ -228,7 +229,7 @@ class StudioWindow(QMainWindow):
         self._make_problems_dock()
         self._build_commands()
         self._build_menus()
-        self.set_language(str(self.settings.value("language", "fr")))
+        self.set_language(str(self.settings.value("language", DEFAULT_LANGUAGE)))
         self._refresh_recent_menu()
         self._activate("project")
 
@@ -543,10 +544,10 @@ class StudioWindow(QMainWindow):
             self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
-        file_menu = self.menuBar().addMenu("&Fichier")
+        file_menu = self.menuBar().addMenu("&File")
         for key in ("new_project", "new", "new_template", "open"):
             file_menu.addAction(self.commands[key])
-        self.recent_menu = file_menu.addMenu("Projets récents")
+        self.recent_menu = file_menu.addMenu("Recent projects")
         self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
         for key in ("save", "save_as"):
             file_menu.addAction(self.commands[key])
@@ -555,30 +556,33 @@ class StudioWindow(QMainWindow):
                     "playtest_report", "export"):
             file_menu.addAction(self.commands[key])
         self._sync_playtest_commands()
-        edit_menu = self.menuBar().addMenu("&Édition")
+        edit_menu = self.menuBar().addMenu("&Edit")
         for key in ("undo", "redo", "palette"):
             edit_menu.addAction(self.commands[key])
-        view_menu = self.menuBar().addMenu("&Affichage")
-        self.workspaces_menu = self.menuBar().addMenu("&Ateliers")
+        view_menu = self.menuBar().addMenu("&Display")
+        self.workspaces_menu = self.menuBar().addMenu("&Workspaces")
         for identifier in WORKSPACES:
             self.workspaces_menu.addAction(self.commands["go_" + identifier])
         for dock in (self.resource_dock, self.inspector_dock, self.problems_dock):
             view_menu.addAction(dock.toggleViewAction())
-        for title, name in (("Disposition édition", "editing"),
-                            ("Disposition analyse", "analysis"),
-                            ("Disposition compacte", "compact")):
-            action = view_menu.addAction(title)
+        self._localized_actions = {}
+        for name in ("editing", "analysis", "compact"):
+            action = view_menu.addAction(ui_text("layout." + name))
+            self._localized_actions["layout." + name] = action
             action.triggered.connect(lambda _=False, p=name: self.layout_preset(p))
-        theme_menu = view_menu.addMenu("Thème")
-        for title, key in (("Sombre", "dark"), ("Clair", "light")):
-            action = theme_menu.addAction(title)
+        theme_menu = view_menu.addMenu("Theme")
+        for key in ("dark", "light"):
+            action = theme_menu.addAction(ui_text("theme." + key))
+            self._localized_actions["theme." + key] = action
             action.triggered.connect(lambda _=False, value=key: self.set_theme(value))
         for scale in (90, 100, 115, 130):
-            action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
+            action = view_menu.addAction(ui_text("menu.ui_scale", scale=scale))
+            self._localized_actions[("menu.ui_scale", scale)] = action
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
-        tools_menu = self.menuBar().addMenu("&Outils")
-        vcs_menu = tools_menu.addMenu("Collaboration / VCS")
-        review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
+        tools_menu = self.menuBar().addMenu("&Tools")
+        vcs_menu = tools_menu.addMenu(ui_text("menu.vcs"))
+        review_branch = vcs_menu.addAction(ui_text("tool.vcs_merge"))
+        self._localized_actions["tool.vcs_merge"] = review_branch
         review_branch.triggered.connect(self._semantic_merge_dialog)
         vcs_menu.addAction(self.commands["r48_history"])
         vcs_menu.addAction(self.commands["r78_team_reviews"])
@@ -612,7 +616,8 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r37_squad"])
         tools_menu.addAction(self.commands["r37_boss"])
         tools_menu.addAction(self.commands["r55_systems"])
-        qa_action = tools_menu.addAction("R56 • QA Lab du gameplay…")
+        qa_action = tools_menu.addAction(ui_text("tool.qa_lab"))
+        self._localized_actions["tool.qa_lab"] = qa_action
         qa_action.setObjectName("r56-qa-lab-action")
         qa_action.triggered.connect(self.open_gameplay_qa_lab)
         tools_menu.addAction(self.commands["r63_survival"])
@@ -621,30 +626,47 @@ class StudioWindow(QMainWindow):
         tools_menu.addAction(self.commands["r76_optimizer"])
         tools_menu.addAction(self.commands["r57_translation"])
         tools_menu.addAction(self.commands["r45_economy"])
-        scripts_menu = tools_menu.addMenu("Hooks contrôlés")
-        import_hooks = scripts_menu.addAction("Importer des hooks JSON…")
+        scripts_menu = tools_menu.addMenu(ui_text("menu.scripts"))
+        import_hooks = scripts_menu.addAction(ui_text("tool.scripts_import"))
+        self._localized_actions["tool.scripts_import"] = import_hooks
         import_hooks.triggered.connect(self._import_hooks_dialog)
         tools_menu.addAction(self.commands["preferences"])
         tools_menu.addAction(self.commands["guide"])
-        package_menu = tools_menu.addMenu("Packages de ressources R58")
-        manage_packages = package_menu.addAction("Gérer les packages…")
+        package_menu = tools_menu.addMenu(ui_text("menu.packages"))
+        manage_packages = package_menu.addAction(ui_text("tool.packages_manage"))
+        self._localized_actions["tool.packages_manage"] = manage_packages
         manage_packages.triggered.connect(self.open_package_manager)
-        plugin_menu = tools_menu.addMenu("Plugins Studio")
-        load_plugin = plugin_menu.addAction("Charger un manifeste…")
+        plugin_menu = tools_menu.addMenu(ui_text("menu.plugins"))
+        load_plugin = plugin_menu.addAction(ui_text("tool.plugins_load"))
+        self._localized_actions["tool.plugins_load"] = load_plugin
         load_plugin.triggered.connect(self._load_plugin_dialog)
-        disable_plugin = plugin_menu.addAction("Désactiver un plugin…")
+        disable_plugin = plugin_menu.addAction(ui_text("tool.plugins_disable"))
+        self._localized_actions["tool.plugins_disable"] = disable_plugin
         disable_plugin.triggered.connect(self._disable_plugin_dialog)
-        mod_menu = tools_menu.addMenu("Modules / SDK R47")
-        mod_manager = mod_menu.addAction("Inspecter les mods déclaratifs…")
+        mod_menu = tools_menu.addMenu(ui_text("menu.mods"))
+        mod_manager = mod_menu.addAction(ui_text("tool.mods_inspect"))
+        self._localized_actions["tool.mods_inspect"] = mod_manager
         mod_manager.triggered.connect(self.open_mod_manager)
-        shortcuts = tools_menu.addAction("Configurer un raccourci…")
+        shortcuts = tools_menu.addAction(ui_text("menu.shortcuts"))
+        self._localized_actions["menu.shortcuts"] = shortcuts
         shortcuts.triggered.connect(self.configure_shortcut)
-        # Localization applies to global workspace labels; legacy editors
-        # maintain their own FR labels while they are being migrated.
-        locale_menu = tools_menu.addMenu("Langue")
-        for lang in ("fr", "en"):
-            action = locale_menu.addAction(lang.upper())
+        # Presentation-only language selection: does not mutate authored content.
+        locale_menu = tools_menu.addMenu("Language")
+        self._locale_actions = {}
+        for lang, name in language_choices():
+            action = locale_menu.addAction(name)
+            action.setCheckable(True)
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+            self._locale_actions[lang] = action
+        self._localized_menus = {
+            "menu.file": file_menu, "menu.edit": edit_menu,
+            "menu.display": view_menu, "menu.workspaces": self.workspaces_menu,
+            "menu.tools": tools_menu, "menu.recent": self.recent_menu,
+            "menu.theme": theme_menu, "menu.language": locale_menu,
+            "menu.vcs": vcs_menu, "menu.scripts": scripts_menu,
+            "menu.packages": package_menu, "menu.plugins": plugin_menu,
+            "menu.mods": mod_menu,
+        }
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
         self.addToolBar(self.toolbar)
@@ -684,13 +706,34 @@ class StudioWindow(QMainWindow):
         apply_theme(QApplication.instance(), self.settings.value("theme", "dark"), scale)
 
     def set_language(self, language):
+        language = normalize_language(language)
         self.settings.setValue("language", language)
-        labels = EN if language == "en" else LABELS
+        for key, menu in self._localized_menus.items():
+            menu.setTitle(ui_text(key, language))
+        for code, action in self._locale_actions.items():
+            action.setChecked(code == language)
         for identifier in WORKSPACES:
-            self.commands["go_" + identifier].setText("Workspace: " + labels[identifier]
-                                                      if language == "en" else
-                                                      "Atelier : " + labels[identifier])
-        self.statusBar().showMessage("Langue du shell : " + language.upper())
+            self.commands["go_" + identifier].setText(ui_text(
+                "studio.workspace_prefix", language,
+                name=ui_text("workspace." + identifier, language)))
+        for key, action in self._localized_actions.items():
+            if isinstance(key, tuple):
+                action.setText(ui_text(key[0], language, scale=key[1]))
+            else:
+                action.setText(ui_text(key, language))
+        self.resource_dock.setWindowTitle(ui_text("dock.resources", language))
+        self.inspector_dock.setWindowTitle(ui_text("dock.inspector", language))
+        self.problems_dock.setWindowTitle(ui_text("dock.problems", language))
+        for key in (
+            "new", "new_project", "new_template", "open", "save", "save_as",
+            "playtest", "stop_playtest", "return_playtest", "playtest_report",
+            "export", "preferences", "undo", "redo", "palette", "guide",
+            "r57_translation", "focus_resources", "focus_inspector",
+            "focus_workspace",
+        ):
+            self.commands[key].setText(ui_text("command." + key, language))
+        self.statusBar().showMessage(ui_text(
+            "studio.language_changed", language, language=language.upper()))
         self._update_guide()
 
     def configure_shortcut(self):

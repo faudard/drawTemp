@@ -71,6 +71,47 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
             finally:
                 app.close()
 
+    def test_authored_title_screen_applies_to_real_player_menu(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        from sporebound.title_screen_settings import NAMESPACE, extension_for
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            try:
+                app.project.extensions[NAMESPACE] = extension_for({
+                    "background": "solid", "accent": "#aabbcc",
+                    "panel": "#123456", "show_campaign": False,
+                    "labels": {"new": "Start a Quest"},
+                    "positions": {"new": [0.05, 0.05],
+                                  "logo": [0.01, 0.03]}})
+                app.title_screen()
+                app.root.update()
+                menu = app._title_menu
+                self.assertEqual(menu._accent, "#aabbcc")
+                self.assertEqual(menu._panel_color, "#123456")
+                self.assertEqual(len(menu._hitboxes), 9)
+                texts = [menu.canvas.itemcget(item, "text")
+                         for item in menu.canvas.find_withtag("title_card_new")
+                         if menu.canvas.type(item) == "text"]
+                self.assertIn("Start a Quest", texts)
+                from sporebound.title_screen_layout import resolve_boxes
+                expected = resolve_boxes(
+                    menu.canvas.winfo_width(), menu.canvas.winfo_height(),
+                    title_geometry(menu.canvas.winfo_width(),
+                                   menu.canvas.winfo_height()),
+                    app.project.extensions[NAMESPACE]["data"]["positions"])
+                self.assertEqual(menu._hitboxes["new"], expected["new"])
+                self.assertLess(menu._hitboxes["new"][0], 100)
+                app.root.geometry("800x580")
+                app.root.update()
+                self.assertEqual(len(menu._hitboxes), 9)
+                for bounds in menu._hitboxes.values():
+                    self.assertGreaterEqual(bounds[0], 0)
+                    self.assertLessEqual(bounds[2], menu.canvas.winfo_width())
+            finally:
+                app.close()
+
     def test_jeanne_art_and_high_contrast_survive_resize(self):
         from sporebound.player_app import PlayerApplication
         root = Path(__file__).resolve().parents[1]

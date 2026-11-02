@@ -63,6 +63,15 @@ class SelectionState:
     cells: Tuple[Tuple[int, int], ...] = ()
 
 
+def selection_cell_or_default(board, cell):
+    """Return a valid focus cell, including after an off-board click or map change."""
+    if (isinstance(cell, (tuple, list)) and len(cell) == 2
+            and all(type(value) is int for value in cell)
+            and board.contains(cell)):
+        return tuple(cell)
+    return (0, 0)
+
+
 class SelectionController:
     """Pure selection state; the selection never enters serialized Content."""
     def __init__(self, notifications, mission_id='', *, cell=(0, 0)):
@@ -72,7 +81,8 @@ class SelectionController:
     def set(self, mission_id, cell, cells=(), *, publish=True):
         require(isinstance(mission_id, str) and bool(mission_id),
                 'Selection requires a mission')
-        require(len(cell) == 2 and all(type(v) is int for v in cell),
+        require(isinstance(cell, (tuple, list)) and len(cell) == 2
+                and all(type(v) is int for v in cell),
                 'Invalid selected cell')
         selected = tuple(sorted(set(tuple(c) for c in cells)))
         updated = SelectionState(mission_id, tuple(cell), selected)

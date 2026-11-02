@@ -116,6 +116,9 @@ class GameProject:
                     f'Unknown starting mission: {campaign["start_mission"]}')
         from .project_extensions import validate_project_extensions
         validate_project_extensions(self.extensions, content=content, campaigns=self.campaigns)
+        from .title_screen_settings import NAMESPACE as TITLE_NAMESPACE, validate_title_screen
+        if TITLE_NAMESPACE in self.extensions:
+            validate_title_screen(self.extensions[TITLE_NAMESPACE]["data"])
         # R65.B: legacy projects bypass the optional combat validation entirely.
         if "org.drawtemp.actioncombat" in self.extensions:
             from .action_combat_catalog_r65 import catalog_from_project

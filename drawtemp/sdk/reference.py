@@ -24,6 +24,8 @@ def reference_project():
     data["missions"] = [mission]
     content = Content.from_dict(data)
     project = GameProject.default(content)
+    # Historical Jeanne reference content remains authored in French.
+    project.options["language"] = "fr"
     project.title = "Jeanne — référence de migration R0"
     project.story = {
         "entry_scenes": {"main": "arrival"}, "after_mission": {},

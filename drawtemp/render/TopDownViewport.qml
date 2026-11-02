@@ -23,16 +23,16 @@ Item {
         model: renderer.depthLayers
         delegate: Rectangle {
             required property var modelData
-            readonly property var layer: modelData
+            readonly property var depthLayer: modelData
             readonly property real zoom: viewport.camera.zoom
             visible: viewport.flatView
-            width: layer.width * zoom
-            height: layer.height * zoom
-            x: viewport.width / 2 + (viewport.camera.panX + layer.sx * zoom) * layer.parallax - width / 2
-            y: viewport.height / 2 + (viewport.camera.panY + layer.sy * zoom) * layer.parallax - height / 2
-            z: -200000 + layer.depthIndex
-            color: layer.color
-            opacity: layer.opacity
+            width: depthLayer.width * zoom
+            height: depthLayer.height * zoom
+            x: viewport.width / 2 + (viewport.camera.panX + depthLayer.sx * zoom) * depthLayer.parallax - width / 2
+            y: viewport.height / 2 + (viewport.camera.panY + depthLayer.sy * zoom) * depthLayer.parallax - height / 2
+            z: -200000 + depthLayer.depthIndex
+            color: depthLayer.color
+            opacity: depthLayer.opacity
         }
     }
 

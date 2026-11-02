@@ -39,7 +39,8 @@ class SharedIsometricBattleGuiTests(unittest.TestCase):
                 toggle.invoke()
                 root.update()
                 self.assertTrue(canvas.find_withtag('iso_actor'))
-                buttons['Playtest'].invoke()
+                playtest_button = buttons['▶ Playtest']
+                playtest_button.invoke()
                 root.update()
                 self.assertTrue(canvas.find_withtag('iso_actor'))
                 # Isometric selection remains usable while Battle is active.
@@ -56,7 +57,7 @@ class SharedIsometricBattleGuiTests(unittest.TestCase):
                 canvas.event_generate('<ButtonRelease-1>', x=x, y=y)
                 root.update()
                 self.assertTrue(canvas.find_withtag('selection'))
-                buttons['Éditer'].invoke()
+                playtest_button.invoke()
                 root.update()
                 self.assertTrue(canvas.find_withtag('iso_actor'))
                 self.assertEqual(errors, [])
