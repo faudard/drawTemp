@@ -127,6 +127,11 @@ class StudioAppearance:
                   background=[("pressed", palette.selected),
                               ("active", palette.selected)],
                   foreground=[("disabled", palette.muted)])
+        style.configure("Studio.Toolbar.TButton",
+                        background=palette.elevated,
+                        foreground=palette.text,
+                        font=("TkDefaultFont", 9),
+                        borderwidth=1, padding=(7, 3))
         style.configure("TMenubutton", background=palette.elevated,
                         foreground=palette.text, borderwidth=1,
                         padding=(10, 7))
