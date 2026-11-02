@@ -161,7 +161,7 @@ class AddonManagerDialog(QDialog):
             self._report(exc)
             return
 
-        summary = "\\n".join(
+        summary = "\n".join(
             "• {} / {}: {}".format(
                 hook["scene"], hook["choice"],
                 ", ".join(effect["kind"] for effect in hook["effects"]),
@@ -170,11 +170,11 @@ class AddonManagerDialog(QDialog):
         )
         approved = QMessageBox.question(
             self, "Compile native event hooks",
-            "Add-on: {}\\n\\nNative story.choice hooks:\\n{}\\n\\n"
+            "Add-on: {}\n\nNative story.choice hooks:\n{}\n\n"
             "This is ONE undoable change to the canonical GameProject. "
             "The Player will execute only validated StoryBook effects. "
             "Disabling the add-on later will NOT undo already compiled effects. "
-            "You must explicitly save the project after compiling.\\n\\n"
+            "You must explicitly save the project after compiling.\n\n"
             "Apply these changes?".format(addon_id, summary),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
