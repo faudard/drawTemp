@@ -45,6 +45,28 @@ class UiLocalizationTests(unittest.TestCase):
                    side_effect=lambda code: english if code == "en" else french):
             self.assertEqual(ui_text("menu.file", "fr"), "&File")
 
+    def test_packaged_catalogs_have_no_duplicate_json_keys(self):
+        """Do not regress on duplicate keys after merging locale additions."""
+        import json
+        from importlib.resources import files
+        from drawtemp.localization.ui import _no_duplicate_keys
+
+        for code in LANGUAGES:
+            with self.subTest(locale=code):
+                raw = files("drawtemp.localization").joinpath(
+                    "locales", code + ".json"
+                ).read_text(encoding="utf-8")
+                doc = json.loads(raw, object_pairs_hook=_no_duplicate_keys)
+                self.assertEqual(doc["locale"], code)
+
+        with self.assertRaisesRegex(
+            UiLocalizationError, "Duplicate localization JSON key: example.key"
+        ):
+            json.loads(
+                '{"strings": {"example.key": "a", "example.key": "b"}}',
+                object_pairs_hook=_no_duplicate_keys,
+            )
+
     def test_packaged_json_catalogs_are_readable(self):
         from importlib.resources import files
         for filename in ("manifest.json", "en.json", "fr.json"):
