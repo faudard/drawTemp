@@ -132,6 +132,8 @@ class VisualLayerTests(unittest.TestCase):
         from types import SimpleNamespace
         from drawtemp.player.qt_app import scene_for_player
 
+        first_mid = self.map.map_ids()[0]
+        self.map.select_map(first_mid)
         self.visual.create("above", "Above", plane="above")
         self.visual.paint("above", [(2, 2)], material="rock",
                           mask=[255, 50, 0, 255])
@@ -140,14 +142,13 @@ class VisualLayerTests(unittest.TestCase):
         project = GameProject.from_dict(snapshot["project"], content)
         detached = scene_for_player(SimpleNamespace(
             content=content, project=project, session=None))
-        # The Player default fallback scene is the original first mission.
-        # Select the authored mission directly to verify its shared contract.
-        annotated = attach_visual_layers(
-            scene_from_mission(content.missions["visual_test"]),
-            project.extensions)
-        self.assertEqual(annotated["visual_layers"][0]["id"], "above")
-        self.assertNotIn("drawtemp.visual.layers", snapshot["content"])
-        self.assertEqual(detached["visual_layers"], [])
+        self.assertEqual(detached["mission"], first_mid)
+        self.assertEqual(detached["visual_layers"][0]["id"], "above")
+        self.assertEqual(detached["visual_layers"][0]["cells"][0]["mask"],
+                         [255, 50, 0, 255])
+        self.assertEqual(detached["visual_layers"], attach_visual_layers(
+            scene_from_mission(content.missions[first_mid]),
+            project.extensions)["visual_layers"])
 
     def test_save_reload_roundtrip_and_no_sidecar(self):
         self.visual.create("details", "Flower Details")
