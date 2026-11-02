@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sporebound.terrain_autoblend import LAND_PRIORITY
+# The 2D palette puts roads/path materials over base grass; this is a
+# presentation priority and does not alter the existing isometric AutoBlend.
+QUAD_PRIORITY = {"grass": 1, "dirt": 2, "sand": 3,
+                 "cobble": 4, "stone": 5, "rock": 6}
 
 # Stable single-digit atlas indexes; do not derive from an unordered set.
 MATERIALS = ("grass", "dirt", "sand", "stone", "cobble", "rock", "water", "bridge")
@@ -82,7 +85,7 @@ def quadrant_overlays(center, surrounding):
     """
     if center not in MATERIALS or len(surrounding) != 8:
         raise ValueError("Invalid autotile materials")
-    base_priority = LAND_PRIORITY.get(center)
+    base_priority = QUAD_PRIORITY.get(center)
     if base_priority is None:
         return ((), (), (), ())
     result = []
@@ -90,12 +93,12 @@ def quadrant_overlays(center, surrounding):
         layers = {}
         for bit, idx in zip((1, 2, 4), indexes):
             incoming = surrounding[idx]
-            priority = LAND_PRIORITY.get(incoming, 0)
+            priority = QUAD_PRIORITY.get(incoming, 0)
             if priority > base_priority:
                 layers[incoming] = layers.get(incoming, 0) | bit
         result.append(tuple(QuarterOverlay(material, mask) for material, mask in
                             sorted(layers.items(),
-                                   key=lambda entry: (LAND_PRIORITY[entry[0]], entry[0]))))
+                                   key=lambda entry: (QUAD_PRIORITY[entry[0]], entry[0]))))
     return tuple(result)
 
 
@@ -140,5 +143,5 @@ def mask_alpha(quadrant, bits, local_x, local_y):
 
 
 __all__ = ["MATERIALS", "OFFSETS", "QUADRANTS", "QuarterOverlay",
-           "tile_key", "encode_key", "decode_key", "quadrant_overlays",
+           "QUAD_PRIORITY", "tile_key", "encode_key", "decode_key", "quadrant_overlays",
            "overlays_for_key", "affected_cells", "mask_alpha"]
