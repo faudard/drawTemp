@@ -11,7 +11,7 @@ undo/redo and Player are unchanged.
 
 ```powershell
 py -3.12 -m pip install -e ".[qt6-docking]"
-py -3.12 -m drawtemp studio --smoke
+py -3.12 -m drawtemp.studio.qt_shell --smoke
 py -3.12 -m unittest tests_standalone.test_studio_qtads -v
 ```
 
