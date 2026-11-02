@@ -5414,6 +5414,9 @@ def launch(path):
     root.protocol('WM_DELETE_WINDOW', close_editor)
     refresh_source()
     refresh()
+    # The initial scene should be legible without first finding the Fit button.
+    # Defer until the tool notebook and restored dock widths have settled.
+    root.after_idle(lambda: root.after_idle(fit_map))
     ambient_job = root.after(TICK_MS, ambient_tick)
     root.mainloop()
 
