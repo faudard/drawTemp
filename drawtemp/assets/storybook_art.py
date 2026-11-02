@@ -386,7 +386,8 @@ STORYBOOK_STARTERS = {
 }
 LOOKS = (
     ("village_scout", "Village Scout", "male",
-     {"front_hair": "swept", "rear_hair": "crop", "top": "tunic"}),
+     {"front_hair": "swept", "rear_hair": "crop",
+      "top": "tunic", "face": "smile"}),
     ("iron_guard", "Iron Guard", "male",
      {"body": "sturdy", "front_hair": "spikes",
       "rear_hair": "crop", "top": "brigandine",
@@ -410,7 +411,8 @@ LOOKS = (
      {"front_hair": "curtain", "rear_hair": "curls",
       "top": "tunic", "bottom": "skirt"}),
     ("village_kid", "Village Kid", "kid",
-     {"front_hair": "fringe", "rear_hair": "bob", "top": "hoodie"}),
+     {"front_hair": "fringe", "rear_hair": "bob",
+      "top": "hoodie", "face": "calm"}),
     ("young_scout", "Young Scout", "kid",
      {"front_hair": "spikes", "rear_hair": "crop", "top": "tunic"}),
     ("apprentice_mage", "Apprentice Mage", "kid",
