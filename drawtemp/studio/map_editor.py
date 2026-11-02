@@ -120,6 +120,13 @@ class MapWindow(QMainWindow):
         self.mode.addItems(["Édition carte", "Construction 2.5D", "Donjons / énigmes"])
         toolbar.addWidget(QLabel(" Espace "))
         toolbar.addWidget(self.mode)
+        self.projection_choice = QComboBox(self)
+        self.projection_choice.setObjectName("r5-map-projection")
+        self.projection_choice.setAccessibleName("Map projection: ISO or 2D")
+        self.projection_choice.addItem("Iso 2.5D", "isometric")
+        self.projection_choice.addItem("2D", "top_down")
+        toolbar.addWidget(QLabel(" View "))
+        toolbar.addWidget(self.projection_choice)
         toolbar.addWidget(QLabel(" Outil "))
         toolbar.addWidget(self.tools)
 
@@ -174,16 +181,7 @@ class MapWindow(QMainWindow):
         if viewport.status() == QQuickWidget.Error:
             raise RuntimeError("\n".join(error.toString() for error in viewport.errors()))
         root = viewport.rootObject()
-        root.setProperty("interactionMode", "edit")
-        root.setProperty("showLegend", False)
-        root.strokeStarted.connect(self.begin_stroke)
-        root.strokeMoved.connect(self.extend_stroke)
-        root.strokeFinished.connect(self.finish_stroke)
-        root.strokeCancelled.connect(self.cancel_stroke)
-        root.cellSelected.connect(self.select_event_cell)
-        root.editHover.connect(self._hover_transform)
-        root.editHoverLeft.connect(self._hover_left)
-        root.buildingPicked.connect(self._on_building_pick)
+        self._connect_viewport_inputs(root)
         self.viewport = viewport
         # Keep the ONE R3/QML viewport; ADS only changes QWidget geometry.
         from .ads_docking import DockHost
@@ -198,7 +196,18 @@ class MapWindow(QMainWindow):
 
         self.maps = QListWidget()
         self.maps.currentRowChanged.connect(self.change_map)
-        self._dock("Cartes / Missions", self.maps, Qt.LeftDockWidgetArea)
+        self.maps_dock = self._dock("Cartes / Missions", self.maps,
+                                    Qt.LeftDockWidgetArea)
+        # Actual native-resolution PNG atlas swatches, sharing the existing
+        # R5 surface brush; no new terrain schema or sidecar.
+        from .topdown_tileset_dock import TopDownTilesetDock
+        self.tileset_panel = TopDownTilesetDock(self)
+        self.tileset_panel.materialSelected.connect(self._select_tileset_material)
+        self.tileset_dock = self._dock("Tileset 2D", self.tileset_panel,
+                                      Qt.LeftDockWidgetArea)
+        self.tabifyDockWidget(self.maps_dock, self.tileset_dock)
+        self.maps_dock.raise_()
+        self.tileset_dock.hide()
 
         right = QWidget()
         layout = QVBoxLayout(right)
@@ -273,6 +282,9 @@ class MapWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.dungeon)
         self.dungeon.hide()
         self.mode.currentIndexChanged.connect(self._construction_mode)
+        self.projection_choice.currentIndexChanged.connect(self.change_projection)
+        self.material.currentTextChanged.connect(self.tileset_panel.set_material)
+        self.tileset_panel.set_material(self.material.currentText())
         self.construction.committed.connect(lambda _change: self.refresh())
         self.construction.level_changed.connect(self._construction_view)
         self.construction.cutaway_changed.connect(self._construction_view)
@@ -312,6 +324,66 @@ class MapWindow(QMainWindow):
         from .r15_creator import open_creator
         open_creator(self)
 
+    def _connect_viewport_inputs(self, root):
+        """The same R5 paint/hover contract exists in both Qt Quick views."""
+        root.setProperty("interactionMode", "edit")
+        root.setProperty("showLegend", False)
+        root.strokeStarted.connect(self.begin_stroke)
+        root.strokeMoved.connect(self.extend_stroke)
+        root.strokeFinished.connect(self.finish_stroke)
+        root.strokeCancelled.connect(self.cancel_stroke)
+        root.cellSelected.connect(self.select_event_cell)
+        root.editHover.connect(self._hover_transform)
+        root.editHoverLeft.connect(self._hover_left)
+        root.buildingPicked.connect(self._on_building_pick)
+
+    def _select_tileset_material(self, material):
+        index = self.material.findText(material)
+        if index >= 0:
+            self.material.setCurrentIndex(index)
+            self.tools.setCurrentText("Pinceau")
+
+    def change_projection(self, *_):
+        """Switch ISO/2D without replacing the shared renderer/session or zoom."""
+        mode = self.projection_choice.currentData()
+        if mode == self.renderer.projection_mode:
+            return
+        if mode == "top_down" and self.mode.currentIndex() != 0:
+            self.projection_choice.blockSignals(True)
+            self.projection_choice.setCurrentIndex(0)
+            self.projection_choice.blockSignals(False)
+            self.statusBar().showMessage(
+                "2D painting is available in Edit Map mode, not Construction.")
+            return
+        self.cancel_stroke()
+        self.cancel_transform()
+        self.cancel_generation()
+        previous = self.renderer.projection_mode
+        self.renderer.setProjectionMode(mode)
+        name = "TopDownViewport.qml" if mode == "top_down" else "IsoViewport.qml"
+        qml = Path(__file__).resolve().parents[1] / "render" / name
+        self.viewport.setSource(QUrl.fromLocalFile(str(qml)))
+        if self.viewport.status() == QQuickWidget.Error:
+            failure = "; ".join(e.toString() for e in self.viewport.errors())
+            self.renderer.setProjectionMode(previous)
+            old = "TopDownViewport.qml" if previous == "top_down" else "IsoViewport.qml"
+            self.viewport.setSource(QUrl.fromLocalFile(str(qml.with_name(old))))
+            self.projection_choice.blockSignals(True)
+            self.projection_choice.setCurrentIndex(0 if previous == "isometric" else 1)
+            self.projection_choice.blockSignals(False)
+            if self.viewport.rootObject() is not None:
+                self._connect_viewport_inputs(self.viewport.rootObject())
+            QMessageBox.warning(self, "Projection failed", failure)
+            return
+        self._connect_viewport_inputs(self.viewport.rootObject())
+        self.tileset_dock.setVisible(mode == "top_down")
+        if mode == "top_down":
+            self.tileset_dock.raise_()
+        else:
+            self.maps_dock.raise_()
+        self._construction_mode()
+        self.refresh()
+
     def _map_context(self, operation):
         if self.mode.currentIndex() == 2 and operation == "map.stroke":
             return True  # Preserve R27 dungeon placement.
@@ -325,6 +397,8 @@ class MapWindow(QMainWindow):
 
     def _construction_mode(self, *_):
         current = self.mode.currentIndex()
+        if current != 0 and self.renderer.projection_mode == "top_down":
+            self.projection_choice.setCurrentIndex(0)
         active = current == 1
         self.cancel_stroke()
         self.cancel_transform()
