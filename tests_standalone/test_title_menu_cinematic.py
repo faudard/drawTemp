@@ -32,6 +32,32 @@ class TitleMenuGeometryTests(unittest.TestCase):
         self.assertTrue(image.is_file())
 
 
+class PlayerShutdownOrderTests(unittest.TestCase):
+    def test_cleanup_happens_before_destroy_and_is_idempotent(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, call
+        from sporebound.player_app import PlayerApplication
+
+        app = PlayerApplication.__new__(PlayerApplication)
+        app._closing = False
+        app._close_request_job = None
+        app.player = SimpleNamespace(session=None)
+        app.playtest_recorder = None
+        app.root = Mock()
+        app.audio = Mock()
+        app._clear = Mock()
+        lifecycle = Mock()
+        lifecycle.attach_mock(app._clear, "clear")
+        lifecycle.attach_mock(app.audio.close, "stop_audio")
+        lifecycle.attach_mock(app.root.destroy, "destroy_root")
+
+        app.close()
+        app.close()
+        self.assertEqual(lifecycle.mock_calls, [
+            call.clear(), call.stop_audio(), call.destroy_root()
+        ])
+
+
 @unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1", "Requires Tk display")
 class TitleMenuCinematicGuiTests(unittest.TestCase):
     def test_menu_cards_are_live_and_do_not_mutate_game(self):
@@ -142,6 +168,31 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 self.assertIsNone(app.player.session)
             finally:
                 app.close()
+
+
+    def test_quit_is_deferred_and_releases_tk_callbacks(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            app.root.update()
+            menu = app._title_menu
+            triggered = []
+            app._preview_job = app.root.after(30000, lambda: triggered.append(True))
+            menu._execute("quit")
+            self.assertIsNotNone(app._close_request_job)
+            self.assertEqual(app.root.winfo_exists(), 1)
+            # Repeated clicks must not schedule a second teardown.
+            requested = app._close_request_job
+            menu._execute("quit")
+            self.assertEqual(app._close_request_job, requested)
+            app.root.update_idletasks()
+            self.assertEqual(app.root.winfo_exists(), 0)
+            self.assertIsNone(app._preview_job)
+            self.assertEqual(triggered, [])
+            self.assertTrue(app._closing)
+            app.close()  # Reentrant close must remain a no-op.
 
 
 if __name__ == "__main__":

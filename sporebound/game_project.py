@@ -15,11 +15,11 @@ from .storage import write_json
 
 @dataclass
 class GameProject:
-    title: str = 'DrawTemp — RPG tactique'
-    subtitle: str = 'Une aventure tactique'
+    title: str = 'DrawTemp — Tactical RPG'
+    subtitle: str = 'A tactical adventure'
     campaigns: list[dict] = field(default_factory=list)
     options: dict = field(default_factory=lambda: {
-        'language': 'fr', 'music_volume': 70, 'effects_volume': 70,
+        'language': 'en', 'music_volume': 70, 'effects_volume': 70,
         'fullscreen': False,
     })
     save_slots: int = 3
@@ -41,7 +41,7 @@ class GameProject:
     @classmethod
     def default(cls, content):
         first = next(iter(content.missions))
-        return cls(campaigns=[{'id': 'main', 'name': 'Campagne principale',
+        return cls(campaigns=[{'id': 'main', 'name': 'Main campaign',
                                'start_mission': first, 'description': ''}])
 
     @classmethod

@@ -89,6 +89,19 @@ class TitleMenu:
         if self.canvas.winfo_exists() and self.overlay is None:
             (self.continue_button if self._saved() else self.new_button).focus_set()
 
+    def dispose(self):
+        """Delete Canvas items and Tk images before the Tcl interpreter closes."""
+        self.canvas.delete("all")
+        for name in ("_backdrop_photo", "_backdrop_native", "portrait",
+                     "_stage_photo", "_thumb_photo"):
+            if hasattr(self, name):
+                setattr(self, name, None)
+        for name in ("_backdrop_source", "_stage_source"):
+            source = getattr(self, name, None)
+            if source is not None:
+                source.close()
+                setattr(self, name, None)
+
     def _saved(self):
         return has_save(self.app.player, self.app.campaign_var.get(),
                         int(self.app.slot_var.get()),
@@ -116,7 +129,7 @@ class TitleMenu:
         self.load_button = self._button("CHARGER UNE PARTIE",
                                         lambda: self.open_selection(load=True))
         self.options_button = self._button("OPTIONS", self.app.options_screen)
-        self.quit_button = self._button("QUITTER", self.app.close)
+        self.quit_button = self._button("QUITTER", self.app.request_close)
         self.choose_button = self._button("CHOISIR CAMPAGNE / EMPLACEMENT",
                                           self.open_selection)
         self.advanced_button = self._button("OUTILS AVANCÉS", self.open_advanced)
