@@ -972,10 +972,13 @@ def main(argv=None):
             self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
+            warnings = len(problems) - errors
             self.diagnostics_box.setText(
-                f"{errors} erreur(s), {len(problems)-errors} avertissement(s)\n" +
-                "\n".join(f"• {p['code']} {p.get('variant','')} {p.get('action','')}"
-                          for p in problems[:7]))
+                f"Art QA · {errors} incomplete / {warnings} warnings")
+            self.diagnostics_box.setToolTip(
+                "\n".join(f"{p['code']} {p.get('variant', '')} "
+                          f"{p.get('action', '')} {p.get('direction', '')}"
+                          for p in problems[:25]))
             self.setWindowTitle(
                 "DrawTemp — Character Studio — " + document["name"] +
                 ("" if self.path is None else " — " + self.path.name))
@@ -1241,23 +1244,23 @@ def main(argv=None):
             from PySide6.QtWidgets import QInputDialog
             from copy import deepcopy
             name, ok = QInputDialog.getText(
-                self, "Nouvelle tenue", "Identifiant (ex. peasant ou armor)")
+                self, "Duplicate Outfit", "New outfit identifier (e.g. armor)")
             name = name.strip()
             if not ok or not name:
                 return
             try:
                 def transform(doc):
                     if name in doc["variants"]:
-                        raise CharacterError("Cette tenue existe déjà")
+                        raise CharacterError("An outfit with this ID already exists")
                     doc["variants"][name] = deepcopy(doc["variants"][self.active_variant()])
                     doc["variants"][name]["name"] = name.capitalize()
                 self.session.edit(transform)
                 self.refresh()
                 self.variants.setCurrentRow(list(self.session.document["variants"]).index(name))
                 self.statusBar().showMessage(
-                    "Tenue clonée : remplacez ses sprites/calques pour créer un art distinct.")
+                    "Outfit copied. Edit its appearance to create distinct art.")
             except CharacterError as exc:
-                QMessageBox.warning(self, "Variante", str(exc))
+                QMessageBox.warning(self, "Outfit", str(exc))
 
         def configure_layer(self):
             from PySide6.QtWidgets import QInputDialog
@@ -1303,7 +1306,7 @@ def main(argv=None):
             if not self._confirm_replace():
                 return
             path, _ = QFileDialog.getOpenFileName(
-                self, "Ouvrir un personnage R7", str(root), "JSON (*.json)")
+                self, "Open Character", str(root), "Character JSON (*.json)")
             if path:
                 try:
                     self.session = CharacterSession(
@@ -1316,13 +1319,15 @@ def main(argv=None):
                     self.saved_revision = self.session.revision
                     self.refresh()
                 except (OSError, ValueError, KeyError) as exc:
-                    QMessageBox.critical(self, "Fichier invalide", str(exc))
+                    QMessageBox.critical(self, "Invalid Character File", str(exc))
 
         def save_recipe(self):
             if self.path is None:
                 path, _ = QFileDialog.getSaveFileName(
-                    self, "Enregistrer la fiche", str(root / "jeanne.character.json"),
-                    "JSON (*.json)")
+                    self, "Save Character",
+                str(root / "characters" /
+                    (self.session.document["id"] + ".character.json")),
+                "Character JSON (*.json)")
                 if not path:
                     return
                 self.path = Path(path)
@@ -1334,7 +1339,7 @@ def main(argv=None):
                 self.statusBar().showMessage("Character saved.")
                 self.refresh()
             except OSError as exc:
-                QMessageBox.critical(self, "Enregistrement", str(exc))
+                QMessageBox.critical(self, "Save failed", str(exc))
 
         def export(self):
             path = QFileDialog.getExistingDirectory(
