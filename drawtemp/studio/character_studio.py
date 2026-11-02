@@ -661,13 +661,25 @@ def main(argv=None):
                 thumb.clear()
                 frames = doc["variants"][variant]["clips"].get(
                     action, {}).get("directions", {}).get(direction, ())
+                clip_action = action
                 if not frames:
-                    thumb.setText("Not authored")
+                    # Keep the character visible, but never mislabel idle art
+                    # as an authored combat/animation frame.
+                    clip_action = "idle"
+                    frames = doc["variants"][variant]["clips"].get(
+                        "idle", {}).get("directions", {}).get(direction, ())
+                if not frames:
+                    thumb.setText("No art")
                     continue
+                thumb.setToolTip(
+                    ("Idle reference only — " + action + " is not authored")
+                    if clip_action != action else action.capitalize())
                 try:
-                    frame_no = min(self.frame_index, len(frames) - 1)
+                    frame_no = (min(self.frame_index, len(frames) - 1)
+                                if clip_action == action else 0)
                     image = render_frame(
-                        doc, variant, action, direction, frame_no, self.art_root)
+                        doc, variant, clip_action, direction,
+                        frame_no, self.art_root)
                     thumb.setPixmap(self._to_pixmap(image, 126))
                 except (ValueError, OSError, KeyError) as exc:
                     thumb.setText("Missing asset")
@@ -1061,8 +1073,23 @@ def main(argv=None):
                     self.status.setText("Portrait introuvable : " + path)
                 return
             if not self.active_clip():
-                self.canvas.setText("Action non dessinée\nAjoutez des poses à la fiche.")
-                self.status.setText("R7 : pose manquante")
+                doc = self.session.document
+                variant = self.active_variant()
+                direction = self.direction.currentData()
+                fallback = doc["variants"][variant]["clips"].get(
+                    "idle", {}).get("directions", {}).get(direction, ())
+                if fallback:
+                    try:
+                        idle_image = render_frame(
+                            doc, variant, "idle", direction, 0, self.art_root)
+                        self.canvas.setPixmap(self._to_pixmap(idle_image, 360))
+                    except (OSError, KeyError, ValueError):
+                        self.canvas.setText("Missing sprite")
+                else:
+                    self.canvas.setText("No sprite for this view")
+                self.status.setText(
+                    self.action.currentData() +
+                    " has no authored animation; idle reference only")
                 return
             try:
                 image = render_frame(
