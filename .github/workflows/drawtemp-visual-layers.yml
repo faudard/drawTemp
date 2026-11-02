@@ -1,0 +1,53 @@
+name: DrawTemp 2D Visual Layers and Masks
+on:
+  pull_request:
+    paths:
+      - 'sporebound/visual_layers.py'
+      - 'sporebound/game_project.py'
+      - 'drawtemp/studio/visual_layer_authoring.py'
+      - 'drawtemp/studio/visual_layers_dock.py'
+      - 'drawtemp/studio/map_editor.py'
+      - 'drawtemp/render/iso_scene.py'
+      - 'drawtemp/render/topdown_image_provider.py'
+      - 'drawtemp/render/TopDownViewport.qml'
+      - 'drawtemp/player/qt_app.py'
+      - 'tests_standalone/test_visual_layers_stack*.py'
+      - '.github/workflows/drawtemp-visual-layers.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  canonical:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - name: Visual layer model and persistence regressions
+        run: python -m unittest tests_standalone.test_visual_layers_stack -v
+      - name: Existing editor and project compatibility
+        run: python -m unittest tests_standalone.test_drawtemp5_r5_map tests_standalone.test_drawtemp5_r2 -v
+  qt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install software Qt requirements
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - run: python -m pip install '.[qt6]'
+      - name: Editor and image compositing offscreen tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          python -m unittest tests_standalone.test_visual_layers_stack_qt tests_standalone.test_quarter_autotile2d_qt -v
+          python -m drawtemp.studio.map_editor --smoke
