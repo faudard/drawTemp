@@ -12,6 +12,7 @@ from shutil import copy2
 from .game_project import GameProject
 from .title_menu_cinematic import CinematicTitleMenu, title_geometry
 from .title_screen_settings import DEFAULTS, LABEL_KEYS, NAMESPACE, extension_for, settings_for
+from .title_screen_layout import ELEMENTS, CARD_KEYS, placement, relocate, resolve_boxes
 
 
 class TitleScreenStudio:
@@ -50,6 +51,15 @@ class TitleScreenStudio:
         self._image_cache = None
         self._image_key = None
         self._photo = None
+        self._positions = {}
+        self._last_boxes = {}
+        self._drag = None
+        self._undo_moves = []
+        self._redo_moves = []
+        self._preview_transform = (0.0, 0.0, 1.0)
+        self.selected = self.tk.StringVar(value="title")
+        self.position_x = self.tk.StringVar()
+        self.position_y = self.tk.StringVar()
 
         self.ttk.Label(controls, text="Title Screen Editor",
                        font=("TkDefaultFont", 13, "bold")).pack(anchor="w", padx=8, pady=(8, 3))
@@ -85,6 +95,39 @@ class TitleScreenStudio:
         for (key, default, _caption, _icon) in CinematicTitleMenu.ACTIONS:
             self._entry(controls, key.title(), self.labels[key])
 
+        self.ttk.Label(controls, text="Layout · drag objects in the preview",
+                       font=("TkDefaultFont", 10, "bold")).pack(
+                           anchor="w", padx=8, pady=(12, 2))
+        self.ttk.Label(controls, text="Move: click and drag. Positions are relative "
+                       "to the game window. Ctrl+Z/Ctrl+Y: undo/redo moves.",
+                       wraplength=264).pack(anchor="w", padx=8, pady=(1, 7))
+        self.ttk.Combobox(controls, textvariable=self.selected,
+                          values=ELEMENTS, state="readonly").pack(
+                              fill="x", padx=8, pady=4)
+        self.selected.trace_add("write", lambda *_args: self._sync_selected_position())
+        coords = self.ttk.Frame(controls)
+        coords.pack(fill="x", padx=8, pady=4)
+        self.ttk.Label(coords, text="X %").grid(row=0, column=0, sticky="w")
+        self.ttk.Entry(coords, textvariable=self.position_x, width=9).grid(
+            row=1, column=0, padx=(0, 8), sticky="ew")
+        self.ttk.Label(coords, text="Y %").grid(row=0, column=1, sticky="w")
+        self.ttk.Entry(coords, textvariable=self.position_y, width=9).grid(
+            row=1, column=1, sticky="ew")
+        coords.columnconfigure(0, weight=1)
+        coords.columnconfigure(1, weight=1)
+        self.ttk.Button(controls, text="Set position",
+                        command=lambda: owner._run(self.set_position)).pack(
+                            fill="x", padx=8, pady=2)
+        self.ttk.Button(controls, text="Reset selected position",
+                        command=self.reset_selected).pack(
+                            fill="x", padx=8, pady=2)
+        movement_buttons = self.ttk.Frame(controls)
+        movement_buttons.pack(fill="x", padx=8, pady=7)
+        self.ttk.Button(movement_buttons, text="Undo move",
+                        command=self.undo_move).pack(side="left", padx=3)
+        self.ttk.Button(movement_buttons, text="Redo move",
+                        command=self.redo_move).pack(side="left", padx=3)
+
         buttons = self.ttk.Frame(controls)
         buttons.pack(fill="x", padx=8, pady=15)
         self.ttk.Button(buttons, text="Apply changes",
@@ -108,6 +151,12 @@ class TitleScreenStudio:
                                      highlightthickness=1, highlightbackground="#788294")
         self.canvas.grid(row=1, column=0, sticky="nsew")
         self.canvas.bind("<Configure>", lambda _e: self.paint())
+        self.canvas.bind("<ButtonPress-1>", self._pointer_down)
+        self.canvas.bind("<B1-Motion>", self._pointer_move)
+        self.canvas.bind("<ButtonRelease-1>", self._pointer_up)
+        self.canvas.bind("<Escape>", self._cancel_drag)
+        self.canvas.bind("<Control-z>", lambda _e: self.undo_move())
+        self.canvas.bind("<Control-y>", lambda _e: self.redo_move())
         for var in (self.title, self.subtitle, self.background, self.image,
                     self.accent, self.panel, self.text, self.show_campaign,
                     *self.labels.values()):
@@ -121,6 +170,10 @@ class TitleScreenStudio:
         if self.owner.project is None:
             return
         settings = settings_for(self.owner.project)
+        self._positions = deepcopy(settings["positions"])
+        self._undo_moves.clear()
+        self._redo_moves.clear()
+        self._drag = None
         self.title.set(self.owner.project.title)
         self.subtitle.set(self.owner.project.subtitle)
         for field in ("background", "image", "accent", "panel", "text", "show_campaign"):
@@ -129,12 +182,17 @@ class TitleScreenStudio:
         for key in LABEL_KEYS:
             self.labels[key].set(settings["labels"].get(key, defaults[key]))
         self.paint()
+        self._sync_selected_position()
 
     def defaults(self):
+        self._remember_move()
+        self._positions = {}
         for key in ("background", "image", "accent", "panel", "text", "show_campaign"):
             getattr(self, key).set(deepcopy(DEFAULTS[key]))
         for key, label, _caption, _icon in CinematicTitleMenu.ACTIONS:
             self.labels[key].set(label)
+        self.paint()
+        self._sync_selected_position()
 
     def _settings(self):
         defaults = {row[0]: row[1] for row in CinematicTitleMenu.ACTIONS}
@@ -143,7 +201,7 @@ class TitleScreenStudio:
         return dict(background=self.background.get(), image=self.image.get(),
                     accent=self.accent.get(), panel=self.panel.get(),
                     text=self.text.get(), show_campaign=self.show_campaign.get(),
-                    labels=labels)
+                    labels=labels, positions=deepcopy(self._positions))
 
     def pending(self):
         if self.owner.project is None:
@@ -153,6 +211,110 @@ class TitleScreenStudio:
         return (self.title.get() != self.owner.project.title
                 or self.subtitle.get() != self.owner.project.subtitle
                 or any(edited[key] != current[key] for key in DEFAULTS))
+
+    def _remember_move(self):
+        self._undo_moves.append(deepcopy(self._positions))
+        if len(self._undo_moves) > 50:
+            self._undo_moves.pop(0)
+        self._redo_moves.clear()
+
+    def undo_move(self):
+        if self._undo_moves:
+            self._redo_moves.append(deepcopy(self._positions))
+            self._positions = self._undo_moves.pop()
+            self.paint()
+            self._sync_selected_position()
+
+    def redo_move(self):
+        if self._redo_moves:
+            self._undo_moves.append(deepcopy(self._positions))
+            self._positions = self._redo_moves.pop()
+            self.paint()
+            self._sync_selected_position()
+
+    def reset_selected(self):
+        key = self.selected.get()
+        if key in self._positions:
+            self._remember_move()
+            self._positions.pop(key)
+            self.paint()
+            self._sync_selected_position()
+
+    def _sync_selected_position(self):
+        key = self.selected.get()
+        box = self._last_boxes.get(key)
+        if box:
+            self.position_x.set("%.2f" % (box[0] / 11.6))
+            self.position_y.set("%.2f" % (box[1] / 8.2))
+        else:
+            self.position_x.set("")
+            self.position_y.set("")
+
+    def set_position(self):
+        x, y = float(self.position_x.get()), float(self.position_y.get())
+        if not (0 <= x <= 100 and 0 <= y <= 100):
+            raise ValueError("Coordinates must be between 0 and 100 percent")
+        key = self.selected.get()
+        if key not in self._last_boxes:
+            raise ValueError("Select a title-screen element")
+        proposed = relocate(self._last_boxes[key], x * 11.6, y * 8.2, 1160, 820)
+        new_position = placement(proposed, 1160, 820)
+        if self._positions.get(key) != new_position:
+            self._remember_move()
+            self._positions[key] = new_position
+        self.paint()
+        self._sync_selected_position()
+
+    def _pointer_coords(self, event):
+        ox, oy, scale = self._preview_transform
+        return ((event.x - ox) / scale, (event.y - oy) / scale)
+
+    def _pointer_down(self, event):
+        self.canvas.focus_set()
+        x, y = self._pointer_coords(event)
+        # Test in reverse draw order; prefer individual cards over their surround.
+        for key in reversed(ELEMENTS):
+            if key == "campaign" and not self.show_campaign.get():
+                continue
+            bounds = self._last_boxes.get(key)
+            if bounds and bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]:
+                self.selected.set(key)
+                self._drag = (key, x, y, bounds, deepcopy(self._positions))
+                self.canvas.configure(cursor="fleur")
+                self.paint()
+                return
+        self._drag = None
+
+    def _pointer_move(self, event):
+        if self._drag is None:
+            return
+        key, start_x, start_y, original, _initial = self._drag
+        x, y = self._pointer_coords(event)
+        moved = relocate(original, original[0] + x - start_x,
+                         original[1] + y - start_y, 1160, 820)
+        self._positions[key] = placement(moved, 1160, 820)
+        self.paint()
+        self._sync_selected_position()
+
+    def _pointer_up(self, _event):
+        if self._drag is not None:
+            _, _, _, _, initial = self._drag
+            if self._positions != initial:
+                self._undo_moves.append(initial)
+                if len(self._undo_moves) > 50:
+                    self._undo_moves.pop(0)
+                self._redo_moves.clear()
+        self._drag = None
+        self.canvas.configure(cursor="")
+        self.paint()
+
+    def _cancel_drag(self, _event=None):
+        if self._drag is not None:
+            self._positions = self._drag[4]
+            self._drag = None
+            self.canvas.configure(cursor="")
+            self.paint()
+            self._sync_selected_position()
 
     def apply(self):
         data = deepcopy(self.owner.project.to_dict())
