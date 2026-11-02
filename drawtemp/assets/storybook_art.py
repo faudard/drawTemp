@@ -361,6 +361,144 @@ def build(root, *, overwrite=False):
     return wrote
 
 
+
+# Independently drawn compatible layers: 3 silhouettes and 12 different
+# outfits/looks; all use the same real directional source family.
+STORYBOOK_STARTERS = {
+    "male": {
+        "body": "slender", "head_shape": "oval",
+        "rear_hair": "crop", "front_hair": "swept",
+        "face": "calm", "eyes": "bright",
+        "top": "tunic", "bottom": "travel_pants",
+    },
+    "female": {
+        "body": "slender", "head_shape": "soft",
+        "rear_hair": "long", "front_hair": "waves",
+        "face": "smile", "eyes": "gentle",
+        "top": "mage_robe", "bottom": "skirt",
+    },
+    "kid": {
+        "body": "child", "head_shape": "young",
+        "rear_hair": "bob", "front_hair": "fringe",
+        "face": "smile", "eyes": "bright",
+        "top": "hoodie", "bottom": "shorts",
+    },
+}
+LOOKS = (
+    ("village_scout", "Village Scout", "male",
+     {"front_hair": "swept", "rear_hair": "crop", "top": "tunic"}),
+    ("iron_guard", "Iron Guard", "male",
+     {"body": "sturdy", "front_hair": "spikes",
+      "rear_hair": "crop", "top": "brigandine",
+      "bottom": "leather_boots", "face": "focused", "eyes": "narrow"}),
+    ("wandering_mage", "Wandering Mage", "male",
+     {"front_hair": "curtain", "rear_hair": "long",
+      "top": "mage_robe", "face": "calm"}),
+    ("road_traveller", "Road Traveller", "male",
+     {"front_hair": "waves", "rear_hair": "bob",
+      "top": "hoodie", "bottom": "travel_pants"}),
+    ("forest_archer", "Forest Archer", "female",
+     {"front_hair": "braid_bangs", "rear_hair": "ponytail",
+      "top": "tunic", "bottom": "travel_pants", "face": "focused"}),
+    ("village_healer", "Village Healer", "female",
+     {"front_hair": "fringe", "rear_hair": "braids",
+      "top": "mage_robe", "bottom": "skirt"}),
+    ("castle_knight", "Castle Knight", "female",
+     {"front_hair": "swept", "rear_hair": "bob",
+      "top": "brigandine", "bottom": "leather_boots"}),
+    ("wandering_scholar", "Wandering Scholar", "female",
+     {"front_hair": "curtain", "rear_hair": "curls",
+      "top": "tunic", "bottom": "skirt"}),
+    ("village_kid", "Village Kid", "kid",
+     {"front_hair": "fringe", "rear_hair": "bob", "top": "hoodie"}),
+    ("young_scout", "Young Scout", "kid",
+     {"front_hair": "spikes", "rear_hair": "crop", "top": "tunic"}),
+    ("apprentice_mage", "Apprentice Mage", "kid",
+     {"front_hair": "waves", "rear_hair": "curls",
+      "top": "mage_robe"}),
+    ("young_guard", "Young Guard", "kid",
+     {"front_hair": "swept", "rear_hair": "crop",
+      "top": "brigandine", "face": "focused"}),
+)
+
+
+def _layer(slot, style):
+    from .character_parts import PART_CATEGORIES
+    from .characters import DIRECTIONS
+    suffixes = {
+        "south": "front", "north": "back",
+        "east": "right", "west": "left",
+    }
+    name = f"{COLLECTION}_{style}"
+    return {
+        "slot": slot,
+        "paths": {direction:
+            f"assets/hero_parts/{slot}/{name}_{suffixes[direction]}.png"
+            for direction in DIRECTIONS},
+        "offset": [0, 0], "tint": "#ffffff", "opacity": 255,
+    }
+
+
+def _variant(pieces, label):
+    from .characters import frame, DIRECTIONS
+    from .character_parts import PART_CATEGORIES
+    base = "assets/hero_parts/accessory/none_"
+    suffixes = {
+        "south": "front", "north": "back",
+        "east": "right", "west": "left",
+    }
+    return {
+        "name": label, "expressions": {},
+        "clips": {"idle": {"loop": True, "directions": {
+            direction: [frame(base + suffixes[direction] + ".png")]
+            for direction in DIRECTIONS}}},
+        "layers": [_layer(slot, pieces[slot]) for slot, _ in PART_CATEGORIES
+                   if slot in pieces],
+    }
+
+
+def storybook_starter():
+    """R7 recipe using ONLY coherent storybook v1 parts and real idle art."""
+    from .characters import validate
+    return validate({
+        "version": 1, "id": "storybook_hero",
+        "name": "Storybook Hero · Original Art",
+        "size": [SIZE, SIZE], "pivot": [SIZE//2, SIZE-1],
+        "variants": {
+            profile: _variant(pieces, profile.capitalize())
+            for profile, pieces in STORYBOOK_STARTERS.items()},
+    })
+
+
+def available_storybook_looks(profile=None):
+    if profile is not None and profile not in STORYBOOK_STARTERS:
+        raise ValueError("Unknown storybook profile")
+    return tuple({"id": key, "name": name, "profile": kind}
+                 for key, name, kind, _ in LOOKS
+                 if profile in (None, kind))
+
+
+def apply_storybook_look(document, variant, look_id):
+    """Apply coherent original layer set, preserving all authored clips."""
+    from .character_parts import PART_CATEGORIES
+    from .characters import validate
+    validate(document)
+    if document["size"] != [SIZE, SIZE] or variant not in document["variants"]:
+        raise ValueError("Storyboard look requires a 192x192 character variant")
+    match = next((entry for entry in LOOKS if entry[0] == look_id), None)
+    if match is None:
+        raise ValueError("Unknown storybook look")
+    profile = match[2]
+    pieces = dict(STORYBOOK_STARTERS[profile])
+    pieces.update(match[3])
+    target = document["variants"][variant]["layers"]
+    allowed = set(FAMILIES)
+    target[:] = [layer for layer in target if layer["slot"] not in allowed]
+    target.extend(_layer(slot, pieces[slot])
+                  for slot, _ in PART_CATEGORIES if slot in pieces)
+    validate(document)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Build original DrawTemp art")
     parser.add_argument("--root", type=Path,
