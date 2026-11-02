@@ -77,6 +77,20 @@ class VisualLayerTests(unittest.TestCase):
         self.visual.configure("one", locked=False, visible=True)
         self.assertEqual(self.visual.layers()[0]["cells"][0]["material"], "sand")
 
+    def test_duplicate_map_clones_graphics_atomically(self):
+        self.visual.create("flowers", "Flowers")
+        self.visual.paint("flowers", [(3, 3)], material="grass",
+                          mask=[255, 0, 127, 255])
+        original = self.visual.layers()
+        self.map.duplicate("visual_copy", "Visual copy")
+        self.assertEqual(self.visual.layers(), original)
+        self.visual.paint("flowers", [(4, 4)], material="stone")
+        self.map.select_map("visual_test")
+        self.assertEqual(self.visual.layers(), original)
+        self.map.undo()  # Undo edit in duplicated mission, not original.
+        self.map.undo()  # Undo creation of the duplicate map and its graphic stack.
+        self.assertNotIn("visual_copy", self.map.map_ids())
+
     def test_mask_eraser_do_not_rewrite_base_terrain(self):
         before_content = deepcopy(self.map.snapshot()["content"])
         self.visual.create("decor", "Decor")
