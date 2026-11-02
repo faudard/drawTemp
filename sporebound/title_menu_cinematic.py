@@ -112,7 +112,7 @@ class CinematicTitleMenu(TitleMenu):
             "load": lambda: self.open_selection(load=True),
             "campaign": self.open_selection,
             "options": self.app.options_screen,
-            "quit": self.app.close,
+            "quit": self.app.request_close,
             "choose": self.open_selection,
             "advanced": self.open_advanced,
             "credits": self.open_credits,
