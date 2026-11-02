@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .title_menu import BACKGROUND, GOLD, IVORY, MUTED, PANEL, TitleMenu
 from .title_screen_settings import settings_for
+from .title_screen_layout import CARD_KEYS, resolve_boxes
 
 
 def title_geometry(width, height):
@@ -245,11 +246,12 @@ class CinematicTitleMenu(TitleMenu):
         p = max(9, round(size * min(self.scale, 1.4)))
         return (family, p, weight) if weight else (family, p)
 
-    def _draw_header(self, layout, height):
+    def _draw_header(self, layout, height, boxes):
         c = self.canvas
-        x = layout["menu_x"] + (12 if layout["compact"] else 21)
-        max_x = layout["menu_x"] + layout["menu_width"]
-        header_width = max_x - x - 9
+        lx0, ly0, lx1, _ = boxes["logo"]
+        tx0, ty0, tx1, _ = boxes["title"]
+        sx0, sy0, sx1, _ = boxes["subtitle"]
+        header_width = tx1 - tx0
         name, sep, sub = self.app.project.title.partition(" — ")
         if not sep:
             name, sep, sub = self.app.project.title.partition(" - ")
@@ -258,18 +260,16 @@ class CinematicTitleMenu(TitleMenu):
         title_size = min(56, max(23, round(layout["menu_width"] * .095)))
         if layout["compact"]:
             title_size = min(title_size, 31)
-        y = max(19, round(height * (.075 if not layout["compact"] else .045)))
-        c.create_text(x+header_width/2, y, anchor="n", text="⚜",
+        c.create_text((lx0+lx1)/2, ly0, anchor="n", text="⚜",
                       fill=self._accent, font=self._font("Georgia", 24 if not layout["compact"] else 15),
                       tags="art")
-        c.create_text(x+header_width/2, y+(32 if not layout["compact"] else 22),
+        c.create_text((tx0+tx1)/2, ty0,
                       text=name, anchor="n", width=header_width,
                       fill=self._text_color if not self.contrast else "white",
                       font=("Georgia", title_size, "bold"), tags="art")
-        c.create_text(x+header_width/2,
-                      y+(111 if not layout["compact"] else 62),
+        c.create_text((sx0+sx1)/2, sy0,
                       text=sub.upper() if sub else self.app.project.subtitle.upper(),
-                      anchor="n", width=header_width, fill=self._accent,
+                      anchor="n", width=sx1-sx0, fill=self._accent,
                       font=self._font("Georgia", 12 if not layout["compact"] else 9),
                       tags="art")
 
@@ -410,8 +410,8 @@ class CinematicTitleMenu(TitleMenu):
 
     def _draw_footer(self,layout,width,height):
         c=self.canvas
-        x=layout["menu_x"]
-        w=layout["menu_width"]
+        x=layout.get("footer_x", layout["menu_x"])
+        w=layout.get("footer_width", layout["menu_width"])
         y=layout["footer_y"]
         h=layout["footer_height"]
         gap=6 if layout["compact"] else 9
@@ -435,14 +435,22 @@ class CinematicTitleMenu(TitleMenu):
         if width < 2 or height < 2 or not self.canvas.winfo_exists():
             return
         layout=title_geometry(width,height)
+        boxes=resolve_boxes(width, height, layout, self._appearance["positions"])
+        custom = dict(layout)
+        custom["cards"] = [boxes[key] for key in CARD_KEYS]
+        custom["campaign"] = boxes["campaign"]
+        custom["footer_x"] = boxes["footer"][0]
+        custom["footer_y"] = boxes["footer"][1]
+        custom["footer_width"] = boxes["footer"][2] - boxes["footer"][0]
+        custom["footer_height"] = boxes["footer"][3] - boxes["footer"][1]
         c=self.canvas
         c.delete("art")
         self._paint_stage(width,height,layout)
-        self._draw_header(layout,height)
-        self._draw_cards(layout)
+        self._draw_header(layout,height,boxes)
+        self._draw_cards(custom)
         if self._appearance["show_campaign"]:
-            self._draw_campaign(layout)
-        self._draw_footer(layout,width,height)
+            self._draw_campaign(custom)
+        self._draw_footer(custom,width,height)
         if self.overlay_shade is not None:
             c.coords(self.overlay_shade,0,0,width,height)
             c.tag_raise(self.overlay_shade)
