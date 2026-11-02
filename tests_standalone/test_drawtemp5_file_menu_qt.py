@@ -40,12 +40,12 @@ class FileMenuQtTests(unittest.TestCase):
         self.assertEqual(file_menu.objectName(), "studio-file-menu")
         self.assertEqual(file_menu.actions(), [
             self.window.commands[key]
-            for key in ("new_project", "open", "close", "save")
+            for key in ("new", "open", "close", "save")
         ])
         self.assertEqual(
             [action.text() for action in file_menu.actions()],
             ["&New Project…", "&Open Project…", "&Close Project", "&Save Project"])
-        for key, shortcut in (("new_project", "Ctrl+N"),
+        for key, shortcut in (("new", "Ctrl+N"),
                               ("open", "Ctrl+O"), ("save", "Ctrl+S")):
             self.assertEqual(self.window.commands[key].shortcut(),
                              QKeySequence(shortcut))
@@ -79,16 +79,16 @@ class FileMenuQtTests(unittest.TestCase):
         titles = [action.menu().title() for action in
                   self.window.menuBar().actions() if action.menu() is not None]
         self.assertEqual(
-            titles, ["&File", "&Edit", "&Display", "&Workspaces", "&Tools", "&Game"])
+            titles, ["&File", "&Edit", "&Display", "&Workspaces", "&Tools", "&Game", "&Help"])
         self.assertIn("&Game", titles)
         tools = next(action.menu() for action in self.window.menuBar().actions()
                      if action.menu() and action.menu().title() == "&Tools")
         advanced = next(action.menu() for action in tools.actions()
                         if action.menu() and action.menu().title() == "Advanced Project")
-        self.assertIn(self.window.commands["new"], advanced.actions())
+        self.assertIn(self.window.commands["new_project"], advanced.actions())
         self.assertIn(self.window.commands["new_template"], advanced.actions())
         self.assertIn(self.window.commands["save_as"], advanced.actions())
-        self.assertEqual(self.window.recent_menu.title(), "Recent Projects")
+        self.assertEqual(self.window.recent_menu.title(), "Recent projects")
         display = next(action.menu() for action in self.window.menuBar().actions()
                        if action.menu() and action.menu().title() == "&Display")
         self.assertIn("Theme", [action.menu().title() for action in
