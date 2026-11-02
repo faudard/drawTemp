@@ -1,26 +1,18 @@
-"""Shared access to the real Studio Fichier menu in Tk GUI smoke tests.
+"""Helpers for exercising the real DrawTemp Studio native File menu."""
 
-The editor moved rare file operations into a menu. Tests must activate the
-public UI action instead of depending on a removed header button.
-"""
+
+def menu_named(root, name):
+    """Return a native Tk submenu by its visible top-level label."""
+    bar_name = root.cget('menu')
+    if not bar_name:
+        raise AssertionError('The native Studio menubar is missing.')
+    bar = root.nametowidget(bar_name)
+    for index in range(bar.index('end') + 1):
+        if bar.entrycget(index, 'label') == name:
+            return root.nametowidget(bar.entrycget(index, 'menu'))
+    raise AssertionError(f'Studio menu {name!r} is missing.')
 
 
 def save_as(root):
-    """Invoke Fichier -> Enregistrer sous… through the visible menu."""
-    from tkinter import ttk
-
-    def descendants(parent):
-        for child in parent.winfo_children():
-            yield child
-            yield from descendants(child)
-
-    file_button = next(
-        (widget for widget in descendants(root)
-         if isinstance(widget, ttk.Menubutton)
-         and widget.cget('text').startswith('Fichier')),
-        None,
-    )
-    if file_button is None:
-        raise AssertionError('Le menu Fichier est introuvable.')
-    menu = root.nametowidget(file_button.cget('menu'))
-    menu.invoke('Enregistrer sous…')
+    """Invoke File -> Save Content As… through the native menubar."""
+    menu_named(root, 'File').invoke('Save Content As…')
