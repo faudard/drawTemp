@@ -37,7 +37,7 @@ LOOKS = (
       "rear_hair": "long", "top": "hoodie", "bottom": "kilt"}),
     ("female_guard", "Guard", "female", {"body": "classic", "front_hair": "crest",
       "rear_hair": "bob", "top": "armor", "bottom": "trousers"}),
-    ("kid_villager", "Villager", "kid", {"body": "slim", "front_hair": "tuft",
+    ("kid_villager", "Villager", "kid", {"body": "slim", "front_hair": "bob",
       "rear_hair": "bob", "top": "hoodie", "bottom": "shorts"}),
     ("kid_apprentice", "Apprentice", "kid", {"body": "slim", "front_hair": "bob",
       "rear_hair": "long", "top": "vest", "bottom": "shorts"}),
