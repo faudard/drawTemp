@@ -45,9 +45,11 @@ class AddonManagerDialog(QDialog):
         self.import_button = QPushButton("Import JSON…", self)
         self.enable_button = QPushButton("Enable…", self)
         self.disable_button = QPushButton("Disable", self)
+        self.compile_button = QPushButton("Preview / Compile Events…", self)
+        self.compile_button.setObjectName("studio-addon-compile-events")
         self.remove_button = QPushButton("Remove", self)
         for button in (self.import_button, self.enable_button,
-                       self.disable_button, self.remove_button):
+                       self.disable_button, self.compile_button, self.remove_button):
             row.addWidget(button)
         layout.addLayout(row)
 
@@ -57,6 +59,7 @@ class AddonManagerDialog(QDialog):
         self.import_button.clicked.connect(self._import)
         self.enable_button.clicked.connect(self._enable)
         self.disable_button.clicked.connect(self._disable)
+        self.compile_button.clicked.connect(self._compile_events)
         self.remove_button.clicked.connect(self._remove)
         self.items.currentRowChanged.connect(self._update_details)
         self.refresh()
@@ -89,13 +92,16 @@ class AddonManagerDialog(QDialog):
         addon_id = self._selected()
         if addon_id is None:
             self.details.setPlainText("No add-ons registered.")
-            for button in (self.enable_button, self.disable_button, self.remove_button):
+            for button in (self.enable_button, self.disable_button,
+                           self.compile_button, self.remove_button):
                 button.setEnabled(False)
             return
         state = self.owner.addons.status(addon_id)
         self.enable_button.setEnabled(not state["legacy_read_only"] and not state["enabled"])
         self.disable_button.setEnabled(state["enabled"])
         self.remove_button.setEnabled(True)
+        self.compile_button.setEnabled(
+            state["enabled"] and "game.event" in state["capabilities"])
         self.details.setPlainText(json.dumps({
             "id": state["id"],
             "version": state["version"],
@@ -141,6 +147,41 @@ class AddonManagerDialog(QDialog):
             return
         try:
             self.owner.enable_addon(addon_id, permissions)
+            self.refresh(addon_id)
+        except (AddonError, ValueError, OSError) as exc:
+            self._report(exc)
+
+    def _compile_events(self):
+        addon_id = self._selected()
+        if addon_id is None:
+            return
+        try:
+            plan, script = self.owner.preview_addon_events(addon_id)
+        except (AddonError, ValueError, OSError) as exc:
+            self._report(exc)
+            return
+
+        summary = "\\n".join(
+            "• {} / {}: {}".format(
+                hook["scene"], hook["choice"],
+                ", ".join(effect["kind"] for effect in hook["effects"]),
+            )
+            for hook in script["hooks"]
+        )
+        approved = QMessageBox.question(
+            self, "Compile native event hooks",
+            "Add-on: {}\\n\\nNative story.choice hooks:\\n{}\\n\\n"
+            "This is ONE undoable change to the canonical GameProject. "
+            "The Player will execute only validated StoryBook effects. "
+            "Disabling the add-on later will NOT undo already compiled effects. "
+            "You must explicitly save the project after compiling.\\n\\n"
+            "Apply these changes?".format(addon_id, summary),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if approved != QMessageBox.Yes:
+            return
+        try:
+            self.owner.apply_addon_events(addon_id, plan)
             self.refresh(addon_id)
         except (AddonError, ValueError, OSError) as exc:
             self._report(exc)
