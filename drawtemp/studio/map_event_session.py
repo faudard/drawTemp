@@ -42,10 +42,12 @@ class MapEventSession:
         if event_id and not any(event["id"] == event_id for event in self.events()):
             raise ValueError("Unknown event: " + event_id)
         self.selected_id = event_id
-        for marker in self.markers():
-            if marker["event_id"] == event_id and marker["kind"] == "trigger":
-                self.focus_cell = tuple(marker["pos"])
-                break
+        self.focus_cell = None
+        markers = [marker for marker in self.markers()
+                   if marker["event_id"] == event_id]
+        markers.sort(key=lambda marker: marker["kind"] != "trigger")
+        if markers:
+            self.focus_cell = tuple(markers[0]["pos"])
         return self.selected_id
 
     def select_cell(self, x, y):
