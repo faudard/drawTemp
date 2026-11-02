@@ -53,3 +53,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: python -m drawtemp.studio.character_studio --smoke
+      - name: Open modular character profiles offscreen
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python -m drawtemp.studio.character_studio --template modular_hero --smoke
