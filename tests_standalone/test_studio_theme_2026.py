@@ -1,4 +1,5 @@
 """Visual theme regression gates; no gameplay or graphics dependencies."""
+from tests_standalone.studio_gui_actions import menu_named
 import json
 import os
 from pathlib import Path
@@ -116,19 +117,15 @@ class StudioEditorAppearanceSmoke(unittest.TestCase):
             try:
                 root.report_callback_exception = lambda *args: caught.append(args)
                 root.update()
-                menu_button = next(
-                    w for w in descendants(root)
-                    if isinstance(w, ttk.Menubutton)
-                    and w.cget("text") == "Affichage ▾")
-                menu = root.nametowidget(menu_button.cget("menu"))
+                menu = menu_named(root, "Display")
                 dark_index = next(
                     i for i in range(menu.index("end") + 1)
                     if menu.type(i) == "radiobutton"
-                    and menu.entrycget(i, "label") == "Thème sombre")
+                    and menu.entrycget(i, "label") == "Dark Theme")
                 light_index = next(
                     i for i in range(menu.index("end") + 1)
                     if menu.type(i) == "radiobutton"
-                    and menu.entrycget(i, "label") == "Thème clair")
+                    and menu.entrycget(i, "label") == "Light Theme")
                 canvas = next(
                     w for w in descendants(root)
                     if isinstance(w, tk.Canvas) and
