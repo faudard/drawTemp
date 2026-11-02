@@ -156,8 +156,9 @@ class PlayerApplication(JeanneChapterUiMixin):
         self._explore_pan = (0, 0)
         self._audible_scene = None
         self._closing = False
+        self._close_request_job = None
         self._pause_dialog = None
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.protocol("WM_DELETE_WINDOW", self.request_close)
         self.root.bind("<Escape>", self._handle_escape)
         self.root.bind("<F5>", lambda event: self._game_shortcut(self._quick_save))
         self.root.bind("<F9>", lambda event: self._game_shortcut(self._quick_load))
@@ -174,6 +175,9 @@ class PlayerApplication(JeanneChapterUiMixin):
 
     def _clear(self):
         self._close_pause()
+        menu = getattr(self, "_title_menu", None)
+        if menu is not None:
+            menu.dispose()
         self.presentation.transition(self.presentation.screen)
         if self.cinematic is not None:
             self.cinematic.close()
@@ -2673,12 +2677,26 @@ class PlayerApplication(JeanneChapterUiMixin):
                     lambda: self.player.start_recovery(
                         self.front_var.get()))).pack(side="left", padx=4)
 
+    def request_close(self):
+        """Defer teardown until the current Canvas/WM event has returned to Tk."""
+        if self._closing or self._close_request_job is not None:
+            return
+        self._close_request_job = self.root.after_idle(self._complete_requested_close)
+
+    def _complete_requested_close(self):
+        self._close_request_job = None
+        self.close()
+
     def close(self):
         # Multiple WM_DELETE/button callbacks must never double-close audio/Tk.
         if self._closing:
             return
         self._closing = True
         try:
+            # A direct close (e.g. by a test) must not leave a stale idle exit.
+            if self._close_request_job is not None:
+                self.root.after_cancel(self._close_request_job)
+                self._close_request_job = None
             if self.player.session is not None:
                 try:
                     self.player.save()
@@ -2705,6 +2723,8 @@ class PlayerApplication(JeanneChapterUiMixin):
                         if recorder.revision != self.playtest_exported_revision:
                             self._closing = False
                             return
+            # Dispose images and cancel Tk after jobs BEFORE destroying Tcl/Tk.
+            self._clear()
             self.audio.close()
             self.root.destroy()
         except Exception:
