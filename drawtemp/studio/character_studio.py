@@ -537,8 +537,9 @@ def main(argv=None):
             self.variants.setCurrentRow(keys.index(selected) if selected in keys else 0)
             self.variants.blockSignals(False)
             self.sync_profile_tabs()
-            self.refresh_timeline()
+            # Clear stale portrait choice before drawing a different outfit.
             self.refresh_expressions()
+            self.refresh_timeline()
             self.refresh_parts()
             self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
@@ -567,8 +568,9 @@ def main(argv=None):
             self.sync_profile_tabs()
             self.stop()
             self.frame_index = 0
-            self.refresh_timeline()
+            # Clear stale portrait choice before drawing a different outfit.
             self.refresh_expressions()
+            self.refresh_timeline()
             self.refresh_parts()
             self.refresh_pose_grid()
 
