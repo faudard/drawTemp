@@ -32,6 +32,32 @@ class TitleMenuGeometryTests(unittest.TestCase):
         self.assertTrue(image.is_file())
 
 
+class PlayerShutdownOrderTests(unittest.TestCase):
+    def test_cleanup_happens_before_destroy_and_is_idempotent(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, call
+        from sporebound.player_app import PlayerApplication
+
+        app = PlayerApplication.__new__(PlayerApplication)
+        app._closing = False
+        app._close_request_job = None
+        app.player = SimpleNamespace(session=None)
+        app.playtest_recorder = None
+        app.root = Mock()
+        app.audio = Mock()
+        app._clear = Mock()
+        lifecycle = Mock()
+        lifecycle.attach_mock(app._clear, "clear")
+        lifecycle.attach_mock(app.audio.close, "stop_audio")
+        lifecycle.attach_mock(app.root.destroy, "destroy_root")
+
+        app.close()
+        app.close()
+        self.assertEqual(lifecycle.mock_calls, [
+            call.clear(), call.stop_audio(), call.destroy_root()
+        ])
+
+
 @unittest.skipUnless(os.environ.get("SPOREBOUND_GUI_SMOKE") == "1", "Requires Tk display")
 class TitleMenuCinematicGuiTests(unittest.TestCase):
     def test_menu_cards_are_live_and_do_not_mutate_game(self):
