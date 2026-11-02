@@ -1,4 +1,5 @@
 """3.7.24E visual Studio gate using actual Tk, StudioHistory and Save All."""
+from tests_standalone.studio_gui_actions import menu_named
 import json
 import os
 from pathlib import Path
@@ -103,7 +104,7 @@ class WorldEventStudioGUITests(TestCase):
                     buttons["Rétablir"].invoke()
                     root.update()
                     self.assertEqual(len(tab.owner.project.world["events"]), 2)
-                    buttons["Enregistrer tout"].invoke()
+                    menu_named(root, "File").invoke("Save Project")
                     root.update()
                     saved = GameProject.load(
                         source.with_suffix(".game.json"), Content.load(source))
