@@ -79,7 +79,17 @@ class StudioHistoryGuiTests(unittest.TestCase):
                     root.report_callback_exception = (
                         lambda *exc: callback_errors.append(exc))
                     root.update()
+                    menubar = root.nametowidget(root.cget("menu"))
+                    self.assertEqual(
+                        [menubar.entrycget(i, "label")
+                         for i in range(menubar.index("end") + 1)],
+                        ["File", "Edit", "Mode", "Draw", "Layer",
+                         "Display", "Scale", "Tools", "Game", "Help"])
                     widgets = list(descendants(root))
+                    self.assertFalse(any(
+                        isinstance(w, ttk.Menubutton) and
+                        w.cget("text") in ("Fichier ▾", "Affichage ▾")
+                        for w in widgets))
                     buttons = {w.cget("text"): w for w in widgets
                                if isinstance(w, ttk.Button)}
                     label = next(w for w in widgets if isinstance(w, ttk.Label)
