@@ -404,52 +404,115 @@ class TitleScreenStudio:
         return self._photo
 
     def paint(self):
+        """Draw in the same logical 1160x820 coordinate system as the Player.
+
+        Letterbox instead of distorting the preview. Every draggable hit region
+        is resolved with the exact same geometry helper as the real Player.
+        """
         if self.owner.project is None or not self.canvas.winfo_exists():
             return
         canvas = self.canvas
-        w, h = max(canvas.winfo_width(), 2), max(canvas.winfo_height(), 2)
+        w, h = canvas.winfo_width(), canvas.winfo_height()
         if w < 20 or h < 20:
             return
+        scale = min(w / 1160.0, h / 820.0)
+        ox, oy = (w - 1160 * scale) / 2, (h - 820 * scale) / 2
+        self._preview_transform = (ox, oy, scale)
         canvas.delete("all")
-        sx, sy = w / 1160, h / 820
+        canvas.create_rectangle(0, 0, w, h, fill="#090f19", outline="")
+        def xy(x, y):
+            return ox + x * scale, oy + y * scale
         def rect(x0, y0, x1, y1, **kwargs):
-            return canvas.create_rectangle(x0*sx, y0*sy, x1*sx, y1*sy, **kwargs)
-        def label(x, y, value, size, color, **kwargs):
-            return canvas.create_text(x*sx, y*sy, text=value,
-                                      fill=color, font=("Georgia", max(8, int(size*min(sx,sy))), "bold"),
-                                      **kwargs)
+            ax, ay = xy(x0, y0)
+            bx, by = xy(x1, y1)
+            return canvas.create_rectangle(ax, ay, bx, by, **kwargs)
+        def label(x, y, value, size, color, *, anchor="center",
+                  bold=True, width=None, **kwargs):
+            options = dict(text=value, fill=color, anchor=anchor,
+                           font=("Georgia", max(7, round(size * scale)),
+                                 "bold" if bold else "normal"))
+            if width is not None:
+                options["width"] = width * scale
+            options.update(kwargs)
+            return canvas.create_text(*xy(x, y), **options)
 
         accent = self._valid_color(self.accent.get(), DEFAULTS["accent"])
         panel = self._valid_color(self.panel.get(), DEFAULTS["panel"])
         foreground = self._valid_color(self.text.get(), DEFAULTS["text"])
+        legacy = title_geometry(1160, 820)
+        boxes = resolve_boxes(1160, 820, legacy, self._positions)
+        self._last_boxes = boxes
         rect(0, 0, 1160, 820, fill="#101b2a", outline="")
-        photo = self._background_photo(max(1, int(w*.72)), h)
+        scenic_width = 1160 * .73
+        photo = self._background_photo(max(1, round(scenic_width * scale)),
+                                        max(1, round(820 * scale)))
         if photo is not None:
-            canvas.create_image(0, 0, image=photo, anchor="nw")
-        layout = title_geometry(1160, 820)
-        rect(layout["menu_x"]-8, 0, 1160, 820, fill="#101b2a", outline="")
-        label(935, 75, "⚜", 25, accent, anchor="center")
-        label(935, 120, self.title.get() or "Game Title", 31, foreground,
-              anchor="center", width=400*sx, justify="center")
-        label(935, 196, self.subtitle.get(), 13, accent,
-              anchor="center", width=390*sx, justify="center")
-        for (key, default, caption, _icon), (x0, y0, x1, y1) in zip(
-                CinematicTitleMenu.ACTIONS, layout["cards"]):
-            rect(x0, y0, x1, y1, fill=panel, outline=accent, width=1)
-            rect(x0+2, y0+2, x0+77, y1-2, fill="#203249", outline="")
-            label(x0+39, (y0+y1)/2, "✦", 18, accent, anchor="center")
-            label(x0+95, y0+(y1-y0)*.36, self.labels[key].get() or default,
-                  17, foreground, anchor="w", width=(x1-x0-114)*sx)
-            label(x0+95, y0+(y1-y0)*.73, caption, 9, "#c0ccda",
-                  anchor="w", width=(x1-x0-114)*sx)
+            canvas.create_image(*xy(0, 0), image=photo, anchor="nw")
+        # Match the Player's fixed right-hand stage, independent of card moves.
+        rect(legacy["menu_x"] - 8, 0, 1160, 820,
+             fill="#101b2a", outline="")
+        name, sep, sub = self.title.get().partition(" — ")
+        if not sep:
+            name, sep, sub = self.title.get().partition(" - ")
+        if not sep:
+            name, sub = self.title.get(), ""
+        logo = boxes["logo"]
+        title = boxes["title"]
+        subtitle = boxes["subtitle"]
+        label((logo[0]+logo[2])/2, logo[1], "⚜", 24,
+              accent, anchor="n")
+        label((title[0]+title[2])/2, title[1], name or "Game Title", 39,
+              foreground, anchor="n", width=title[2]-title[0])
+        label((subtitle[0]+subtitle[2])/2, subtitle[1],
+              (sub or self.subtitle.get()).upper(), 12, accent,
+              anchor="n", width=subtitle[2]-subtitle[0])
+
+        for key, default, description, _icon in CinematicTitleMenu.ACTIONS:
+            x0, y0, x1, y1 = boxes[
+                "campaign_action" if key == "campaign" else key]
+            ch = y1-y0
+            rect(x0, y0, x1, y1, fill=panel, outline=accent)
+            icon_w = min(93, max(63, round(legacy["menu_width"] * .19)))
+            rect(x0+1, y0+1, x0+icon_w, y1-1,
+                 fill="#203249", outline="")
+            label(x0+icon_w/2, (y0+y1)/2, "✦", 18, accent)
+            tx = x0+icon_w+13
+            label(tx, y0+ch*.34, self.labels[key].get() or default, 20,
+                  foreground, anchor="w", width=x1-tx-29)
+            label(tx, y0+ch*.71, description, 10, "#c0ccda",
+                  anchor="w", bold=False, width=x1-tx-29)
+            label(x1-15, (y0+y1)/2, "›", 19, accent)
+
         if self.show_campaign.get():
-            x0,y0,x1,y1 = layout["campaign"]
-            rect(x0,y0,x1,y1,fill="#101b2a",outline=accent)
-            label(x0+15,y0+25,"Current campaign",14,accent,anchor="w")
+            x0, y0, x1, y1 = boxes["campaign"]
+            rect(x0, y0, x1, y1, fill="#101b2a", outline=accent)
+            label(x0+15, y0+14, "Current campaign", 12,
+                  accent, anchor="nw")
             campaign = self.owner.project.campaigns[0]
-            label(x0+15,y0+77,campaign["name"],15,foreground,anchor="w",
-                  width=(x1-x0-25)*sx)
-        rect(layout["menu_x"], layout["footer_y"], 1135, 794,
-             fill=panel, outline=accent)
-        label(915, 767, "Advanced tools       Credits       Help", 12,
-              foreground, anchor="center", width=430*sx)
+            label(x0+15, y0+70, campaign["name"], 14, foreground,
+                  anchor="nw", width=x1-x0-30)
+            label(x0+15, y1-42, "⇆  Change campaign", 11,
+                  foreground, anchor="nw")
+
+        fx0, fy0, fx1, fy1 = boxes["footer"]
+        fw = fx1-fx0
+        gap = 9
+        widths = (fw*.48, fw*.245, fw*.275)
+        captions = ("Advanced tools", "Credits", "Help")
+        for idx, (cw, caption) in enumerate(zip(widths, captions)):
+            x0 = fx0 + sum(widths[:idx]) + gap * idx
+            x1 = x0 + cw - (gap if idx == 2 else 0)
+            rect(x0, fy0, x1, fy1, fill="#101a29", outline=accent)
+            label((x0+x1)/2, (fy0+fy1)/2, caption, 11, foreground)
+        rect(0, 789, 152, 820, fill="#101b2a", outline="")
+        label(25, 796, "DrawTemp · Player", 10, "#b8becc",
+              anchor="nw", bold=False)
+
+        selected = self.selected.get()
+        if selected in boxes and not (selected == "campaign" and not self.show_campaign.get()):
+            x0, y0, x1, y1 = boxes[selected]
+            rect(x0, y0, x1, y1, fill="", outline="#5bc8ff",
+                 dash=(5, 3), width=2)
+            rect(x0-4, y0-4, x0+4, y0+4, fill="#5bc8ff",
+                 outline="#101b2a", width=1)
+        self._sync_selected_position()
