@@ -4725,7 +4725,8 @@ def launch(path):
     for title, menu in zip(
         ('File', 'Edit', 'Mode', 'Draw', 'Layer', 'Display',
          'Scale', 'Tools', 'Game', 'Help'), native_menus):
-        menubar.add_cascade(label=title, menu=menu, underline=0)
+        menubar.add_cascade(label=title, menu=menu,
+                            underline=3 if title == 'Display' else 0)
 
     file_menu.add_command(label='New Map…', command=blank_mission)
     file_menu.add_command(label='New Mission…', command=new_mission)
