@@ -14,6 +14,10 @@ from drawtemp.assets.characters import (
     export_pack, frame, render_frame, starter_library,
 )
 from drawtemp.assets.jeanne_art import build_jeanne_art
+from drawtemp.assets.character_parts import (
+    PART_CATEGORIES, active_part, available_parts, part_paths,
+    set_part, set_part_style,
+)
 
 
 def main(argv=None):
@@ -27,12 +31,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        from PySide6.QtCore import Qt, QTimer
-        from PySide6.QtGui import QAction, QKeySequence, QPixmap
+        from PySide6.QtCore import Qt, QTimer, QSize
+        from PySide6.QtGui import QAction, QKeySequence, QPixmap, QIcon, QColor
         from PySide6.QtWidgets import (
-            QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog, QFormLayout,
-            QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter,
+            QApplication, QCheckBox, QComboBox, QColorDialog, QDockWidget, QFileDialog, QFormLayout,
+            QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem,
+            QMainWindow, QMessageBox, QPushButton, QSpinBox, QSplitter, QToolButton,
             QVBoxLayout, QWidget,
         )
     except ImportError as exc:
@@ -65,7 +69,7 @@ def main(argv=None):
             self.timer.setSingleShot(True)
             self.timer.timeout.connect(self.advance)
             self.setWindowTitle("DrawTemp 5.0 — Character & Animation Studio")
-            self.resize(1240, 820)
+            self.resize(1380, 940)
             self.build_ui()
             self.refresh()
 
@@ -136,6 +140,42 @@ def main(argv=None):
             self.diagnostics_box = QLabel()
             self.diagnostics_box.setWordWrap(True)
 
+            # RPG Maker-style visual part selection, with canonical R7 layers.
+            self.part_category = QListWidget()
+            for slot, label in PART_CATEGORIES:
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, slot)
+                self.part_category.addItem(item)
+            self.part_category.currentRowChanged.connect(self.refresh_parts)
+            self.part_grid = QListWidget()
+            self.part_grid.setViewMode(QListView.IconMode)
+            self.part_grid.setIconSize(QSize(58, 58))
+            self.part_grid.setGridSize(QSize(94, 88))
+            self.part_grid.setResizeMode(QListView.Adjust)
+            self.part_grid.setMovement(QListView.Static)
+            self.part_grid.setWrapping(True)
+            self.part_grid.currentItemChanged.connect(self.choose_part)
+            self.part_status = QLabel()
+            self.part_status.setWordWrap(True)
+            self.part_color = QPushButton("Choose color…")
+            self.part_color.clicked.connect(self.choose_color)
+            self.part_opacity = QSpinBox()
+            self.part_opacity.setRange(0, 255)
+            self.part_opacity.editingFinished.connect(self.apply_part_style)
+            self.part_x = QSpinBox()
+            self.part_y = QSpinBox()
+            for spin in (self.part_x, self.part_y):
+                spin.setRange(-4096, 4096)
+                spin.editingFinished.connect(self.apply_part_style)
+            self.pose_grid = QListWidget()
+            self.pose_grid.setViewMode(QListView.IconMode)
+            self.pose_grid.setIconSize(QSize(58, 58))
+            self.pose_grid.setGridSize(QSize(90, 96))
+            self.pose_grid.setResizeMode(QListView.Adjust)
+            self.pose_grid.setMovement(QListView.Static)
+            self.pose_grid.setWrapping(True)
+            self.pose_grid.itemClicked.connect(self.choose_pose)
+
             library_box = QWidget()
             left = QVBoxLayout(library_box)
             left.addWidget(QLabel("Modèles existants"))
@@ -147,6 +187,8 @@ def main(argv=None):
             left.addWidget(QLabel("Portraits / expressions"))
             left.addWidget(self.expression)
             left.addWidget(self.add_expression)
+            left.addWidget(QLabel("Appearance categories"))
+            left.addWidget(self.part_category, 2)
             left.addWidget(QLabel("Contrôle artistique"))
             left.addWidget(self.diagnostics_box)
 
@@ -158,10 +200,50 @@ def main(argv=None):
             toolbar.addWidget(QLabel("Action"))
             toolbar.addWidget(self.action)
             middle.addLayout(toolbar)
-            middle.addWidget(self.canvas, 1)
+            middle.addWidget(QLabel("Variation — select an existing part"))
+            middle.addWidget(self.part_grid, 2)
+            middle.addWidget(self.part_status)
+            controls = QHBoxLayout()
+            controls.addWidget(QLabel("Color"))
+            controls.addWidget(self.part_color)
+            controls.addWidget(QLabel("Alpha"))
+            controls.addWidget(self.part_opacity)
+            middle.addLayout(controls)
+            palette = QHBoxLayout()
+            for color in ("#ffffff", "#f8ce9d", "#b87652", "#412a24",
+                          "#ffd359", "#71b7e3", "#d875b7", "#8e5ecb",
+                          "#44885a", "#2e2e36"):
+                swatch = QToolButton()
+                swatch.setToolTip(color)
+                swatch.setFixedSize(24, 24)
+                swatch.setStyleSheet("background-color: " + color + ";")
+                swatch.clicked.connect(
+                    lambda checked=False, value=color: self.apply_part_style(tint=value))
+                palette.addWidget(swatch)
+            palette.addStretch()
+            middle.addLayout(palette)
+            offsets = QHBoxLayout()
+            offsets.addWidget(QLabel("Offset X"))
+            offsets.addWidget(self.part_x)
+            offsets.addWidget(QLabel("Y"))
+            offsets.addWidget(self.part_y)
+            for label, dx, dy in (("←", -1, 0), ("↑", 0, -1),
+                                  ("↓", 0, 1), ("→", 1, 0)):
+                move = QToolButton()
+                move.setText(label)
+                move.setToolTip("Move selected element by one pixel")
+                move.clicked.connect(
+                    lambda checked=False, x=dx, y=dy: self.move_part(x, y))
+                offsets.addWidget(move)
+            middle.addLayout(offsets)
+            middle.addWidget(QLabel("Preview"))
+            self.canvas.setMinimumSize(280, 260)
+            middle.addWidget(self.canvas, 4)
             middle.addWidget(self.status)
             middle.addWidget(self.onion)
             middle.addWidget(self.play)
+            middle.addWidget(QLabel("Existing poses — click to inspect"))
+            middle.addWidget(self.pose_grid, 2)
 
             edit_box = QWidget()
             right = QVBoxLayout(edit_box)
@@ -191,7 +273,8 @@ def main(argv=None):
             splitter.addWidget(library_box)
             splitter.addWidget(editor_box)
             splitter.addWidget(edit_box)
-            splitter.setSizes([270, 570, 330])
+            splitter.setSizes([250, 770, 310])
+            self.part_category.setCurrentRow(0)
             self.setCentralWidget(splitter)
 
             file_menu = self.menuBar().addMenu("&Fichier")
