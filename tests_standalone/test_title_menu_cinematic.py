@@ -1,5 +1,6 @@
 """R7: rendered six-card cinematic Player menu and safe controller wiring."""
 import os
+from importlib.util import find_spec
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -27,7 +28,7 @@ class TitleMenuGeometryTests(unittest.TestCase):
                 self.assertLess(layout["campaign"][2], layout["menu_x"])
                 self.assertLessEqual(layout["footer_y"] + layout["footer_height"], height)
 
-    @unittest.skipUnless(__import__("importlib").util.find_spec("PIL") is not None,
+    @unittest.skipUnless(find_spec("PIL") is not None,
                          "Pillow is needed for rendered image checks")
     def test_pillow_cover_and_continuous_fade(self):
         from PIL import Image
@@ -54,7 +55,7 @@ class TitleMenuGeometryTests(unittest.TestCase):
                 self.assertGreater(channel_values[0], channel_values[1])
                 self.assertGreater(channel_values[1], channel_values[2])
 
-    @unittest.skipUnless(__import__("importlib").util.find_spec("PIL") is not None,
+    @unittest.skipUnless(find_spec("PIL") is not None,
                          "Pillow is needed for rendered image checks")
     def test_pillow_rejects_invalid_dimensions(self):
         from PIL import Image
@@ -182,7 +183,6 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 app.root.update()
                 menu = app._title_menu
                 self.assertIsInstance(menu, CinematicTitleMenu)
-                from importlib.util import find_spec
                 if find_spec("PIL") is not None:
                     self.assertIsNotNone(menu._stage_path)
                     self.assertEqual(menu._stage_path.name, "jeanne_menu_backdrop.png")
