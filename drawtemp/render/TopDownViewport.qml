@@ -83,15 +83,16 @@ Item {
             readonly property bool tile: row.kind === "tile"
             readonly property bool actor: row.kind === "actor"
             readonly property bool object: row.kind === "object"
+            readonly property bool graphic: row.kind === "visual-layer"
             readonly property real unit: viewport.camera.zoom
-            readonly property real extentX: tile ? 64 : actor ? 40 : 30
+            readonly property real extentX: (tile || graphic) ? 64 : actor ? 40 : 30
             readonly property real extentY: viewport.sideView && tile ? 24 : extentX
             x: viewport.width / 2 + viewport.camera.panX + row.sx * unit - extentX * unit / 2
             y: viewport.height / 2 + viewport.camera.panY + row.sy * unit - extentY * unit / 2
             width: extentX * unit
             height: extentY * unit
             z: row.zOrder
-            visible: viewport.flatView && (tile || actor || object)
+            visible: viewport.flatView && (tile || actor || object || graphic)
 
             // Cosmetic side-on ledge; no gameplay collision or pointer handler.
             Rectangle {
@@ -119,6 +120,21 @@ Item {
                 active: projected.tile && viewport.topDown && !!row.autotileKey
                 sourceComponent: Image {
                     source: "image://drawtemp-topdown/" + projected.row.autotileKey
+                    fillMode: Image.Stretch
+                    smooth: false
+                    cache: true
+                    asynchronous: false
+                }
+            }
+            // Project-owned graphics render as independent depth-sorted
+            // scene rows. One PNG has its four alpha quadrants already
+            // composited by the shared image provider (no per-cell Canvas).
+            Loader {
+                anchors.fill: parent
+                active: projected.graphic && viewport.topDown
+                opacity: projected.row.opacity === undefined ? 1 : projected.row.opacity
+                sourceComponent: Image {
+                    source: "image://drawtemp-topdown/" + projected.row.visualKey
                     fillMode: Image.Stretch
                     smooth: false
                     cache: true
