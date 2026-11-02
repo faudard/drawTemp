@@ -12,12 +12,12 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QItemSelectionModel, QProcess, QSettings, QSortFilterProxyModel, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QIntValidator, QKeySequence, QPalette, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDockWidget,
     QFileDialog, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
-    QScrollArea, QSplitter, QStackedWidget, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
+    QScrollArea, QSplitter, QStackedWidget, QStyle, QStyleFactory, QTabWidget, QToolBar, QTreeView, QVBoxLayout, QWidget,
 )
 
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
@@ -451,10 +451,14 @@ class StudioWindow(QMainWindow):
 
     def _build_commands(self):
         self._action("new", "Nouveau projet…", self.new_document)
-        self._action("new_project", "Nouveau projet multi-genres…", self.new_project)
+        self._action("new_project", "&New Project…", self.new_project)
         self._action("new_template", "Projet depuis un modèle rapide…", self.new_project_template)
-        self._action("open", "Ouvrir un projet…", self.open_document)
-        self._action("save", "Enregistrer le projet", self.save_document)
+        self._action("open", "&Open Project…", self.open_document)
+        self._action("close", "&Close Project", self.close_project)
+        save_action = self._action("save", "&Save Project", self.save_document)
+        save_action.setIcon(QIcon.fromTheme(
+            "document-save", self.style().standardIcon(QStyle.SP_DialogSaveButton)))
+        save_action.setIconVisibleInMenu(True)
         self._action("save_as", "Enregistrer sous…", self.save_document_as)
         self._action("playtest", "Jouer / Playtest", self.playtest)
         self._action("stop_playtest", "Arrêter le playtest", self.stop_playtest)
@@ -543,16 +547,11 @@ class StudioWindow(QMainWindow):
             self.problems.addItem("R49: commande " + issue.key + " : " + issue.code)
 
     def _build_menus(self):
-        file_menu = self.menuBar().addMenu("&Fichier")
-        for key in ("new_project", "new", "new_template", "open"):
-            file_menu.addAction(self.commands[key])
-        self.recent_menu = file_menu.addMenu("Projets récents")
-        self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
-        for key in ("save", "save_as"):
-            file_menu.addAction(self.commands[key])
-        file_menu.addSeparator()
-        for key in ("playtest", "stop_playtest", "return_playtest",
-                    "playtest_report", "export"):
+        # Keep the primary File menu as short as RPG Maker's project workflow.
+        # Native Qt mnemonics provide Alt+F, then N/O/C/S on Windows/Linux.
+        file_menu = self.menuBar().addMenu("&File")
+        file_menu.setObjectName("studio-file-menu")
+        for key in ("new_project", "open", "close", "save"):
             file_menu.addAction(self.commands[key])
         self._sync_playtest_commands()
         edit_menu = self.menuBar().addMenu("&Édition")
@@ -577,6 +576,11 @@ class StudioWindow(QMainWindow):
             action = view_menu.addAction("Échelle UI : " + str(scale) + "%")
             action.triggered.connect(lambda _=False, size=scale: self.set_scale(size))
         tools_menu = self.menuBar().addMenu("&Outils")
+        advanced_project = tools_menu.addMenu("Projet avancé")
+        for key in ("new", "new_template", "save_as"):
+            advanced_project.addAction(self.commands[key])
+        self.recent_menu = advanced_project.addMenu("Projets récents")
+        self.recent_menu.aboutToShow.connect(self._refresh_recent_menu)
         vcs_menu = tools_menu.addMenu("Collaboration / VCS")
         review_branch = vcs_menu.addAction("Comparer et fusionner 3 versions…")
         review_branch.triggered.connect(self._semantic_merge_dialog)
@@ -645,6 +649,10 @@ class StudioWindow(QMainWindow):
         for lang in ("fr", "en"):
             action = locale_menu.addAction(lang.upper())
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+        game_menu = self.menuBar().addMenu("&Game")
+        for key in ("playtest", "stop_playtest", "return_playtest",
+                    "playtest_report", "export"):
+            game_menu.addAction(self.commands[key])
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
         self.addToolBar(self.toolbar)
@@ -1192,6 +1200,8 @@ class StudioWindow(QMainWindow):
         self._update_title()
         self.commands["undo"].setEnabled(snapshot.can_undo)
         self.commands["redo"].setEnabled(snapshot.can_redo)
+        self.commands["close"].setEnabled(
+            self.content_path is not None and not self._r49_playtest.active)
         self._update_guide()
 
     def _refresh_if_changed(self):
@@ -2237,12 +2247,19 @@ class StudioWindow(QMainWindow):
         # Project switch invalidates every R47 consent and installed descriptor.
         self.mods = ModRegistry()
         self.session = fresh
-        self.content_path = Path(path)
+        self.content_path = Path(path) if path is not None else None
         self._activate("project")
         self.refresh()
-        self._record_recent(path)
-        # A loaded project is proof of a completed open/create action.
-        self._guide_switch_document(path)
+        if path is not None:
+            self._record_recent(path)
+            # A loaded project is proof of a completed open/create action.
+            self._guide_switch_document(path)
+        else:
+            # Closing a document restores the no-project Studio home without
+            # clearing the recent-project list or creating a disk file.
+            self._onboarding_key = None
+            self._onboarding_done = set()
+            self._update_guide()
 
     @measure_studio("studio.open")
     def open_path(self, path):
@@ -2254,6 +2271,13 @@ class StudioWindow(QMainWindow):
             self.report_error(exc)
             return False
         self._install_document(fresh, path)
+        return True
+
+    def close_project(self):
+        """Close only the current project; keep the Studio application open."""
+        if self.content_path is None or not self._confirm_leave():
+            return False
+        self._install_document(AuthoringSession.new(*reference_project()), None)
         return True
 
     def create_project(self, kind, destination):
@@ -2381,6 +2405,8 @@ class StudioWindow(QMainWindow):
         for key in ("new", "new_project", "new_template", "open",
                     "save", "save_as", "export"):
             self.commands[key].setEnabled(not active)
+        self.commands["close"].setEnabled(
+            not active and self.content_path is not None)
         if hasattr(self, "_r49_publication_play"):
             self._r49_publication_play.setEnabled(not active)
             self._r49_publication_stop.setEnabled(active)
