@@ -305,14 +305,14 @@ class PlayerApplication(JeanneChapterUiMixin):
             return
         dialog = self.tk.Toplevel(self.root)
         self._pause_dialog = dialog
-        dialog.title("Pause")
+        dialog.title(self._t("tk.pause.title"))
         dialog.transient(self.root)
         dialog.resizable(False, False)
         dialog.protocol("WM_DELETE_WINDOW", self._close_pause)
         dialog.bind("<Escape>", lambda _event: self._close_pause())
         panel = self.ttk.Frame(dialog, padding=22)
         panel.pack(fill="both", expand=True)
-        self.ttk.Label(panel, text="PAUSE",
+        self.ttk.Label(panel, text=self._t("tk.pause.heading"),
                        font=("TkDefaultFont", 19, "bold")).pack(pady=(0, 10))
         self.ttk.Label(panel, text="Échap : reprendre   ·   F5 : sauvegarder"
                        "   ·   F9 : charger").pack(pady=(0, 12))
@@ -321,21 +321,21 @@ class PlayerApplication(JeanneChapterUiMixin):
             self._close_pause()
             self._safe(action)
 
-        resume = self._button(panel, "Reprendre", self._close_pause)
+        resume = self._button(panel, self._t("player.resume"), self._close_pause)
         resume.pack(fill="x", pady=4)
-        self._button(panel, "Sauvegarder (F5)",
+        self._button(panel, self._t("tk.pause.save"),
                      lambda: go(self._quick_save)).pack(fill="x", pady=4)
-        self._button(panel, "Charger (F9)",
+        self._button(panel, self._t("tk.pause.load"),
                      lambda: go(self._quick_load)).pack(fill="x", pady=4)
-        self._button(panel, "Gestion des sauvegardes",
+        self._button(panel, self._t("tk.pause.save_manager"),
                      lambda: go(self.save_manager_screen)).pack(fill="x", pady=4)
         self.ttk.Checkbutton(
-            panel, text="Vue isométrique 2.5D", variable=self.iso_view_var,
+            panel, text=self._t("tk.pause.iso"), variable=self.iso_view_var,
             command=lambda: go(self.show)).pack(anchor="w", pady=7)
-        self._button(panel, "Options",
+        self._button(panel, self._t("player.options"),
                      lambda: go(lambda: self.options_screen(
                          return_to_game=True))).pack(fill="x", pady=4)
-        self._button(panel, "Menu principal",
+        self._button(panel, self._t("player.main_menu"),
                      lambda: go(self.title_screen)).pack(fill="x", pady=4)
         dialog.grab_set()
         resume.focus_set()

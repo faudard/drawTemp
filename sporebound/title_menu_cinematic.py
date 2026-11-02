@@ -379,7 +379,7 @@ class CinematicTitleMenu(TitleMenu):
         has_save = self._saved()
         self._hitboxes = {}
         for index, ((key,label,subtitle,icon), rect) in enumerate(zip(self.ACTIONS,layout["cards"])):
-            label = self._appearance["labels"].get(key, label)
+            label = self._appearance["labels"].get(key) or self.app._t("tk.title." + key)
             x0,y0,x1,y1=rect
             h = y1-y0
             tag="title_card_"+key
@@ -397,8 +397,9 @@ class CinematicTitleMenu(TitleMenu):
             c.create_text(tx,y0+h*(.33 if h>66 else .34),text=label,anchor="w",
                           fill=self._text_color if not disabled else "#94a1ae",
                           font=("Georgia",title_size,"bold"),tags=("art",tag))
-            sub = ("Aucune sauvegarde" if disabled else
-                   self._resume_caption() if key=="continue" else subtitle)
+            sub = (self.app._t("tk.title.no_save") if disabled else
+                   self._resume_caption() if key=="continue"
+                   else self.app._t("tk.title." + key + ".detail"))
             c.create_text(tx,y0+h*.71,text=sub,anchor="w",
                           fill=MUTED if not disabled else "#7f8894",
                           width=max(80,x1-tx-32),
@@ -466,7 +467,7 @@ class CinematicTitleMenu(TitleMenu):
         tag="title_campaign_change"
         c.create_rectangle(bx0,by0,bx1,by1,fill="#132236",outline=self._accent,
                            width=1,tags=("art",tag))
-        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  Changer de campagne",
+        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  " + self.app._t("tk.title.change_campaign"),
                       fill=self._text_color,font=self._font("Georgia",10),tags=("art",tag))
         self._region(tag,(bx0,by0,bx1,by1),key="choose")
 
@@ -478,8 +479,8 @@ class CinematicTitleMenu(TitleMenu):
         h=layout["footer_height"]
         gap=6 if layout["compact"] else 9
         widths=(w*.48,w*.245,w*.275)
-        labels=(("advanced","⚒  Outils avancés" if not layout["compact"] else "⚒  Outils"),
-                ("credits","♙  Crédits"),("help","?  Aide"))
+        labels=(("advanced","⚒  " + self.app._t("tk.title.advanced" if not layout["compact"] else "tk.title.advanced_compact")),
+                ("credits","♙  " + self.app._t("tk.title.credits")),("help","?  " + self.app._t("tk.title.help")))
         for i,((key,label),cw) in enumerate(zip(labels,widths)):
             xx=x+sum(widths[:i])+gap*i
             xx1=xx+cw-(gap if i==2 else 0)
@@ -521,16 +522,16 @@ class CinematicTitleMenu(TitleMenu):
             c.tag_raise(self.overlay_window)
 
     def open_credits(self):
-        parent=self._open_overlay("Crédits")
+        parent=self._open_overlay(self.app._t("tk.title.credits"))
         self.tk.Label(parent,text="Jeanne d’Arc — Les Cendres du Royaume\n"
                     "Jeu de rôle tactique développé avec DrawTemp.\n"
                     "Illustrations et univers créés pour le projet.",
                     bg=PANEL,fg=self._text_color,justify="left",font=self._font("Georgia",12),
                     wraplength=500).pack(fill="x",pady=16)
-        self._panel_button(parent,"Retour",self._close_overlay).pack(fill="x",pady=8)
+        self._panel_button(parent,self.app._t("tk.title.back"),self._close_overlay).pack(fill="x",pady=8)
 
     def open_help(self):
-        parent=self._open_overlay("Aide")
+        parent=self._open_overlay(self.app._t("tk.title.help"))
         info=("Cliquez sur une entrée du menu ou utilisez les flèches ↑/↓ puis Entrée.\n\n"
               "Continuer : charge l'emplacement sélectionné.\n"
               "Nouvelle partie : démarre une aventure ; confirmation si nécessaire.\n"
@@ -539,4 +540,4 @@ class CinematicTitleMenu(TitleMenu):
               "Échap : fermer ce panneau.")
         self.tk.Label(parent,text=info,bg=PANEL,fg=self._text_color,justify="left",
                       wraplength=495,font=self._font("Segoe UI",11)).pack(fill="x",pady=12)
-        self._panel_button(parent,"Retour",self._close_overlay).pack(fill="x",pady=8)
+        self._panel_button(parent,self.app._t("tk.title.back"),self._close_overlay).pack(fill="x",pady=8)
