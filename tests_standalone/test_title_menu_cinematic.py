@@ -103,5 +103,30 @@ class TitleMenuCinematicGuiTests(unittest.TestCase):
                 app.close()
 
 
+    def test_quit_is_deferred_and_releases_tk_callbacks(self):
+        from sporebound.__main__ import DEFAULT_CONTENT
+        from sporebound.player_app import PlayerApplication
+        with TemporaryDirectory() as directory:
+            app = PlayerApplication(DEFAULT_CONTENT,
+                                    profile_path=Path(directory) / "player.profile")
+            app.root.update()
+            menu = app._title_menu
+            triggered = []
+            app._preview_job = app.root.after(30000, lambda: triggered.append(True))
+            menu._execute("quit")
+            self.assertIsNotNone(app._close_request_job)
+            self.assertEqual(app.root.winfo_exists(), 1)
+            # Repeated clicks must not schedule a second teardown.
+            requested = app._close_request_job
+            menu._execute("quit")
+            self.assertEqual(app._close_request_job, requested)
+            app.root.update_idletasks()
+            self.assertEqual(app.root.winfo_exists(), 0)
+            self.assertIsNone(app._preview_job)
+            self.assertEqual(triggered, [])
+            self.assertTrue(app._closing)
+            app.close()  # Reentrant close must remain a no-op.
+
+
 if __name__ == "__main__":
     unittest.main()
