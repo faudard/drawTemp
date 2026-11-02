@@ -961,9 +961,30 @@ def main(argv=None):
     app = QApplication.instance() or QApplication([sys.argv[0]])
     window = Workbench()
     window.show()
+    smoke_errors = []
     if args.smoke:
-        QTimer.singleShot(120, app.quit)
-    return app.exec()
+        def verify_smoke():
+            try:
+                if window.session.document["id"] == "modular_hero":
+                    # Exercise actual Qt tab selection, not only construction.
+                    assert window.profile_tabs.count() == len(PROFILE_PRESETS)
+                    for index, name in enumerate(PROFILE_PRESETS):
+                        window.profile_tabs.setCurrentIndex(index)
+                        assert window.active_variant() == name, (
+                            "Profile tab did not select " + name)
+                    assert window.pose_grid.count() == 4, (
+                        "Static four-direction poses were not shown")
+            except Exception as exc:
+                smoke_errors.append(str(exc))
+            finally:
+                app.quit()
+        QTimer.singleShot(120, verify_smoke)
+    result = app.exec()
+    if smoke_errors:
+        print("Character Studio smoke failed: " + "; ".join(smoke_errors),
+              file=sys.stderr)
+        return 1
+    return result
 
 
 if __name__ == "__main__":
