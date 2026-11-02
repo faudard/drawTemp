@@ -25,6 +25,7 @@ ACTIONS = ("idle", "walk", "run", "attack", "magic", "hit", "block", "death", "v
 # assets/hero_parts folder names and are backward-compatible recipe v1 slots.
 SLOTS = ("body", "face", "eyes", "hair", "clothing", "cape", "weapon", "accessory",
          "head_shape", "ears", "skin_spots", "head_pattern", "iris", "pupil",
+         "front_hair", "rear_hair",
          "brows", "nose", "mouth", "teeth", "facial_hair", "cap", "horns",
          "bottom", "top", "mark", "mark_2", "mark_3", "earrings", "jewelry",
          "accessory_2", "accessory_3")
@@ -383,6 +384,15 @@ def render_frame(document, variant_id, action, direction, index, root):
             overlay = src.convert("RGBA")
             _check(overlay.size == tuple(data["size"]),
                    "Layer canvas size must match character canvas")
+            # Existing whole-hair sprites remain supported. For the new
+            # Front Hair category only, derive a non-destructive fringe from
+            # their occupied alpha bounds; genuine front_hair PNGs are
+            # composited verbatim. Rear Hair uses the full source beneath
+            # the head, without modifying its original pixels.
+            if (layer["slot"] == "front_hair"
+                    and path.startswith("assets/hero_parts/hair/")):
+                from .character_parts import split_legacy_hair_front
+                overlay = split_legacy_hair_front(overlay)
             rgb = tuple(int(layer["tint"][i:i+2], 16) for i in (1, 3, 5))
             if rgb != (255, 255, 255):
                 # Preserve detail in alpha; RGB tint uses multiplication.
