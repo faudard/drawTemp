@@ -34,7 +34,10 @@ def event_addon_script(manifest):
     effects are supported. A v3 event grant permits *only this compilation*;
     it does not grant arbitrary game state mutation or Python execution.
     """
-    manifest = validate_addon_manifest(manifest)
+    try:
+        manifest = validate_addon_manifest(manifest)
+    except AddonError as exc:
+        raise EventAddonError(exc.code, str(exc)) from exc
     contributions = [
         contribution for contribution in manifest["contributions"]
         if contribution["point"] == POINT
@@ -58,7 +61,8 @@ def event_addon_script(manifest):
         if type(effects) is not list or not 1 <= len(effects) <= 8:
             _fail("effect_limit", "Each hook requires 1..8 native effects")
         for effect in effects:
-            if type(effect) is not dict or effect.get("kind") not in PERMISSION_FOR:
+            if (type(effect) is not dict or type(effect.get("kind")) is not str
+                    or effect["kind"] not in PERMISSION_FOR):
                 _fail("unsupported_effect", "Use a deterministic R24.E effect")
             required.add(PERMISSION_FOR[effect["kind"]])
         hooks.append({
