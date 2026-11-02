@@ -613,13 +613,14 @@ def main(argv=None):
             look_id = item.data(Qt.UserRole)
             if not look_id or not self.look_grid.isEnabled():
                 return
+            look_label = item.text()
             variant = self.active_variant()
             try:
                 self.session.edit(
                     lambda document: apply_look(document, variant, look_id, root))
                 self.refresh()
                 self.statusBar().showMessage(
-                    "Applied " + item.text() + " to " + variant +
+                    "Applied " + look_label + " to " + variant +
                     "; adjust parts and offsets freely.")
             except CharacterError as exc:
                 self.statusBar().showMessage(str(exc))
@@ -1370,6 +1371,10 @@ def main(argv=None):
                         "All four permanent facing previews must exist")
                     assert window.canvas.isVisible(), (
                         "Main overview should always be visible")
+                    assert not window.timeline_dock.isVisible(), (
+                        "Advanced animation tools must start collapsed")
+                    assert window.look_grid.count() >= 5, (
+                        "Starting looks must be visible")
                     assert not hasattr(window, "generate_outfits"), (
                         "Jeanne-specific outfit UI must not return")
             except Exception as exc:
