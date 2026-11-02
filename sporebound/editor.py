@@ -13,7 +13,8 @@ from .editor_architecture import (EditingContext, EditorChange, StructureCommand
                                   EditorGroupTreeDropCommand, EditorGroupBatchCommand,
                                   GroupPrefabPlaceCommand,
                                   EntityCommand,
-                                  RENDERER, MINIMAP, INSPECTOR, WORKSPACE)
+                                  RENDERER, MINIMAP, INSPECTOR, WORKSPACE,
+                                  selection_cell_or_default)
 from .ai import play_activation
 from .engine import Battle
 from .model import Content, RuleError
@@ -2701,10 +2702,12 @@ def launch(path):
             visual_pick = pick_building_part(
                 canvas, iso_geometry, px, py,
                 fallback_cell=iso_geometry.hit_test(px, py))
-        selected_cell = (visual_pick.cell if visual_pick is not None
-                         else event_cell(event))
-        if selected_cell is None:
+        clicked_cell = (visual_pick.cell if visual_pick is not None
+                        else event_cell(event))
+        if clicked_cell is None:
+            # Clicking outside the map must not erase the active selection.
             return
+        selected_cell = clicked_cell
         validate_selection(doc.data, mission_var.get(), [selected_cell])
         editing_context.selection.set(mission_var.get(), selected_cell,
                                       selected_tiles, publish=False)
@@ -3291,6 +3294,9 @@ def launch(path):
         object_box['values'] = [o['id'] for o in mission.objects]
         if object_var.get() not in object_box['values']:
             object_var.set(object_box['values'][0] if object_box['values'] else '')
+        # An off-map click or mission switch must never pass None (or a
+        # stale out-of-bounds cell) to the selection controller or renderer.
+        selected_cell = selection_cell_or_default(board, selected_cell)
         # Bound the work to the selection, not all 16,384 board cells.
         selected_tiles.intersection_update(
             {c for c in selected_tiles if board.contains(c)})
@@ -3433,10 +3439,6 @@ def launch(path):
                 heading = 'OBJET — ' + ', '.join(o['id'] for o in selected_objects)
             else:
                 heading = 'TERRAIN — case ' + str(selected_cell)
-            # Switching to a smaller mission may invalidate the previous
-            # cursor position; keep the shared inspector on a valid tile.
-            if not board.contains(selected_cell):
-                selected_cell = (0, 0)
             context = inspect_map(doc.data, mission_var.get(),
                                   selected_cell, selected_tiles)
             text = (context.title + '\n' + context.detail +
