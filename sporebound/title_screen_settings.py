@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import PurePosixPath
 
 from .model import RuleError, require
+from .title_screen_layout import ELEMENTS
 
 NAMESPACE = "org.drawtemp.titlescreen"
 LABEL_KEYS = ("continue", "new", "load", "campaign", "options", "quit")
@@ -18,6 +19,7 @@ DEFAULTS = {
     "text": "#f4ead7",
     "show_campaign": True,
     "labels": {},
+    "positions": {},
 }
 
 
@@ -53,6 +55,14 @@ def validate_title_screen(data):
     for key, value in labels.items():
         require(type(value) is str and 0 < len(value.strip()) <= 48,
                 "Title-screen label %s must have 1..48 characters" % key)
+    positions = settings["positions"]
+    require(type(positions) is dict and not (set(positions) - set(ELEMENTS)),
+            "Unknown title-screen element position")
+    for key, xy in positions.items():
+        require(type(xy) is list and len(xy) == 2
+                and all(type(value) in (int, float) and 0 <= value <= 1
+                        for value in xy),
+                "Title-screen position %s must be normalized [x,y]" % key)
     return settings
 
 
