@@ -24,7 +24,7 @@ from drawtemp.localization.ui import DEFAULT_LANGUAGE, language_choices, normali
 from drawtemp.studio.ads_docking import DockHost
 from drawtemp.sdk.authoring import AuthoringError, AuthoringSession
 from drawtemp.sdk.modding import ModRegistry
-from drawtemp.addons import AddonManager, AddonError, read_addon_manifest
+from drawtemp.addons import AddonManager, AddonError, read_addon_manifest, validate_addon_manifest
 from drawtemp.studio.addon_points import (
     PROJECT_FIELDS, STUDIO_POINTS, project_field_values,
     studio_contributions, validate_studio_contribution,
@@ -720,6 +720,7 @@ class StudioWindow(QMainWindow):
         self._localized_actions["tool.addons_manage"] = addons_action
         self._addon_actions_menu = tools_menu.addMenu(ui_text("menu.addon_actions"))
         self._addon_actions_menu.setObjectName("studio-addon-actions-menu")
+        self._addon_actions_menu.menuAction().setVisible(False)
 
         tools_menu.addSeparator()
         tools_menu.addAction(self.commands["preferences"])
@@ -2258,7 +2259,8 @@ class StudioWindow(QMainWindow):
     def install_addon_manifest(self, path):
         descriptor = read_addon_manifest(path)
         if type(descriptor) is dict and descriptor.get("schema_version") == 3:
-            for contribution in descriptor.get("contributions", []):
+            descriptor = validate_addon_manifest(descriptor)
+            for contribution in descriptor["contributions"]:
                 if contribution.get("point") in STUDIO_POINTS:
                     validate_studio_contribution(contribution)
         return self.addons.register(descriptor)
