@@ -297,6 +297,172 @@ def main(argv=None):
                 edit_menu.addAction(action)
             self.statusBar().showMessage("R7 | Le rendu Player Qt sera raccordé par R3/R12.")
 
+        def selected_part_slot(self):
+            item = self.part_category.currentItem()
+            return item.data(Qt.UserRole) if item else None
+
+        def refresh_parts(self, *_):
+            """Show actual four-direction variations, never fabricated art."""
+            slot = self.selected_part_slot()
+            self.part_grid.blockSignals(True)
+            self.part_grid.clear()
+            if slot is None:
+                self.part_grid.blockSignals(False)
+                return
+            doc = self.session.document
+            variant = self.active_variant()
+            layer = active_part(doc, variant, slot)
+            enabled = doc["size"] == [192, 192] and self.art_root == root
+            self.part_grid.setEnabled(enabled)
+            if enabled:
+                none = QListWidgetItem("None")
+                none.setData(Qt.UserRole, None)
+                self.part_grid.addItem(none)
+                try:
+                    variants = available_parts(root, slot)
+                except CharacterError:
+                    variants = ()
+                for name in variants:
+                    icon_path = root / part_paths(slot, name)["south"]
+                    item = QListWidgetItem(QIcon(str(icon_path)),
+                                           name.replace("_", " ").title())
+                    item.setData(Qt.UserRole, name)
+                    self.part_grid.addItem(item)
+                selected_name = None
+                if layer is not None:
+                    path = layer["paths"].get("south", "")
+                    expected_prefix = f"assets/hero_parts/{slot}/"
+                    if path.startswith(expected_prefix) and path.endswith("_front.png"):
+                        selected_name = Path(path).stem[:-len("_front")]
+                for i in range(self.part_grid.count()):
+                    item = self.part_grid.item(i)
+                    if item.data(Qt.UserRole) == selected_name:
+                        self.part_grid.setCurrentRow(i)
+                        break
+                self.part_status.setText(
+                    f"{len(variants)} variants | All four directions | "
+                    "Select a piece to edit its color and position")
+            else:
+                self.part_status.setText(
+                    "Visual modular parts use a 192 x 192 canvas and repository "
+                    "assets. Choose the Modular Hero template to enable them.")
+            self.part_grid.blockSignals(False)
+            active = enabled and layer is not None
+            for control in (self.part_color, self.part_opacity, self.part_x, self.part_y):
+                control.setEnabled(active)
+            for spin, value in (
+                (self.part_x, layer["offset"][0] if layer else 0),
+                (self.part_y, layer["offset"][1] if layer else 0),
+                (self.part_opacity, layer["opacity"] if layer else 255),
+            ):
+                spin.blockSignals(True)
+                spin.setValue(value)
+                spin.blockSignals(False)
+            tint = layer["tint"] if layer else "#ffffff"
+            self.part_color.setStyleSheet("background-color: " + tint + ";")
+
+        def choose_part(self, item, previous):
+            if item is None or not self.part_grid.isEnabled():
+                return
+            slot = self.selected_part_slot()
+            name = item.data(Qt.UserRole)
+            current = active_part(self.session.document, self.active_variant(), slot)
+            expected = part_paths(slot, name) if name is not None else None
+            if (current is None and name is None) or (
+                    current is not None and current["paths"] == expected):
+                return
+            try:
+                vid = self.active_variant()
+                self.session.edit(
+                    lambda doc: set_part(doc, vid, slot, name, root))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+            self.refresh_parts()
+            self.refresh_pose_grid()
+            self.refresh_preview()
+
+        def choose_color(self):
+            layer = active_part(self.session.document, self.active_variant(),
+                                self.selected_part_slot())
+            if layer is None:
+                return
+            color = QColorDialog.getColor(
+                QColor(layer["tint"]), self, "Selected element color")
+            if color.isValid():
+                self.apply_part_style(tint=color.name())
+
+        def apply_part_style(self, *, tint=None):
+            slot = self.selected_part_slot()
+            if slot is None or not self.part_grid.isEnabled():
+                return
+            old = active_part(self.session.document, self.active_variant(), slot)
+            if old is None:
+                return
+            vid = self.active_variant()
+            offset = [self.part_x.value(), self.part_y.value()]
+            opacity = self.part_opacity.value()
+            color = tint if tint is not None else old["tint"]
+            if (old["offset"] == offset and old["opacity"] == opacity
+                    and old["tint"] == color):
+                return
+            try:
+                self.session.edit(lambda doc: set_part_style(
+                    doc, vid, slot, offset=offset, opacity=opacity, tint=color))
+            except CharacterError as exc:
+                self.statusBar().showMessage(str(exc))
+            self.refresh_parts()
+            self.refresh_pose_grid()
+            self.refresh_preview()
+
+        def move_part(self, dx, dy):
+            if not self.part_grid.isEnabled():
+                return
+            slot = self.selected_part_slot()
+            if slot is None or active_part(
+                    self.session.document, self.active_variant(), slot) is None:
+                return
+            self.part_x.setValue(max(-4096, min(4096, self.part_x.value() + dx)))
+            self.part_y.setValue(max(-4096, min(4096, self.part_y.value() + dy)))
+            self.apply_part_style()
+
+        def refresh_pose_grid(self):
+            """All existing posture/direction combinations; no animation copies."""
+            self.pose_grid.clear()
+            doc = self.session.document
+            variant = self.active_variant()
+            for action in ACTIONS:
+                directions = doc["variants"][variant]["clips"].get(
+                    action, {}).get("directions", {})
+                for direction in DIRECTIONS:
+                    if not directions.get(direction):
+                        continue
+                    try:
+                        image = render_frame(
+                            doc, variant, action, direction, 0, self.art_root)
+                        data = io.BytesIO()
+                        image.save(data, format="PNG")
+                        pixmap = QPixmap()
+                        pixmap.loadFromData(data.getvalue(), "PNG")
+                    except (CharacterError, OSError, KeyError, ValueError):
+                        continue
+                    item = QListWidgetItem(
+                        QIcon(pixmap), action.capitalize() + " / " + direction)
+                    item.setData(Qt.UserRole, (action, direction))
+                    self.pose_grid.addItem(item)
+            if not self.pose_grid.count():
+                self.pose_grid.addItem("No authored postures for this outfit")
+
+        def choose_pose(self, item):
+            choice = item.data(Qt.UserRole)
+            if not choice:
+                return
+            action, direction = choice
+            self.stop()
+            self.action.setCurrentIndex(self.action.findData(action))
+            self.direction.setCurrentIndex(self.direction.findData(direction))
+            self.frame_index = 0
+            self.refresh_timeline()
+
         def active_variant(self):
             vid = self.variants.currentItem()
             return vid.text() if vid else next(iter(self.session.document["variants"]))
@@ -319,6 +485,8 @@ def main(argv=None):
             self.variants.blockSignals(False)
             self.refresh_timeline()
             self.refresh_expressions()
+            self.refresh_parts()
+            self.refresh_pose_grid()
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
             self.diagnostics_box.setText(
@@ -346,6 +514,8 @@ def main(argv=None):
             self.frame_index = 0
             self.refresh_timeline()
             self.refresh_expressions()
+            self.refresh_parts()
+            self.refresh_pose_grid()
 
         def reset_frame(self, *_):
             self.stop()
@@ -478,6 +648,7 @@ def main(argv=None):
             except CharacterError as exc:
                 self.statusBar().showMessage(str(exc))
             self.refresh_timeline()
+            self.refresh_pose_grid()
 
         def change_duration(self):
             self.change_frame("duration_ms", self.duration.value())
