@@ -476,6 +476,9 @@ class StudioWindow(QMainWindow):
         self._action("r38_preflight", "R38 • Preflight du projet…",
                      self.open_preflight)
         self._action("guide", "Visite guidée du premier projet", self.open_guide)
+        self._action("help_docs", "Docs", self.open_help_docs)
+        self._action("help_tutorial", "Tutorial…", self.open_help_tutorial)
+        self._action("help_about", "About", self.open_help_about)
         self._action("r30_creator", "Packs et revue des conflits…", self.open_creator_review)
         self._action("r48_history", "Historique et revue collaborative R48…",
                      self.open_project_history)
@@ -645,6 +648,12 @@ class StudioWindow(QMainWindow):
         for lang in ("fr", "en"):
             action = locale_menu.addAction(lang.upper())
             action.triggered.connect(lambda _=False, code=lang: self.set_language(code))
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.setObjectName("studio-help-menu")
+        help_menu.addAction(self.commands["help_docs"])
+        help_menu.addAction(self.commands["help_tutorial"])
+        help_menu.addSeparator()
+        help_menu.addAction(self.commands["help_about"])
         self.toolbar = QToolBar("Navigation", self)
         self.toolbar.setObjectName("r2-navigation-toolbar")
         self.addToolBar(self.toolbar)
@@ -713,6 +722,18 @@ class StudioWindow(QMainWindow):
             return
         self.commands[key].setShortcut(sequence)
         self.settings.setValue("shortcuts/" + key, sequence.toString())
+
+    def open_help_docs(self):
+        from drawtemp.studio.help_dialogs import open_docs
+        return open_docs(self)
+
+    def open_help_tutorial(self):
+        from drawtemp.studio.help_dialogs import TutorialSelectorDialog
+        TutorialSelectorDialog(self).exec()
+
+    def open_help_about(self):
+        from drawtemp.studio.help_dialogs import show_about
+        show_about(self)
 
     def open_palette(self):
         CommandPalette(self).exec()
