@@ -28,6 +28,8 @@ def main(argv=None):
     parser.add_argument("--root", type=Path,
                         default=Path(__file__).resolve().parents[2])
     parser.add_argument("--open", type=Path, help="Open an R7 character recipe JSON")
+    parser.add_argument("--template", default="jeanne",
+                        help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
     args = parser.parse_args(argv)
 
@@ -51,10 +53,12 @@ def main(argv=None):
 
     root = args.root.resolve()
     templates = starter_library()
+    if not args.open and args.template not in templates:
+        parser.error("Unknown character template: " + args.template)
     if args.open:
         recipe = json.loads(args.open.read_text(encoding="utf-8"))
     else:
-        recipe = templates["jeanne"]
+        recipe = templates[args.template]
 
     class Workbench(QMainWindow):
         def __init__(self):
@@ -78,6 +82,10 @@ def main(argv=None):
             self.templates = QComboBox()
             for key, doc in templates.items():
                 self.templates.addItem(doc["name"], key)
+            initial_key = self.session.document["id"]
+            initial_index = self.templates.findData(initial_key)
+            if initial_index >= 0:
+                self.templates.setCurrentIndex(initial_index)
             self.templates.currentIndexChanged.connect(self.use_template)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
