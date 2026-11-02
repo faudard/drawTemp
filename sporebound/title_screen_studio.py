@@ -89,9 +89,12 @@ class TitleScreenStudio:
         buttons.pack(fill="x", padx=8, pady=15)
         self.ttk.Button(buttons, text="Apply changes",
                         command=lambda: owner._run(self.apply)).pack(fill="x", pady=2)
+        self.ttk.Button(buttons, text="Save project…",
+                        command=lambda: owner._run(owner.save_project)).pack(
+                            fill="x", pady=2)
         self.ttk.Button(buttons, text="Restore defaults",
                         command=self.defaults).pack(fill="x", pady=2)
-        self.ttk.Label(controls, text="Apply, then use the normal Save Project command. "
+        self.ttk.Label(controls, text="Apply changes before saving. "
                        "Undo/Redo and recovery include these settings.",
                        wraplength=260).pack(anchor="w", padx=8, pady=(0, 18))
 
