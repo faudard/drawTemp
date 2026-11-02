@@ -101,6 +101,16 @@ def attach_visual_layers(scene, extensions):
     return result
 
 
+def visual_image_key(material, mask, variant=0):
+    """Bounded URL key consumed by the existing 2D atlas image provider."""
+    require(material in MATERIALS and type(variant) is int and variant in (0, 1)
+            and len(mask) == 4 and
+            all(type(v) is int and 0 <= v <= 255 for v in mask),
+            "Invalid graphic sprite key")
+    return "v" + str(MATERIALS.index(material)) + str(variant) + "".join(
+        f"{alpha:02x}" for alpha in mask)
+
+
 def projected_layer_rows(scene, projection, visible_bounds):
     """Bounded cosmetic render rows; QML never interprets the authored schema.
 
@@ -108,13 +118,13 @@ def projected_layer_rows(scene, projection, visible_bounds):
     objects, upper-plane art above. Relative list position orders layers in
     the same plane, and 0 <= z-fraction < 1 protects the per-row depth gap.
     """
-    from .model import RuleError
     from drawtemp.render.iso_scene import TopDownProjection
 
     if not isinstance(projection, TopDownProjection):
         return []
     lo_x, hi_x, lo_y, hi_y = visible_bounds
     rows = []
+    elevations = {(t["x"], t["y"]): t["height"] for t in scene["tiles"]}
     for index, layer in enumerate(scene.get("visual_layers", ())):
         if not layer["visible"] or layer["opacity"] == 0:
             continue
@@ -125,9 +135,7 @@ def projected_layer_rows(scene, projection, visible_bounds):
                 continue
             if not any(item["mask"]):
                 continue
-            tile_row = next((t for t in scene["tiles"]
-                             if t["x"] == x and t["y"] == y), None)
-            z = tile_row["height"] if tile_row is not None else 0
+            z = elevations.get((x, y), 0)
             sx, sy = projection.project(x, y, z)
             rows.append({
                 "kind": "visual-layer",
@@ -136,6 +144,8 @@ def projected_layer_rows(scene, projection, visible_bounds):
                 "x": x, "y": y, "sx": sx, "sy": sy,
                 "material": item["material"],
                 "mask": list(item["mask"]),
+                "visualKey": visual_image_key(item["material"], item["mask"],
+                                              (x * 17 + y * 29) & 1),
                 "opacity": layer["opacity"] / 100.0,
                 "zOrder": y * 100 + depth + index / (MAX_LAYERS + 1),
             })
@@ -144,4 +154,4 @@ def projected_layer_rows(scene, projection, visible_bounds):
 
 __all__ = ["VISUAL_NS", "MATERIALS", "PLANES", "MAX_LAYERS", "MAX_CELLS",
            "validate_visual_layers", "from_extensions", "attach_visual_layers",
-           "projected_layer_rows"]
+           "projected_layer_rows", "visual_image_key"]
