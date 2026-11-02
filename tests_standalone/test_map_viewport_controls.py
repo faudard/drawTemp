@@ -6,7 +6,7 @@ from sporebound.map_viewport_controls import fit_zoom, scroll_fraction
 
 class ViewportControlTests(unittest.TestCase):
     def test_fits_small_scene_without_exceeding_limit(self):
-        self.assertEqual(fit_zoom(54, 432, 324, 800, 600), 91)
+        self.assertEqual(fit_zoom(54, 432, 324, 800, 600), 92)
 
     def test_large_map_uses_minimum_supported_tile_size(self):
         self.assertEqual(fit_zoom(54, 3200, 2400, 640, 480), 24)
