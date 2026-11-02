@@ -137,3 +137,19 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest \
 Gate visuel non automatisé : vérifier le menu dans la vraie fenêtre du
 Player aux trois tailles de texte, les interactions des dix zones actives,
 les états de sauvegarde, la navigation clavier et le fond sans Pillow.
+
+## Finition du cadrage de Jeanne (novembre 2026)
+
+En mode automatique Jeanne et avec Pillow, le Player préfère désormais
+`jeanne_menu_stage.jpg` : l'illustration conserve le visage et l'armure
+du personnage, contrairement au PNG découpé qui le tronque sur le bord.
+La composition est décalée vers la gauche lors du recadrage pour préserver
+Jeanne sur les fenêtres compactes. Les projets configurant explicitement
+une image conservent leur propre fond ; sans Pillow, le PNG chargé par Tk
+demeure le repli.
+
+La typographie des cartes est réduite et mesurée avec Tk avant affichage,
+de sorte que les libellés personnalisés restent dans la zone cliquable,
+sans masquer la flèche. Le cartouche de campagne reprend les dimensions
+du placard peint dans le décor original, et les trois commandes du pied
+de page restent à l'intérieur de leur conteneur.
