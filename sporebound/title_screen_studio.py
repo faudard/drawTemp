@@ -320,7 +320,12 @@ class TitleScreenStudio:
         data = deepcopy(self.owner.project.to_dict())
         data["title"] = self.title.get()
         data["subtitle"] = self.subtitle.get()
-        data.setdefault("extensions", {})[NAMESPACE] = extension_for(self._settings())
+        appearance = self._settings()
+        if appearance == DEFAULTS:
+            # Removing an explicit override restores Jeanne's exact legacy menu.
+            data.setdefault("extensions", {}).pop(NAMESPACE, None)
+        else:
+            data.setdefault("extensions", {})[NAMESPACE] = extension_for(appearance)
         new_project = GameProject.from_dict(data, self.owner._content())
         self.owner.project = new_project
         self.owner.title.set(new_project.title)
