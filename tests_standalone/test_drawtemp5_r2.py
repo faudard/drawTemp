@@ -154,11 +154,11 @@ class QtShellTests(unittest.TestCase):
                                   "actors", "events", "campaigns"})
                 tools_action = next(action for action in
                                     window.menuBar().actions()
-                                    if action.text().replace("&", "") == "Outils")
+                                    if action.text().replace("&", "") == "Tools")
                 tools_menu = tools_action.menu()
                 self.assertLessEqual(len(tools_menu.actions()), 14)
                 self.assertTrue(any(action.menu() and
-                                    action.menu().title() == "Gameplay, combat et IA"
+                                    action.menu().title() == "Gameplay, combat and AI"
                                     for action in tools_menu.actions()))
                 def included(menu):
                     found = []
@@ -177,7 +177,7 @@ class QtShellTests(unittest.TestCase):
                     for action in all_actions))
                 self.assertEqual(
                     window.commands["r31_logic"].text(),
-                    "Logique visuelle et événements…")
+                    "Visual logic and events…")
                 self.assertIn("R31", window.commands["r31_logic"].toolTip())
                 window.set_language("en")
                 self.assertEqual(window._toolbar_buttons["maps"].text(), "Map")
