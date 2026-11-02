@@ -52,7 +52,11 @@ class VisualLayersDock(QWidget):
         self.opacity = QSlider(Qt.Horizontal)
         self.opacity.setObjectName("r5-graphic-opacity")
         self.opacity.setRange(0, 100)
+        # Commit on release instead of flooding the shared Undo history with
+        # one authoritative project transaction per mouse-move pixel.
         self.opacity.valueChanged.connect(self._opacity_changed)
+        self.opacity.sliderReleased.connect(
+            lambda: self._opacity_changed(self.opacity.value()))
         settings.addRow("Opacity", self.opacity)
         self.plane = QComboBox()
         self.plane.setObjectName("r5-graphic-plane")
@@ -189,6 +193,8 @@ class VisualLayersDock(QWidget):
             self._apply(lambda: self.editor.configure(ident, locked=value))
 
     def _opacity_changed(self, value):
+        if self.opacity.isSliderDown():
+            return
         if not self._building and self.selected_id():
             self._apply(lambda: self.editor.configure(
                 self.selected_id(), opacity=value))
