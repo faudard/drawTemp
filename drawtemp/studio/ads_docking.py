@@ -12,6 +12,7 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtWidgets import QDockWidget
 
 log = logging.getLogger(__name__)
+_ADS_CONFIGURED = False
 
 
 class DockHost:
@@ -29,10 +30,13 @@ class DockHost:
             window.setCentralWidget(central)
             return
 
-        # ADS configuration is process-wide and must precede constructing the
-        # manager. Click-to-open is intentional: avoid surprise hover popups.
-        ads.CDockManager.setAutoHideConfigFlags(
-            ads.CDockManager.DefaultAutoHideConfig)
+        # ADS configuration is process-wide. Set it exactly once, before
+        # the first manager (the MapWindow may be nested inside the Studio).
+        global _ADS_CONFIGURED
+        if not _ADS_CONFIGURED:
+            ads.CDockManager.setAutoHideConfigFlags(
+                ads.CDockManager.DefaultAutoHideConfig)
+            _ADS_CONFIGURED = True
         self.ads = ads
         self.manager = ads.CDockManager(window)
         window.setCentralWidget(self.manager)
