@@ -134,11 +134,9 @@ class CompilationTests(unittest.TestCase):
         with self.assertRaises(AuthoringError):
             self.session.apply(plan)
         self.session.undo()
-        self.assertEqual(self.session.snapshot().to_dict(), {
-            **old, "revision": 2, "can_redo": True
-        }) if False else self.assertEqual(self.session.snapshot().project, old["project"])
+        self.assertEqual(self.session.snapshot().to_dict()["project"], old["project"])
         self.session.redo()
-        self.assertEqual(self.session.snapshot().project, compiled["project"])
+        self.assertEqual(self.session.snapshot().to_dict()["project"], compiled["project"])
         with TemporaryDirectory() as directory:
             path = Path(directory) / "scenario.json"
             self.session.save_as(path)
