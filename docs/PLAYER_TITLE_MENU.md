@@ -2,8 +2,8 @@
 
 Ce menu remplace l'ancien formulaire « Nouvelle aventure / reprendre » dans
 `sporebound.player_app.PlayerApplication.title_screen`. Il n'ajoute aucune
-couche de gameplay, aucun nouveau format de sauvegarde et aucune dépendance
-obligatoire.
+couche de gameplay ni nouveau format de sauvegarde. Le rendu illustré
+utilise désormais **Pillow comme dépendance runtime**, installée avec le projet.
 
 ## Organisation
 
@@ -28,13 +28,14 @@ boutons ni texte rasterisés. Elle est dérivée d'une création originale
 générée pour le menu de Jeanne ; seules les zones illustrées ont été
 retenues pour supprimer les éléments factices de la maquette.
 
-Le rendu emploie un **cover crop** de la zone panoramique à droite des
+Le rendu emploie un **cover crop** de la zone panoramique à gauche des
 boutons, sans déformer le ratio de l'image. Avec Pillow, l'interpolation
-LANCZOS est mise en cache par taille de fenêtre. Sans Pillow, le
-`PhotoImage` natif charge le PNG ; le décor vectoriel est conservé en
-dernier recours, ainsi que pour les projets personnalisés. Le contraste
-renforcé masque l'illustration pour garder une surface lisible. Aucun
-asset distant, format de sauvegarde ou changement de règles n'est ajouté.
+LANCZOS et un fondu continu vers le menu sont mis en cache par taille de
+fenêtre. Sans Pillow, ou si le fichier est illisible, le menu cinématique
+utilise directement **le décor vectoriel** : aucun agrandissement pixelisé
+par Tk ni bande tramée. Le contraste renforcé masque l'illustration pour
+garder une surface lisible. Aucun asset distant, format de sauvegarde ou
+changement de règles n'est ajouté.
 
 En l'absence du nouveau fond, le portrait existant
 `sporebound/content/art/jeanne/jeanne_portrait.png` peut toujours
@@ -55,7 +56,7 @@ SPOREBOUND_GUI_SMOKE=1 xvfb-run -a python -m unittest tests_standalone.test_titl
 python -m sporebound player --content sporebound/content/jeanne.json --project sporebound/content/jeanne.game.json
 ```
 
-**Gate manuel avant fusion :** inspecter en 800×580, 1160×820 et plein écran, sans Pillow puis avec Pillow,
+**Gate manuel avant fusion :** inspecter en 800×580, 1160×820 et plein écran, avec Pillow puis en simulant son absence,
 à 100/125/150 % et contraste renforcé ; confirmer la lisibilité du titre,
 le focus clavier et la fermeture des panneaux, puis créer/charger une partie,
 inspecter un slot avec sauvegarde de secours, tester un slot libre et valider
@@ -81,12 +82,11 @@ par une interface **entièrement interactive en Canvas Tk** :
   est chargé séparément du Canvas : aucun texte ni bouton n'est rasterisé.
 - Avec Pillow, l'illustration est redimensionnée en `cover` (recadrage sans
   marges) et estompée progressivement vers la colonne de commandes.
-- **Sans Pillow**, le PNG est agrandi par `PhotoImage.zoom` puis recadré
-  dans une image Tk exactement aux dimensions de la zone décorative. Cela
-  évite l'ancien problème de PNG minuscule au centre d'une grande fenêtre ;
-  le rendu de secours est en pixels voisins (qualité inférieure à LANCZOS),
-  avec transition sombre en bandes tramées. Aucun paquet supplémentaire
-  n'est requis pour afficher l'image en grand.
+- **Sans Pillow**, le PNG n'est volontairement **pas** agrandi par Tk :
+  l'image serait pixellisée et la transition créerait une bande pointillée.
+  À la place, le décor vectoriel offre un repli net à toute résolution.
+- **Pillow>=10 est une dépendance standard** de `pyproject.toml`, y compris
+  dans les installations Windows du Player réalisées avec `pip install .`.
 - Dimensions calculées via `title_geometry()` ; contrôle explicite des
   800×580, 1160×820, 1595×933, 1672×914 et 1920×1080. À petite taille,
   les sous-titres et pictogrammes se compactent plutôt que se superposer.
@@ -96,12 +96,21 @@ par une interface **entièrement interactive en Canvas Tk** :
   formulations purement décoratives du menu Jeanne sont adaptées à son
   univers. Toutes les mutations de jeu restent dans `PlayerController`.
 
-Le rendu illustré utilise Pillow quand il est présent. Sans Pillow, le
-fond PNG utilise le recadrage natif Tk aux dimensions de la fenêtre ; le
-décor vectoriel ne sert qu'en dernier recours. Le contraste renforcé masque
-toujours les fonds illustrés.
+Le rendu illustré utilise Pillow pour obtenir un redimensionnement doux
+(LANCZOS). Sans Pillow ou lorsque le PNG est invalide, le rendu passe sur
+le décor vectoriel, sans stipple ni flou d'agrandissement. Le contraste
+renforcé masque toujours les fonds illustrés.
 
 ### Vérification
+
+Pour installer ou mettre à jour l'environnement du Player :
+
+```sh
+python -m pip install -e .
+python -c "from PIL import Image; print(Image.__version__)"
+```
+
+Puis lancer les tests :
 
 ```sh
 python -m unittest tests_standalone.test_title_menu_cinematic -v
