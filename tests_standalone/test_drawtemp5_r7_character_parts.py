@@ -47,7 +47,7 @@ class CharacterPartsTests(unittest.TestCase):
         for direction in ("south", "north", "east", "west"):
             rendered = render_frame(doc, "default", "idle", direction, 0, ROOT)
             self.assertEqual(rendered.size, (192, 192))
-        session.edit(lambda doc: set_part(doc, "default", "hair", "short", ROOT))
+        session.edit(lambda doc: set_part(doc, "default", "hair", "bob", ROOT))
         self.assertEqual(
             active_part(session.document, "default", "hair")["tint"], "#aabbcc")
         self.assertTrue(session.undo())
