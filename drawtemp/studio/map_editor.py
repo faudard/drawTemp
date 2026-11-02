@@ -140,6 +140,7 @@ class MapWindow(QMainWindow):
         self.addon_brushes.setObjectName("studio-addon-brush-presets")
         self.addon_brushes.setAccessibleName("Add-on brush presets")
         self.addon_brushes.addItem("Add-on brushes", None)
+        self.addon_brushes.setVisible(False)
         toolbar.addWidget(self.addon_brushes)
         self.additive_selection = QCheckBox("Ajouter à la sélection")
         self.additive_selection.setObjectName("r5_selection_additive")
@@ -1283,6 +1284,7 @@ class MapWindow(QMainWindow):
                     break
         self.addon_brushes.setCurrentIndex(target)
         self.addon_brushes.blockSignals(False)
+        self.addon_brushes.setVisible(self.addon_brushes.count() > 1)
 
     def _select_addon_brush(self, index):
         preset = self.addon_brushes.itemData(index)
