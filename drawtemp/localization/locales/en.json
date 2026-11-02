@@ -294,6 +294,7 @@
     "command.close": "&Close Project",
     "command.help_docs": "Docs",
     "command.help_tutorial": "Tutorial…",
-    "command.help_about": "About"
+    "command.help_about": "About",
+    "menu.focus_editor": "Focus Editor (F11)"
   }
 }
