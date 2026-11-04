@@ -75,8 +75,9 @@ def _directional_sources(folder):
         raise CharacterError("All 4 directional PNGs must share identical dimensions")
     fingerprints = {hashlib.sha256(im.tobytes()).digest()
                     for im in sprites.values()}
-    if len(fingerprints) < 3:
-        raise CharacterError("Use real directional artwork; duplicated images are not accepted")
+    if len(fingerprints) != 4:
+        raise CharacterError("Four genuinely distinct directions are required; "
+                             "duplicated images are not accepted")
     return sprites
 
 
@@ -188,15 +189,17 @@ def import_character_art(root, folder, identifier, label=None, *, align_feet=Tru
         if destination.exists() or recipe_path.exists():
             raise CharacterError("Character ID already exists: " + identifier)
         stage.rename(destination)
+    created_recipe = False
     try:
         # Exclusive create avoids silently overwriting previously saved art.
         with recipe_path.open("x", encoding="utf-8") as output:
+            created_recipe = True
             json.dump(doc, output, indent=2, ensure_ascii=False)
             output.write("\n")
     except Exception:
         shutil.rmtree(destination)
-        if recipe_path.exists():
-            recipe_path.unlink()
+        if created_recipe:
+            recipe_path.unlink(missing_ok=True)
         raise
     return doc, recipe_path
 
