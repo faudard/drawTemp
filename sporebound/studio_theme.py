@@ -132,6 +132,26 @@ class StudioAppearance:
                         foreground=palette.text,
                         font=("TkDefaultFont", 9),
                         borderwidth=1, padding=(7, 3))
+        # Bootstrap-inspired, accessible Playtest toggle. These are the only
+        # saturated toolbar actions; active/hover states remain readable.
+        for name, normal, hover in (
+                ("Studio.Playtest.Start.TButton", "#198754", "#157347"),
+                ("Studio.Playtest.Stop.TButton", "#DC3545", "#BB2D3B")):
+            style.configure(name, background=normal, foreground="#FFFFFF",
+                            font=("TkDefaultFont", 10, "bold"),
+                            bordercolor=normal, borderwidth=1,
+                            relief="flat", padding=(13, 5))
+            style.map(name,
+                      background=[("pressed", hover), ("active", hover)],
+                      foreground=[("disabled", "#E6E7E9"),
+                                  ("active", "#FFFFFF")])
+        style.configure("Studio.Scenery.Treeview", rowheight=42,
+                        background=palette.surface,
+                        fieldbackground=palette.surface,
+                        foreground=palette.text)
+        style.map("Studio.Scenery.Treeview",
+                  background=[("selected", palette.selected)],
+                  foreground=[("selected", palette.selected_text)])
         style.configure("TMenubutton", background=palette.elevated,
                         foreground=palette.text, borderwidth=1,
                         padding=(10, 7))

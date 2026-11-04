@@ -1927,13 +1927,64 @@ def launch(path):
         status_var.set('Arbre réorganisé vers '+(target or 'racine')+
                        ' ; Annuler / Rétablir disponibles.')
 
-    def set_zoom(delta):
+    def scroll_map_to(px, py, *, screen_x=None, screen_y=None):
+        """Pan without modifying authoring coordinates or renderer geometry."""
+        from .map_viewport_controls import scroll_fraction
+        canvas.update_idletasks()
+        region = canvas.cget('scrollregion').split()
+        if len(region) != 4:
+            return
+        left, top, right, bottom = map(float, region)
+        width, height = max(1, canvas.winfo_width()), max(1, canvas.winfo_height())
+        canvas.xview_moveto(scroll_fraction(
+            left, right, width, px, width / 2 if screen_x is None else screen_x))
+        canvas.yview_moveto(scroll_fraction(
+            top, bottom, height, py, height / 2 if screen_y is None else screen_y))
+        refresh_minimap_viewport()
+
+    def recenter_map():
+        """Recenter on the rendered scene, not on a selected tile."""
+        region = canvas.cget('scrollregion').split()
+        if len(region) != 4:
+            return
+        left, top, right, bottom = map(float, region)
+        scroll_map_to((left + right) / 2, (top + bottom) / 2)
+        canvas.focus_set()
+
+    def set_zoom(delta, *, anchor=None):
         nonlocal tile_size
         next_size = max(24, min(96, tile_size + delta))
-        if next_size != tile_size:
-            tile_size = next_size
+        if next_size == tile_size:
+            return
+        width, height = max(1, canvas.winfo_width()), max(1, canvas.winfo_height())
+        sx, sy = anchor if anchor is not None else (width / 2, height / 2)
+        px, py = canvas.canvasx(sx), canvas.canvasy(sy)
+        previous_size = tile_size
+        tile_size = next_size
+        refresh()
+        zoom_label_var.set(f'{round(tile_size / 54 * 100)}%')
+        scroll_map_to(px * tile_size / previous_size,
+                      py * tile_size / previous_size,
+                      screen_x=sx, screen_y=sy)
+        status_var.set(f'Zoom carte : {tile_size}px/case')
+
+    def fit_map():
+        """Fit rendered bounds to the central viewport, keeping editable size limits."""
+        nonlocal tile_size
+        from .map_viewport_controls import fit_zoom
+        canvas.update_idletasks()
+        region = canvas.cget('scrollregion').split()
+        if len(region) != 4:
+            return
+        left, top, right, bottom = map(float, region)
+        target = fit_zoom(tile_size, right - left, bottom - top,
+                          canvas.winfo_width(), canvas.winfo_height())
+        if target != tile_size:
+            tile_size = target
             refresh()
-            status_var.set(f'Zoom carte : {tile_size}px/case')
+        zoom_label_var.set(f'{round(tile_size / 54 * 100)}%')
+        recenter_map()
+        status_var.set(f'Carte ajustée à la fenêtre · {tile_size}px/case')
 
     @guarded
     def rotate_structure(direction):
@@ -3600,7 +3651,7 @@ def launch(path):
 
     playtest_button = ttk.Button(
         toolbar, text='▶ Playtest', command=toggle_playtest,
-        style='Studio.Toolbar.TButton')
+        style='Studio.Playtest.Start.TButton')
     playtest_button.pack(side='right', padx=(4, 1))
 
     # StudioNavigation still owns notebook selection and category history.
@@ -3640,9 +3691,7 @@ def launch(path):
     ttk.Combobox(controls,textvariable=brush_var,state='readonly',width=10,
                  values=['wall','erase','height+','height-','height_set','mud','hazard',
                          'cover','goal','unit','object','zone+','zone-']).pack(side='left')
-    ttk.Checkbutton(controls, text='Vue iso 2.5D',
-                    variable=iso_var, command=refresh).pack(
-                        side='left', padx=(12, 2))
+    # Projection is selected once, above the canvas (2D / Iso 2.5D).
     ttk.Label(battle_controls, text='Unité').pack(side='left')
     unit_box = ttk.Combobox(battle_controls,textvariable=unit_var,state='readonly',width=12)
     unit_box.pack(side='left')
@@ -3661,7 +3710,9 @@ def launch(path):
     def sync_mode_toolbar(*_args):
         # The button always describes the action it will perform next.
         playtest_button.configure(
-            text='■ Stop Playtest' if battle is not None else '▶ Playtest')
+            text='■ Stop Playtest' if battle is not None else '▶ Playtest',
+            style=('Studio.Playtest.Stop.TButton' if battle is not None
+                   else 'Studio.Playtest.Start.TButton'))
         # Map paint tools must not be stacked with inapplicable battle orders.
         active, inactive = ((battle_controls, controls) if battle is not None
                             else (controls, battle_controls))
@@ -3785,18 +3836,15 @@ def launch(path):
             entity_settings = asset_palette.placement_settings()
             tool_var.set('Entité')
         elif entry.kind == 'structure':
-            tool_tabs.select(tools_structure)
             structure_var.set(entry.value)
             structure_turns = turns
             structure_door_var.set('Entrée A')
             tool_var.set('Structure')
         else:
-            tool_tabs.select(tools_terrain)
             (surface_var if entry.kind == 'surface' else feature_var).set(entry.value)
             brush_var.set(entry.id)
             tool_var.set('Pinceau')
-        iso_var.set(True)
-        persist_map_view()
+        # Choosing a tile must not silently change the user's 2D/Iso projection.
         notebook.select(work)
         refresh()
         status_var.set(entry.name + ' : cliquer sur la carte. ' + entry.effect)
@@ -3956,6 +4004,16 @@ def launch(path):
                command=lambda: set_zoom(-6)).pack(side='left')
     ttk.Button(advanced_controls,text='+',width=3,
                command=lambda: set_zoom(6)).pack(side='left')
+    # The notebook previously reserved the height of its tallest hidden tab,
+    # leaving hundreds of blank pixels above the viewport on Windows.
+    def resize_tool_tabs(_event=None):
+        selected = tool_tabs.select()
+        if selected:
+            page = tool_tabs.nametowidget(selected)
+            tool_tabs.configure(height=max(45, page.winfo_reqheight() + 8))
+    tool_tabs.bind('<<NotebookTabChanged>>',
+                   lambda _e: root.after_idle(resize_tool_tabs))
+    root.after_idle(resize_tool_tabs)
     notebook = ttk.Notebook(root)
     notebook.pack(fill='both',expand=True)
     work = ttk.Panedwindow(notebook, orient='horizontal')
@@ -3964,8 +4022,14 @@ def launch(path):
     canvas_region = ttk.Panedwindow(work, orient='vertical')
     side_panel = ttk.Frame(work, width=315)
     work.add(sidebar, weight=1)
-    work.add(canvas_region, weight=4)
+    work.add(canvas_region, weight=5)
     work.add(side_panel, weight=2)
+    sidebar_tabs = ttk.Notebook(sidebar, style='Studio.Dock.TNotebook')
+    sidebar_tabs.pack(fill='both', expand=True, padx=4, pady=5)
+    scenery_page = ttk.Frame(sidebar_tabs)
+    project_page = ttk.Frame(sidebar_tabs)
+    sidebar_tabs.add(scenery_page, text='Décors')
+    sidebar_tabs.add(project_page, text='Projet')
     canvas_frame = ttk.Frame(canvas_region)
     canvas_region.add(canvas_frame, weight=4)
     viewport_bar = ttk.Frame(canvas_frame)
@@ -3978,6 +4042,19 @@ def launch(path):
             value=projection,
             command=lambda selected=projection: switch_projection(selected),
         ).pack(side='left', padx=(0, 10))
+    zoom_label_var = tk.StringVar(value=f'{round(tile_size / 54 * 100)}%')
+    zoom_tools = ttk.Frame(viewport_bar)
+    zoom_tools.pack(side='right')
+    ttk.Button(zoom_tools, text='−', width=3,
+               command=lambda: set_zoom(-6)).pack(side='left', padx=1)
+    ttk.Label(zoom_tools, textvariable=zoom_label_var,
+              width=6, anchor='center').pack(side='left', padx=3)
+    ttk.Button(zoom_tools, text='+', width=3,
+               command=lambda: set_zoom(6)).pack(side='left', padx=1)
+    ttk.Button(zoom_tools, text='Ajuster',
+               command=fit_map).pack(side='left', padx=(8, 2))
+    ttk.Button(zoom_tools, text='Centrer',
+               command=recenter_map).pack(side='left', padx=2)
     canvas = tk.Canvas(canvas_frame,background='#eeeeee',takefocus=1)
     editor_renderer = EditorRenderCache(canvas)
     ambient_animator = TerrainAmbientAnimator()
@@ -4016,6 +4093,107 @@ def launch(path):
     canvas.bind('<Control-Shift-R>',lambda _e: rotate_or_flip('rotate_ccw'))
     canvas.bind('<Control-plus>',lambda _e: set_zoom(6))
     canvas.bind('<Control-minus>',lambda _e: set_zoom(-6))
+    def wheel_zoom(event):
+        # Ctrl+wheel zooms around the cursor; wheel alone retains normal scrolling.
+        increment = 6 if event.delta > 0 else -6
+        if event.delta:
+            set_zoom(increment, anchor=(event.x, event.y))
+        return 'break'
+    canvas.bind('<Control-MouseWheel>', wheel_zoom)
+    canvas.bind('<Control-Button-4>',
+                lambda e: (set_zoom(6, anchor=(e.x, e.y)), 'break')[-1])
+    canvas.bind('<Control-Button-5>',
+                lambda e: (set_zoom(-6, anchor=(e.x, e.y)), 'break')[-1])
+    canvas.bind('<ButtonPress-2>', lambda e: canvas.scan_mark(e.x, e.y))
+    canvas.bind('<B2-Motion>',
+                lambda e: (canvas.scan_dragto(e.x, e.y, gain=1),
+                           refresh_minimap_viewport()))
+
+    # Paintable scenery palette embedded in the left dock. The existing
+    # PaletteEntry catalog and choose_palette_asset authoring path are reused.
+    from .asset_palette import ENTRIES, search_entries
+    scenery_entries = {entry.id: entry for entry in ENTRIES}
+    scenery_images = {}
+    ttk.Label(scenery_page, text='BIBLIOTHÈQUE DE DÉCORS',
+              style='Studio.Section.TLabel').pack(
+                  anchor='w', padx=8, pady=(8, 3))
+    scenery_query = tk.StringVar()
+    ttk.Entry(scenery_page, textvariable=scenery_query).pack(
+        fill='x', padx=7, pady=(0, 4))
+    scenery_category = tk.StringVar(value='Tous')
+    ttk.Combobox(scenery_page, textvariable=scenery_category,
+                 values=('Tous', 'Sols', 'Végétation', 'Décors', 'Structures'),
+                 state='readonly').pack(fill='x', padx=7, pady=(0, 5))
+    scenery_tree_box = ttk.Frame(scenery_page)
+    scenery_tree_box.pack(fill='both', expand=True, padx=5)
+    scenery_tree = ttk.Treeview(scenery_tree_box, show='tree',
+                                selectmode='browse',
+                                style='Studio.Scenery.Treeview')
+    scenery_tree.column('#0', minwidth=145, width=204, stretch=True)
+    scenery_scroll = ttk.Scrollbar(scenery_tree_box, orient='vertical',
+                                   command=scenery_tree.yview)
+    scenery_tree.configure(yscrollcommand=scenery_scroll.set)
+    scenery_scroll.pack(side='right', fill='y')
+    scenery_tree.pack(side='left', fill='both', expand=True)
+
+    def scenery_thumbnail(entry):
+        existing = scenery_images.get(entry.id)
+        if existing is not None:
+            return existing
+        try:
+            if entry.kind == 'surface':
+                photo = iso_atlas.tile(entry.value, 32)
+            elif entry.kind == 'feature':
+                photo = iso_props.sprite(entry.value, 32)
+            else:
+                from .iso_building_atlas import BUILDING_FRAMES
+                loader = (building_atlas if (entry.value, 0) in BUILDING_FRAMES
+                          else fortification_atlas)
+                photo = loader.sprite(entry.value, 0, 32)
+        except (OSError, ValueError, tk.TclError, KeyError):
+            photo = None
+        if photo is None:
+            color = (SURFACE_COLORS.get(entry.value, '#99A78E')
+                     if entry.kind == 'surface' else
+                     '#6A936A' if entry.category == 'Végétation' else
+                     '#9AA8B5')
+            photo = tk.PhotoImage(master=root, width=32, height=32)
+            photo.put(color, to=(0, 0, 32, 32))
+        scenery_images[entry.id] = photo  # retain Tk image references
+        return photo
+
+    def populate_scenery(*_args):
+        previous = scenery_tree.selection()
+        scenery_tree.delete(*scenery_tree.get_children())
+        rows = search_entries(scenery_query.get(), scenery_category.get())
+        for category in ('Sols', 'Végétation', 'Décors', 'Structures'):
+            group = [entry for entry in rows if entry.category == category]
+            if not group:
+                continue
+            parent = scenery_tree.insert('', 'end', iid='category:' + category,
+                                         text=f'{category} ({len(group)})',
+                                         open=True)
+            for entry in group:
+                scenery_tree.insert(parent, 'end', iid=entry.id,
+                                     text='  ' + entry.name,
+                                     image=scenery_thumbnail(entry))
+        if previous and previous[0] in scenery_entries and scenery_tree.exists(previous[0]):
+            scenery_tree.selection_set(previous[0])
+
+    def choose_scenery(_event=None):
+        selection = scenery_tree.selection()
+        if selection and selection[0] in scenery_entries:
+            choose_palette_asset(scenery_entries[selection[0]], 0)
+
+    scenery_tree.bind('<<TreeviewSelect>>', choose_scenery)
+    scenery_query.trace_add('write', populate_scenery)
+    scenery_category.trace_add('write', populate_scenery)
+    populate_scenery()
+    ttk.Label(scenery_page, text='Choisir un décor, puis peindre sur la carte.',
+              wraplength=205, justify='left').pack(
+                  anchor='w', padx=8, pady=(5, 3))
+    ttk.Button(scenery_page, text='Bibliothèque complète…',
+               command=open_asset_palette).pack(fill='x', padx=7, pady=(0, 8))
     # Right dock: separate inspector, group tools and prefab authoring.
     # In the old layout these were one long, mostly inaccessible column.
     side_tabs = ttk.Notebook(side_panel, style='Studio.Dock.TNotebook')
@@ -4493,7 +4671,9 @@ def launch(path):
         'Alt+1 : carte  •  Alt+2 : espace projet  •  Ctrl+F : chercher\n'
         'Ctrl+C/V : copier/coller la sélection sur la carte  •  '
         'Échap : vider la recherche\n'
-        'Glisser les séparateurs pour adapter le navigateur, la carte, '
+        'Ctrl+molette : zoomer  •  Clic molette maintenu : déplacer la carte\n'
+        'Ajuster : voir la carte entière  •  Centrer : revenir au milieu\n'
+        'Glisser les séparateurs pour adapter la palette, la carte, '
         'le journal et l’inspecteur.'),
         justify='left', wraplength=620).pack(anchor='nw', padx=12, pady=12)
     source_frame = ttk.Frame(notebook)
@@ -4894,9 +5074,9 @@ def launch(path):
         command=lambda: messagebox.showinfo(
             'About DrawTemp', 'DrawTemp — Game Studio\n'
             'Tactical RPG editor and player.'))
-    studio.workspace.attach_navigator(sidebar)
+    studio.workspace.attach_navigator(project_page)
     studio.workspace.attach_problems(bottom_panel)
-    ttk.Button(sidebar, text='Espace projet complet',
+    ttk.Button(project_page, text='Espace projet complet',
                command=lambda: notebook.select(studio.workspace.tab)).pack(
                    fill='x', padx=7, pady=(3, 8))
     def wire_drop(tree, kind):
@@ -5035,6 +5215,9 @@ def launch(path):
 
     def focus_project_search(_event=None):
         notebook.select(work)
+        if not studio_docks.visible('explorer'):
+            studio_docks.set_visible('explorer', True)
+        sidebar_tabs.select(project_page)
         entry = studio.workspace.sidebar_search
         entry.focus_set()
         entry.selection_range(0, 'end')
@@ -5134,6 +5317,8 @@ def launch(path):
                 'recents': studio.workspace.explorer.recents,
                 'family_filter': studio.workspace.family_filter.get(),
                 'scope_filter': studio.workspace.scope_filter.get(),
+                'map_viewport_palette_v1': True,
+                'map_palette_tab': sidebar_tabs.tab(sidebar_tabs.select(), 'text'),
             })
             if len(work.panes()) == 3 and not studio_docks.focus_var.get():
                 state['outer_left'] = work.sashpos(0)
@@ -5183,6 +5368,13 @@ def launch(path):
                     notebook.select(tab)
                     break
             studio_docks.restore(docks_store().load())
+            if not values.get('map_viewport_palette_v1'):
+                # Existing users may have both docks hidden from older layouts.
+                # First launch of the map-first workspace exposes both once.
+                studio_docks.set_visible('explorer', True)
+                studio_docks.set_visible('inspector', True)
+            if values.get('map_palette_tab') == 'Projet':
+                sidebar_tabs.select(project_page)
             apply_studio_theme(appearance_store().load(), save=False)
         except (OSError, ValueError, tk.TclError):
             pass
@@ -5222,6 +5414,9 @@ def launch(path):
     root.protocol('WM_DELETE_WINDOW', close_editor)
     refresh_source()
     refresh()
+    # The initial scene should be legible without first finding the Fit button.
+    # Defer until the tool notebook and restored dock widths have settled.
+    root.after_idle(lambda: root.after_idle(fit_map))
     ambient_job = root.after(TICK_MS, ambient_tick)
     root.mainloop()
 
