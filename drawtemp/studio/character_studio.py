@@ -524,6 +524,145 @@ def main(argv=None):
                 "Character Studio | Select parts, edit colors and offsets. "
                 "Preview and four directions remain visible.")
 
+        def import_full_character(self):
+            """Create a genuine high-resolution R7 actor from four real PNGs."""
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            if not self._confirm_replace():
+                return
+            source = QFileDialog.getExistingDirectory(
+                self, "Choose folder: front.png / right.png / back.png / left.png",
+                str(root))
+            if not source:
+                return
+            directory = Path(source)
+            suggested_name = directory.name.replace("_", " ").title()
+            name, ok = QInputDialog.getText(
+                self, "Import Original Character Art",
+                "New character name", text=suggested_name)
+            if not ok or not name.strip():
+                return
+            suggested_id = re.sub(r"[^a-z0-9_]+", "_", name.strip().casefold())
+            suggested_id = suggested_id.strip("_")[:63]
+            if not suggested_id or not suggested_id[0].isalpha():
+                suggested_id = "art_" + suggested_id
+            identifier, ok = QInputDialog.getText(
+                self, "Character ID", "Unique character asset ID",
+                text=suggested_id)
+            if not ok:
+                return
+            try:
+                document, recipe_file = import_character_art(
+                    root, directory, identifier.strip(),
+                    name.strip(), align_feet=True)
+                self.stop()
+                self.session = CharacterSession(document)
+                self.path = recipe_file
+                self.art_root = root
+                self.saved_revision = self.session.revision
+                self.action.setCurrentIndex(self.action.findData("idle"))
+                self.direction.setCurrentIndex(self.direction.findData("south"))
+                self.reload_library()
+                self.refresh()
+                if reference_path(root, document["id"]) is not None:
+                    self.reference_dock.show()
+                self.statusBar().showMessage(
+                    "Imported real 4-view artwork at native resolution. "
+                    "Only idle stills exist; animations need separate frames.")
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(
+                    self, "Artwork import failed",
+                    str(exc) + "\n\nRequired: transparent front.png, "
+                    "right.png, back.png, left.png. Optional portrait.png "
+                    "and reference.png. A labelled illustration sheet alone "
+                    "is reference art, not a directional sprite set.")
+
+        def import_modular_layer(self):
+            """Add an artist-drawn, independent four-way PNG layer family."""
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            current = self.selected_part_slot()
+            choices = [slot for slot, _ in PART_CATEGORIES]
+            default = choices.index(current) if current in choices else 0
+            slot, ok = QInputDialog.getItem(
+                self, "Import Modular Artwork",
+                "Category (each PNG: transparent 192x192)",
+                choices, default, False)
+            if not ok:
+                return
+            folder = QFileDialog.getExistingDirectory(
+                self, "Choose 4-direction part folder", str(root))
+            if not folder:
+                return
+            proposed = re.sub(r"[^a-z0-9_]+", "_", Path(folder).name.casefold())
+            proposed = proposed.strip("_")[:63] or "artist_part"
+            if not proposed[0].isalpha():
+                proposed = "art_" + proposed
+            name, ok = QInputDialog.getText(
+                self, "Part Variant ID", "Unique 4-direction part ID",
+                text=proposed)
+            if not ok:
+                return
+            try:
+                import_part_set(root, folder, slot, name.strip())
+                for index in range(self.part_category.count()):
+                    item = self.part_category.item(index)
+                    if item.data(Qt.UserRole) == slot:
+                        self.part_category.setCurrentRow(index)
+                        break
+                self.refresh_parts()
+                self.statusBar().showMessage(
+                    "Imported " + slot + "/" + name.strip() +
+                    " (four real transparent PNGs, unchanged proportions).")
+                # Let the artist explicitly select a new variation; never
+                # destroy a previous part or silently alter the recipe.
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(self, "Part import failed", str(exc))
+
+        def attach_reference(self):
+            """Keep inspiration as inspiration; do not fake playable art."""
+            filename, _ = QFileDialog.getOpenFileName(
+                self, "Attach Concept / Turnaround Reference",
+                str(root), "PNG reference sheets (*.png)")
+            if not filename:
+                return
+            try:
+                import_reference_art(
+                    root, self.session.document["id"], filename)
+                self._reference_path = None
+                self.refresh_reference()
+                self.reference_dock.show()
+                self.statusBar().showMessage(
+                    "Concept reference attached. It is not an animation, "
+                    "a sprite, or a modular PNG layer.")
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(self, "Concept art", str(exc))
+
+        def resize_reference(self, *_):
+            if self._reference_original.isNull():
+                return
+            scale = self.reference_zoom.value() / 100.0
+            width = max(1, round(self._reference_original.width() * scale))
+            height = max(1, round(self._reference_original.height() * scale))
+            self.reference_canvas.setPixmap(self._reference_original.scaled(
+                width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.reference_canvas.setFixedSize(width, height)
+
+        def refresh_reference(self):
+            filename = reference_path(root, self.session.document["id"])
+            if filename == getattr(self, "_reference_path", None):
+                return
+            self._reference_path = filename
+            self._reference_original = (
+                QPixmap(str(filename)) if filename else QPixmap())
+            if self._reference_original.isNull():
+                self.reference_canvas.clear()
+                self.reference_canvas.setText(
+                    "No concept reference. Use File → Attach Concept Reference…")
+                self.reference_canvas.setFixedSize(450, 240)
+            else:
+                self.resize_reference()
+
         def _character_icon(self, document, variant=None, action="idle"):
             """Only genuine rendered sprites are used for gallery thumbnails."""
             try:
