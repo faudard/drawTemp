@@ -41,6 +41,8 @@ def main(argv=None):
     parser.add_argument("--template", default="storybook_hero",
                         help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
+    parser.add_argument("--screenshot", type=Path,
+                        help="With --smoke, capture the real Qt overview to PNG")
     args = parser.parse_args(argv)
 
     try:
@@ -1692,6 +1694,15 @@ def main(argv=None):
                         "Starting looks must be visible")
                     assert not hasattr(window, "generate_outfits"), (
                         "Jeanne-specific outfit UI must not return")
+                    assert window.import_full_art.isEnabled()
+                    assert window.import_layer.isEnabled()
+                    assert window.import_reference.isEnabled()
+                    assert window.reference_dock.widget() is not None
+                if args.screenshot:
+                    QApplication.processEvents()
+                    args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    assert window.grab().save(str(args.screenshot), "PNG"), (
+                        "Failed to capture real Qt artwork overview")
             except Exception as exc:
                 smoke_errors.append(str(exc))
             finally:
