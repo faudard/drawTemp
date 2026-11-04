@@ -153,10 +153,8 @@ def image_diff(before_path, after_path, diff_path, comparison_path):
     difference = ImageChops.difference(before, after)
     # Each pixel counts once if ANY channel exceeds the configured tolerance.
     limit = MAX_CHANNEL_DELTA
-    mask = difference.convert("RGB").point(
-        lambda value: 255 if value > limit else 0).convert("L")
-    # Above .convert() reduces RGB channels, rather than ORing; use the maximal
-    # per-channel response so saturated single-channel changes count.
+    # Combine the four per-channel differences by per-pixel maximum. A single
+    # red/green/blue/alpha channel regression must still be counted.
     r, g, b, alpha = difference.split()
     mask = ImageChops.lighter(
         ImageChops.lighter(r, g), ImageChops.lighter(b, alpha)).point(
@@ -175,9 +173,9 @@ def image_diff(before_path, after_path, diff_path, comparison_path):
     # Both frames are untouched pixel copies; labels occupy a separate header.
     collage = Image.new("RGB", (1280 * 3, 850 + 52), "#eef2f7")
     for index, (label, frame) in enumerate((
-            ("AVANT — référence approuvée", before),
-            ("APRÈS — capture de la PR", after),
-            ("DIFF — écarts visibles", heat))):
+            ("AVANT - reference approuvee", before),
+            ("APRES - capture de la PR", after),
+            ("DIFF - ecarts visibles", heat))):
         x = index * 1280
         collage.paste(frame.convert("RGB"), (x, 52))
         ImageDraw.Draw(collage).text((x + 20, 16), label, fill="#1b263b")
