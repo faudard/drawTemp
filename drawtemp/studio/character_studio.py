@@ -17,6 +17,9 @@ from drawtemp.assets.character_library import (
     discover_character_library, search_characters,
 )
 from drawtemp.assets.character_looks import available_looks, apply_look
+from drawtemp.assets.character_artwork import (
+    import_character_art, import_part_set, import_reference_art, reference_path,
+)
 from drawtemp.assets.storybook_art import (
     build as build_storybook_assets, storybook_starter,
     available_storybook_looks, apply_storybook_look,
@@ -156,6 +159,16 @@ def main(argv=None):
             self.library_count.setWordWrap(True)
             self.library_reload = QPushButton("Refresh library")
             self.library_reload.clicked.connect(self.reload_library)
+            self.import_full_art = QPushButton("Import 4-direction Character Art…")
+            self.import_full_art.setToolTip(
+                "Import real transparent front/right/back/left PNGs at native "
+                "resolution, plus optional portrait.png and reference.png.")
+            self.import_full_art.clicked.connect(self.import_full_character)
+            self.import_reference = QPushButton("Attach Concept Reference…")
+            self.import_reference.setToolTip(
+                "Reference artwork is displayed in a separate panel; "
+                "it is NOT treated as a sprite or playable animation.")
+            self.import_reference.clicked.connect(self.attach_reference)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
             self.profile_tabs = QTabBar()
@@ -253,6 +266,8 @@ def main(argv=None):
             self.look_grid.itemClicked.connect(self.choose_look)
             self.look_hint = QLabel("Ready-made looks (editable). Select to apply.")
             self.look_hint.setWordWrap(True)
+            self.import_layer = QPushButton("Import Transparent Modular Part…")
+            self.import_layer.clicked.connect(self.import_modular_layer)
             self.face_canvas = QLabel("Face / portrait")
             self.face_canvas.setAlignment(Qt.AlignCenter)
             self.face_canvas.setMinimumSize(145, 145)
@@ -261,6 +276,10 @@ def main(argv=None):
             self.direction_canvases = {}
             self.overview_title = QLabel("CHARACTER OVERVIEW")
             self.overview_title.setStyleSheet("font-weight: bold; font-size: 15px;")
+            self.artwork_info = QLabel()
+            self.artwork_info.setWordWrap(True)
+            self.artwork_info.setStyleSheet(
+                "color: #46617a; font-size: 11px;")
             self.character_name = QLabel()
             self.character_name.setStyleSheet("font-size: 13px;")
 
@@ -347,11 +366,13 @@ def main(argv=None):
             variation_layout.addWidget(QLabel("Ready-made looks"))
             variation_layout.addWidget(self.look_grid, 4)
             variation_layout.addWidget(self.look_hint)
+            variation_layout.addWidget(self.import_layer)
 
             overview_box = QWidget()
             overview = QVBoxLayout(overview_box)
             overview.setContentsMargins(10, 8, 10, 8)
             overview.addWidget(self.overview_title)
+            overview.addWidget(self.artwork_info)
             overview.addWidget(self.character_name)
             overview.addWidget(self.profile_tabs)
             scene = QHBoxLayout()
@@ -408,6 +429,8 @@ def main(argv=None):
             library_layout.addWidget(self.library_count)
             library_layout.addWidget(self.library_open)
             library_layout.addWidget(self.library_reload)
+            library_layout.addWidget(self.import_full_art)
+            library_layout.addWidget(self.import_reference)
             self.library_dock = QDockWidget("Character Library", self)
             self.library_dock.setObjectName("CharacterLibraryDock")
             self.library_dock.setWidget(library_panel)
@@ -445,6 +468,32 @@ def main(argv=None):
             self.addDockWidget(Qt.BottomDockWidgetArea, self.timeline_dock)
             self.timeline_dock.hide()
 
+            # A real art-direction/reference board may be a single large
+            # opaque sheet. Display it clearly, never as fake sprite frames.
+            reference_panel = QWidget()
+            reference_layout = QVBoxLayout(reference_panel)
+            reference_layout.addWidget(QLabel(
+                "CONCEPT ART — reference only, not exported as an animation"))
+            self.reference_zoom = QSpinBox()
+            self.reference_zoom.setRange(25, 400)
+            self.reference_zoom.setValue(100)
+            self.reference_zoom.setSuffix(" %")
+            self.reference_zoom.valueChanged.connect(self.resize_reference)
+            reference_layout.addWidget(self.reference_zoom)
+            self.reference_canvas = QLabel(
+                "Attach a concept reference to this character.")
+            self.reference_canvas.setAlignment(Qt.AlignCenter)
+            self.reference_scroll = QScrollArea()
+            self.reference_scroll.setWidgetResizable(False)
+            self.reference_scroll.setWidget(self.reference_canvas)
+            reference_layout.addWidget(self.reference_scroll, 1)
+            self._reference_original = QPixmap()
+            self.reference_dock = QDockWidget("Concept Art Reference", self)
+            self.reference_dock.setObjectName("CharacterReferenceDock")
+            self.reference_dock.setWidget(reference_panel)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.reference_dock)
+            self.reference_dock.hide()
+
             file_menu = self.menuBar().addMenu("&File")
             def command(text, shortcut, handler, menu=file_menu):
                 action = QAction(text, self)
@@ -455,6 +504,9 @@ def main(argv=None):
                 return action
             command("&New Character…", "Ctrl+N", self.new_character)
             command("&Open Character…", "Ctrl+O", self.open_recipe)
+            command("Import &4-View Artwork…", "", self.import_full_character)
+            command("Import Modular &Part…", "", self.import_modular_layer)
+            command("Attach Concept &Reference…", "", self.attach_reference)
             command("&Save", "Ctrl+S", self.save_recipe)
             command("&Export Atlas…", "Ctrl+E", self.export)
             edit_menu = self.menuBar().addMenu("&Edit")
@@ -463,6 +515,7 @@ def main(argv=None):
             view_menu = self.menuBar().addMenu("&View")
             view_menu.addAction(self.library_dock.toggleViewAction())
             view_menu.addAction(self.timeline_dock.toggleViewAction())
+            view_menu.addAction(self.reference_dock.toggleViewAction())
             command("Search Character Library", "Ctrl+L",
                     lambda: self.library_search.setFocus(), view_menu)
             self.part_category.setCurrentRow(0)
@@ -704,8 +757,9 @@ def main(argv=None):
             pixmap = QPixmap()
             if not pixmap.loadFromData(memory.getvalue(), "PNG"):
                 return QPixmap()
-            return pixmap.scaled(size, size, Qt.KeepAspectRatio,
-                                 Qt.FastTransformation)
+            transform = (Qt.SmoothTransformation if max(image.size) >= 256
+                         else Qt.FastTransformation)
+            return pixmap.scaled(size, size, Qt.KeepAspectRatio, transform)
 
         def refresh_overview(self):
             """Always show four authored facings plus a face crop/portrait."""
@@ -745,7 +799,8 @@ def main(argv=None):
             # Face panel: existing authored expression takes precedence.
             self.face_canvas.clear()
             expr = self.expression.currentData()
-            portrait = doc["variants"][variant]["expressions"].get(expr, "")
+            expressions = doc["variants"][variant]["expressions"]
+            portrait = expressions.get(expr or "portrait", "")
             if portrait:
                 pixmap = QPixmap(str(self.art_root / portrait))
                 if not pixmap.isNull():
@@ -1042,6 +1097,16 @@ def main(argv=None):
             self.refresh_parts()
             self.refresh_looks()
             self.refresh_pose_grid()
+            self.refresh_reference()
+            art_folder = root / "assets" / "character_art" / document["id"]
+            if (art_folder / "import.json").is_file():
+                self.artwork_info.setText(
+                    "Original artwork • native-resolution 4-view idle • "
+                    "walk/attack/death animations still need drawings")
+            else:
+                self.artwork_info.setText(
+                    "Modular graphics • import real transparent artwork to "
+                    "replace simple placeholder sprites")
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
             warnings = len(problems) - errors
