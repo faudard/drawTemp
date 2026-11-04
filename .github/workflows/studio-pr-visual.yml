@@ -11,6 +11,9 @@ on:
       - "drawtemp/assets/topdown_tileset.py"
       - "drawtemp/render/autotile2d.py"
       - "scripts/capture_studio_pr.py"
+      - "scripts/studio_visual_goldens.py"
+      - "tests_standalone/test_studio_visual_goldens.py"
+      - "tests_standalone/goldens/studio-tk/**"
       - ".github/workflows/studio-pr-visual.yml"
   workflow_dispatch:
 
@@ -24,12 +27,13 @@ concurrency:
 jobs:
   capture:
     name: Capture real Studio windows (2D, ISO, Playtest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
     permissions:
       contents: read
     outputs:
       artifact_url: ${{ steps.upload.outputs.artifact-url }}
+      review_status: ${{ steps.review-status.outputs.status }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,11 +43,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
-          python -m pip install . Pillow
+          python -m pip install . Pillow==12.0.0
+      - name: Validate visual golden approval, hashes and diff-report behavior
+        run: python -m unittest tests_standalone.test_studio_visual_goldens -v
       - name: Real Tk Studio — capture native menus, palette, canvas and inspectors
         run: |
           xvfb-run -a -s "-screen 0 1600x1000x24" \
-            python scripts/capture_studio_pr.py \
+            python -m scripts.capture_studio_pr \
               --output "${{ runner.temp }}/studio-visual-review"
       - name: Check screenshot integrity, dimensions and scenario coverage
         run: |
@@ -66,7 +72,28 @@ jobs:
           assert (root / "index.html").is_file()
           print("Screenshots verified:", len(frames))
           PY
-      - name: Upload actual GUI screenshots, HTML gallery and evidence JSON
+      - name: Compare against explicitly reviewed visual golden references
+        id: compare
+        run: |
+          python -m scripts.studio_visual_goldens compare \
+            --capture "${{ runner.temp }}/studio-visual-review" \
+            --goldens tests_standalone/goldens/studio-tk
+      - name: Export visual review outcome even on comparison failure
+        id: review-status
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = Path("${{ runner.temp }}/studio-visual-review/visual-review.json")
+          status = (json.loads(report.read_text(encoding="utf-8"))["result"]
+                    if report.exists() else "capture_failed")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"status={status}\n")
+          print("Visual outcome:", status)
+          PY
+      - name: Upload actual GUI screenshots, approved references, differences and HTML gallery
         id: upload
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,13 +106,16 @@ jobs:
         if: always()
         env:
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          VISUAL_STATUS: ${{ steps.review-status.outputs.status }}
         run: |
           {
             echo '## 📸 DrawTemp Studio — captures de la vraie interface'
             echo ''
             echo '4 scénarios : **2D texturée**, **2D + grille**, **ISO 2.5D**, **Playtest**.'
             echo ''
-            echo "Artefact : [PNG + galerie HTML + manifest.json](${ARTIFACT_URL})"
+            echo "Artefact : [captures + références approuvées + avant/après + diff + HTML](${ARTIFACT_URL})"
+            echo ''
+            echo "Statut référence: **${VISUAL_STATUS}** (review_required = première validation humaine manquante)"
             echo ''
             echo 'Les captures sont produites sous **Linux/Xvfb**, pas sous Windows.'
             echo 'Elles facilitent la revue humaine ; elles ne prouvent pas à elles seules la qualité esthétique.'
@@ -105,6 +135,7 @@ jobs:
         env:
           ARTIFACT_URL: ${{ needs.capture.outputs.artifact_url }}
           CAPTURE_RESULT: ${{ needs.capture.result }}
+          VISUAL_STATUS: ${{ needs.capture.outputs.review_status }}
         with:
           script: |
             const url = process.env.ARTIFACT_URL;
@@ -113,12 +144,17 @@ jobs:
               return;
             }
             const marker = '<!-- drawtemp-studio-visual-review -->';
-            const status = process.env.CAPTURE_RESULT === 'success'
-              ? '✅ Captures produites et contrôles techniques validés.'
-              : '⚠️ La capture ou une validation a échoué ; consulter les logs.';
+            const visual = process.env.VISUAL_STATUS || 'capture_failed';
+            const status = process.env.CAPTURE_RESULT !== 'success'
+              ? '⚠️ La capture ou une comparaison a échoué ; consulter les logs.'
+              : visual === 'review_required'
+              ? '🟡 Captures produites, **aucune référence humaine approuvée à ce jour**.'
+              : visual === 'pass'
+              ? '✅ Captures conformes aux références approuvées.'
+              : '❌ Différences visuelles détectées ; inspecter le rapport.';
             const body = [
               marker,
-              '### 📸 Captures automatiques de l’interface DrawTemp',
+              '### 📸 Captures automatiques et comparaison visuelle DrawTemp',
               '',
               status,
               '',
@@ -129,10 +165,10 @@ jobs:
               '| Éditeur ISO 2.5D | Régression visuelle de la projection |',
               '| Mode Playtest | Couleur du bouton et état de l’interface |',
               '',
-              `**[Ouvrir les captures PNG et la galerie HTML](${url})**`,
+              `**[Ouvrir les captures et le rapport AVANT / APRÈS / DIFF](${url})**`,
               '',
               'Les fichiers sont conservés 30 jours dans GitHub Actions.',
-              'Captures Linux/Xvfb du vrai Studio ; approbation esthétique manuelle encore nécessaire.'
+              'Références jamais approuvées automatiquement. Linux/Xvfb uniquement : la validation Windows reste manuelle.'
             ].join('\n');
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
