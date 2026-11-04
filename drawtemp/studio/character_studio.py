@@ -562,10 +562,11 @@ def main(argv=None):
                 self.path = recipe_file
                 self.art_root = root
                 self.saved_revision = self.session.revision
-                self.action.setCurrentIndex(self.action.findData("idle"))
-                self.direction.setCurrentIndex(self.direction.findData("south"))
                 self.reload_library()
                 self.refresh()
+                self.action.setCurrentIndex(self.action.findData("idle"))
+                self.direction.setCurrentIndex(self.direction.findData("south"))
+                self.refresh_timeline()
                 if reference_path(root, document["id"]) is not None:
                     self.reference_dock.show()
                 self.statusBar().showMessage(
