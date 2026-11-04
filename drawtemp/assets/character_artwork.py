@@ -10,7 +10,6 @@ No PySide6 import: this also runs headlessly in CI.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import os
@@ -93,7 +92,8 @@ def _align_png(image, *, align_feet):
     width, height = image.size
     x = (width - cropped.width) // 2
     y = max(0, height - 4 - cropped.height)
-    aligned = image.__class__.new("RGBA", image.size, (0, 0, 0, 0))
+    from PIL import Image
+    aligned = Image.new("RGBA", image.size, (0, 0, 0, 0))
     aligned.alpha_composite(cropped, (x, y))
     return aligned, (x - x0, y - y0)
 
@@ -139,7 +139,7 @@ def import_character_art(root, folder, identifier, label=None, *, align_feet=Tru
     root = Path(root).resolve()
     folder = Path(folder).resolve()
     identifier = _identifier(identifier)
-    label = label or identifier.replace("_", " ").title()
+    label = identifier.replace("_", " ").title() if label is None else label
     if not isinstance(label, str) or not label.strip():
         raise CharacterError("Character display name required")
     sprites = _directional_sources(folder)
