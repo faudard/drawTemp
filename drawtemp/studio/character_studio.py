@@ -17,6 +17,9 @@ from drawtemp.assets.character_library import (
     discover_character_library, search_characters,
 )
 from drawtemp.assets.character_looks import available_looks, apply_look
+from drawtemp.assets.character_artwork import (
+    import_character_art, import_part_set, import_reference_art, reference_path,
+)
 from drawtemp.assets.storybook_art import (
     build as build_storybook_assets, storybook_starter,
     available_storybook_looks, apply_storybook_look,
@@ -38,6 +41,8 @@ def main(argv=None):
     parser.add_argument("--template", default="storybook_hero",
                         help="Starter template ID (e.g. modular_hero)")
     parser.add_argument("--smoke", action="store_true", help="Build native Qt workbench and exit")
+    parser.add_argument("--screenshot", type=Path,
+                        help="With --smoke, capture the real Qt overview to PNG")
     args = parser.parse_args(argv)
 
     try:
@@ -156,6 +161,16 @@ def main(argv=None):
             self.library_count.setWordWrap(True)
             self.library_reload = QPushButton("Refresh library")
             self.library_reload.clicked.connect(self.reload_library)
+            self.import_full_art = QPushButton("Import 4-direction Character Art…")
+            self.import_full_art.setToolTip(
+                "Import real transparent front/right/back/left PNGs at native "
+                "resolution, plus optional portrait.png and reference.png.")
+            self.import_full_art.clicked.connect(self.import_full_character)
+            self.import_reference = QPushButton("Attach Concept Reference…")
+            self.import_reference.setToolTip(
+                "Reference artwork is displayed in a separate panel; "
+                "it is NOT treated as a sprite or playable animation.")
+            self.import_reference.clicked.connect(self.attach_reference)
             self.variants = QListWidget()
             self.variants.currentTextChanged.connect(self.variant_changed)
             self.profile_tabs = QTabBar()
@@ -253,6 +268,8 @@ def main(argv=None):
             self.look_grid.itemClicked.connect(self.choose_look)
             self.look_hint = QLabel("Ready-made looks (editable). Select to apply.")
             self.look_hint.setWordWrap(True)
+            self.import_layer = QPushButton("Import Transparent Modular Part…")
+            self.import_layer.clicked.connect(self.import_modular_layer)
             self.face_canvas = QLabel("Face / portrait")
             self.face_canvas.setAlignment(Qt.AlignCenter)
             self.face_canvas.setMinimumSize(145, 145)
@@ -261,6 +278,10 @@ def main(argv=None):
             self.direction_canvases = {}
             self.overview_title = QLabel("CHARACTER OVERVIEW")
             self.overview_title.setStyleSheet("font-weight: bold; font-size: 15px;")
+            self.artwork_info = QLabel()
+            self.artwork_info.setWordWrap(True)
+            self.artwork_info.setStyleSheet(
+                "color: #46617a; font-size: 11px;")
             self.character_name = QLabel()
             self.character_name.setStyleSheet("font-size: 13px;")
 
@@ -347,11 +368,13 @@ def main(argv=None):
             variation_layout.addWidget(QLabel("Ready-made looks"))
             variation_layout.addWidget(self.look_grid, 4)
             variation_layout.addWidget(self.look_hint)
+            variation_layout.addWidget(self.import_layer)
 
             overview_box = QWidget()
             overview = QVBoxLayout(overview_box)
             overview.setContentsMargins(10, 8, 10, 8)
             overview.addWidget(self.overview_title)
+            overview.addWidget(self.artwork_info)
             overview.addWidget(self.character_name)
             overview.addWidget(self.profile_tabs)
             scene = QHBoxLayout()
@@ -408,6 +431,8 @@ def main(argv=None):
             library_layout.addWidget(self.library_count)
             library_layout.addWidget(self.library_open)
             library_layout.addWidget(self.library_reload)
+            library_layout.addWidget(self.import_full_art)
+            library_layout.addWidget(self.import_reference)
             self.library_dock = QDockWidget("Character Library", self)
             self.library_dock.setObjectName("CharacterLibraryDock")
             self.library_dock.setWidget(library_panel)
@@ -445,6 +470,32 @@ def main(argv=None):
             self.addDockWidget(Qt.BottomDockWidgetArea, self.timeline_dock)
             self.timeline_dock.hide()
 
+            # A real art-direction/reference board may be a single large
+            # opaque sheet. Display it clearly, never as fake sprite frames.
+            reference_panel = QWidget()
+            reference_layout = QVBoxLayout(reference_panel)
+            reference_layout.addWidget(QLabel(
+                "CONCEPT ART — reference only, not exported as an animation"))
+            self.reference_zoom = QSpinBox()
+            self.reference_zoom.setRange(25, 400)
+            self.reference_zoom.setValue(100)
+            self.reference_zoom.setSuffix(" %")
+            self.reference_zoom.valueChanged.connect(self.resize_reference)
+            reference_layout.addWidget(self.reference_zoom)
+            self.reference_canvas = QLabel(
+                "Attach a concept reference to this character.")
+            self.reference_canvas.setAlignment(Qt.AlignCenter)
+            self.reference_scroll = QScrollArea()
+            self.reference_scroll.setWidgetResizable(False)
+            self.reference_scroll.setWidget(self.reference_canvas)
+            reference_layout.addWidget(self.reference_scroll, 1)
+            self._reference_original = QPixmap()
+            self.reference_dock = QDockWidget("Concept Art Reference", self)
+            self.reference_dock.setObjectName("CharacterReferenceDock")
+            self.reference_dock.setWidget(reference_panel)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.reference_dock)
+            self.reference_dock.hide()
+
             file_menu = self.menuBar().addMenu("&File")
             def command(text, shortcut, handler, menu=file_menu):
                 action = QAction(text, self)
@@ -455,6 +506,9 @@ def main(argv=None):
                 return action
             command("&New Character…", "Ctrl+N", self.new_character)
             command("&Open Character…", "Ctrl+O", self.open_recipe)
+            command("Import &4-View Artwork…", "", self.import_full_character)
+            command("Import Modular &Part…", "", self.import_modular_layer)
+            command("Attach Concept &Reference…", "", self.attach_reference)
             command("&Save", "Ctrl+S", self.save_recipe)
             command("&Export Atlas…", "Ctrl+E", self.export)
             edit_menu = self.menuBar().addMenu("&Edit")
@@ -463,6 +517,7 @@ def main(argv=None):
             view_menu = self.menuBar().addMenu("&View")
             view_menu.addAction(self.library_dock.toggleViewAction())
             view_menu.addAction(self.timeline_dock.toggleViewAction())
+            view_menu.addAction(self.reference_dock.toggleViewAction())
             command("Search Character Library", "Ctrl+L",
                     lambda: self.library_search.setFocus(), view_menu)
             self.part_category.setCurrentRow(0)
@@ -470,6 +525,146 @@ def main(argv=None):
             self.statusBar().showMessage(
                 "Character Studio | Select parts, edit colors and offsets. "
                 "Preview and four directions remain visible.")
+
+        def import_full_character(self):
+            """Create a genuine high-resolution R7 actor from four real PNGs."""
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            if not self._confirm_replace():
+                return
+            source = QFileDialog.getExistingDirectory(
+                self, "Choose folder: front.png / right.png / back.png / left.png",
+                str(root))
+            if not source:
+                return
+            directory = Path(source)
+            suggested_name = directory.name.replace("_", " ").title()
+            name, ok = QInputDialog.getText(
+                self, "Import Original Character Art",
+                "New character name", text=suggested_name)
+            if not ok or not name.strip():
+                return
+            suggested_id = re.sub(r"[^a-z0-9_]+", "_", name.strip().casefold())
+            suggested_id = suggested_id.strip("_")[:63]
+            if not suggested_id or not suggested_id[0].isalpha():
+                suggested_id = "art_" + suggested_id
+            identifier, ok = QInputDialog.getText(
+                self, "Character ID", "Unique character asset ID",
+                text=suggested_id)
+            if not ok:
+                return
+            try:
+                document, recipe_file = import_character_art(
+                    root, directory, identifier.strip(),
+                    name.strip(), align_feet=True)
+                self.stop()
+                self.session = CharacterSession(document)
+                self.path = recipe_file
+                self.art_root = root
+                self.saved_revision = self.session.revision
+                self.reload_library()
+                self.refresh()
+                self.action.setCurrentIndex(self.action.findData("idle"))
+                self.direction.setCurrentIndex(self.direction.findData("south"))
+                self.refresh_timeline()
+                if reference_path(root, document["id"]) is not None:
+                    self.reference_dock.show()
+                self.statusBar().showMessage(
+                    "Imported real 4-view artwork at native resolution. "
+                    "Only idle stills exist; animations need separate frames.")
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(
+                    self, "Artwork import failed",
+                    str(exc) + "\n\nRequired: transparent front.png, "
+                    "right.png, back.png, left.png. Optional portrait.png "
+                    "and reference.png. A labelled illustration sheet alone "
+                    "is reference art, not a directional sprite set.")
+
+        def import_modular_layer(self):
+            """Add an artist-drawn, independent four-way PNG layer family."""
+            from PySide6.QtWidgets import QInputDialog
+            import re
+            current = self.selected_part_slot()
+            choices = [slot for slot, _ in PART_CATEGORIES]
+            default = choices.index(current) if current in choices else 0
+            slot, ok = QInputDialog.getItem(
+                self, "Import Modular Artwork",
+                "Category (each PNG: transparent 192x192)",
+                choices, default, False)
+            if not ok:
+                return
+            folder = QFileDialog.getExistingDirectory(
+                self, "Choose 4-direction part folder", str(root))
+            if not folder:
+                return
+            proposed = re.sub(r"[^a-z0-9_]+", "_", Path(folder).name.casefold())
+            proposed = proposed.strip("_")[:63] or "artist_part"
+            if not proposed[0].isalpha():
+                proposed = "art_" + proposed
+            name, ok = QInputDialog.getText(
+                self, "Part Variant ID", "Unique 4-direction part ID",
+                text=proposed)
+            if not ok:
+                return
+            try:
+                import_part_set(root, folder, slot, name.strip())
+                for index in range(self.part_category.count()):
+                    item = self.part_category.item(index)
+                    if item.data(Qt.UserRole) == slot:
+                        self.part_category.setCurrentRow(index)
+                        break
+                self.refresh_parts()
+                self.statusBar().showMessage(
+                    "Imported " + slot + "/" + name.strip() +
+                    " (four real transparent PNGs, unchanged proportions).")
+                # Let the artist explicitly select a new variation; never
+                # destroy a previous part or silently alter the recipe.
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(self, "Part import failed", str(exc))
+
+        def attach_reference(self):
+            """Keep inspiration as inspiration; do not fake playable art."""
+            filename, _ = QFileDialog.getOpenFileName(
+                self, "Attach Concept / Turnaround Reference",
+                str(root), "PNG reference sheets (*.png)")
+            if not filename:
+                return
+            try:
+                import_reference_art(
+                    root, self.session.document["id"], filename)
+                self._reference_path = None
+                self.refresh_reference()
+                self.reference_dock.show()
+                self.statusBar().showMessage(
+                    "Concept reference attached. It is not an animation, "
+                    "a sprite, or a modular PNG layer.")
+            except (CharacterError, OSError) as exc:
+                QMessageBox.warning(self, "Concept art", str(exc))
+
+        def resize_reference(self, *_):
+            if self._reference_original.isNull():
+                return
+            scale = self.reference_zoom.value() / 100.0
+            width = max(1, round(self._reference_original.width() * scale))
+            height = max(1, round(self._reference_original.height() * scale))
+            self.reference_canvas.setPixmap(self._reference_original.scaled(
+                width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.reference_canvas.setFixedSize(width, height)
+
+        def refresh_reference(self):
+            filename = reference_path(root, self.session.document["id"])
+            if filename == getattr(self, "_reference_path", None):
+                return
+            self._reference_path = filename
+            self._reference_original = (
+                QPixmap(str(filename)) if filename else QPixmap())
+            if self._reference_original.isNull():
+                self.reference_canvas.clear()
+                self.reference_canvas.setText(
+                    "No concept reference. Use File → Attach Concept Reference…")
+                self.reference_canvas.setFixedSize(450, 240)
+            else:
+                self.resize_reference()
 
         def _character_icon(self, document, variant=None, action="idle"):
             """Only genuine rendered sprites are used for gallery thumbnails."""
@@ -704,8 +899,9 @@ def main(argv=None):
             pixmap = QPixmap()
             if not pixmap.loadFromData(memory.getvalue(), "PNG"):
                 return QPixmap()
-            return pixmap.scaled(size, size, Qt.KeepAspectRatio,
-                                 Qt.FastTransformation)
+            transform = (Qt.SmoothTransformation if max(image.size) >= 256
+                         else Qt.FastTransformation)
+            return pixmap.scaled(size, size, Qt.KeepAspectRatio, transform)
 
         def refresh_overview(self):
             """Always show four authored facings plus a face crop/portrait."""
@@ -745,7 +941,8 @@ def main(argv=None):
             # Face panel: existing authored expression takes precedence.
             self.face_canvas.clear()
             expr = self.expression.currentData()
-            portrait = doc["variants"][variant]["expressions"].get(expr, "")
+            expressions = doc["variants"][variant]["expressions"]
+            portrait = expressions.get(expr or "portrait", "")
             if portrait:
                 pixmap = QPixmap(str(self.art_root / portrait))
                 if not pixmap.isNull():
@@ -1042,6 +1239,16 @@ def main(argv=None):
             self.refresh_parts()
             self.refresh_looks()
             self.refresh_pose_grid()
+            self.refresh_reference()
+            art_folder = root / "assets" / "character_art" / document["id"]
+            if (art_folder / "import.json").is_file():
+                self.artwork_info.setText(
+                    "Original artwork • native-resolution 4-view idle • "
+                    "walk/attack/death animations still need drawings")
+            else:
+                self.artwork_info.setText(
+                    "Modular graphics • import real transparent artwork to "
+                    "replace simple placeholder sprites")
             problems = diagnostics(document, require_outfits=document["id"] == "jeanne")
             errors = sum(p["severity"] == "error" for p in problems)
             warnings = len(problems) - errors
@@ -1120,18 +1327,8 @@ def main(argv=None):
             # Overview persists even when a single pose or portrait is absent.
             self.refresh_overview()
             self.canvas.clear()
-            expression = self.expression.currentData()
-            if expression:
-                path = self.session.document["variants"][self.active_variant()]\
-                       ["expressions"][expression]
-                picture = QPixmap(str(self.art_root / path))
-                if not picture.isNull():
-                    self.canvas.setPixmap(picture.scaled(
-                        360, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                    self.status.setText("Portrait : " + expression)
-                else:
-                    self.status.setText("Portrait introuvable : " + path)
-                return
+            # Portraits belong to the adjacent Face / Portrait pane.
+            # Never replace the always-visible body/sprite overview with them.
             if not self.active_clip():
                 doc = self.session.document
                 variant = self.active_variant()
@@ -1488,6 +1685,15 @@ def main(argv=None):
                         "Starting looks must be visible")
                     assert not hasattr(window, "generate_outfits"), (
                         "Jeanne-specific outfit UI must not return")
+                    assert window.import_full_art.isEnabled()
+                    assert window.import_layer.isEnabled()
+                    assert window.import_reference.isEnabled()
+                    assert window.reference_dock.widget() is not None
+                if args.screenshot:
+                    QApplication.processEvents()
+                    args.screenshot.parent.mkdir(parents=True, exist_ok=True)
+                    assert window.grab().save(str(args.screenshot), "PNG"), (
+                        "Failed to capture real Qt artwork overview")
             except Exception as exc:
                 smoke_errors.append(str(exc))
             finally:
