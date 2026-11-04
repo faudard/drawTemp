@@ -104,6 +104,21 @@ def starter_tileset_png():
             _chunk(b"IEND", b""))
 
 
+@lru_cache(maxsize=len(MATERIALS) * VARIANTS)
+def tile_rgba(material, variant=0):
+    """Raw 64×64 RGBA art reused by Qt atlas and Tk quarter composition.
+
+    Deterministic, no Pillow, Qt or Tk imports. Cached only for the 16
+    original tiles, so neighboring cells never allocate independent art.
+    """
+    if material not in MATERIALS or type(variant) is not int or variant not in (0, 1):
+        raise ValueError("Unknown 2D tileset graphic")
+    return bytes(channel
+                 for y in range(TILE_SIZE)
+                 for x in range(TILE_SIZE)
+                 for channel in _pixel(material, x, y, variant))
+
+
 def atlas_rect(material, variant):
     """Return a validated source crop: 64x64 sprite of selected material."""
     if material not in MATERIALS or type(variant) is not int or variant not in (0, 1):
@@ -112,4 +127,4 @@ def atlas_rect(material, variant):
             0, TILE_SIZE, TILE_SIZE)
 
 
-__all__ = ["starter_tileset_png", "atlas_rect", "COLORS", "VARIANTS"]
+__all__ = ["starter_tileset_png", "atlas_rect", "tile_rgba", "COLORS", "VARIANTS"]
