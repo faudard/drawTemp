@@ -1326,18 +1326,8 @@ def main(argv=None):
             # Overview persists even when a single pose or portrait is absent.
             self.refresh_overview()
             self.canvas.clear()
-            expression = self.expression.currentData()
-            if expression:
-                path = self.session.document["variants"][self.active_variant()]\
-                       ["expressions"][expression]
-                picture = QPixmap(str(self.art_root / path))
-                if not picture.isNull():
-                    self.canvas.setPixmap(picture.scaled(
-                        360, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                    self.status.setText("Portrait : " + expression)
-                else:
-                    self.status.setText("Portrait introuvable : " + path)
-                return
+            # Portraits belong to the adjacent Face / Portrait pane.
+            # Never replace the always-visible body/sprite overview with them.
             if not self.active_clip():
                 doc = self.session.document
                 variant = self.active_variant()
