@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 from .editor_render_cache import EditorRenderCache
+from .topdown_tk_art import TopdownTkAtlas
+from .topdown_tk_renderer import draw_topdown
 from .terrain_ambient import TerrainAmbientAnimator, TICK_MS
 from .iso_environment_atlas import IsoEnvironmentAtlas
 from .editor_refresh_scale import EditorContentProjection, MinimapBackgroundCache
@@ -385,6 +387,7 @@ def launch(path):
     tile_size = 54
     iso_geometry = None
     iso_var = tk.BooleanVar(value=False)
+    topdown_grid_var = tk.BooleanVar(value=False)
     projection_choice = tk.StringVar(value='2d')
     ambient_var = tk.BooleanVar(value=True)  # Cosmetic and not saved in Content.
     interior_var = tk.BooleanVar(value=False)  # Editor visibility only.
@@ -568,6 +571,7 @@ def launch(path):
                 max(0.0, min(1.0, (center_y - height / 2 - top) / total_h))
                 if total_h > height else 0.0)
         canvas.focus_set()
+        update_scenery_thumbnails()
         status_var.set('Vue de carte : ' + ('Iso 2.5D' if iso_var.get() else '2D'))
 
     @guarded
@@ -3401,62 +3405,24 @@ def launch(path):
                 ambient_animator.clear()
                 iso_geometry = None
                 editor_renderer.invalidate()
-                canvas.configure(scrollregion=(0, 0, board.width * tile_size, board.height * tile_size))
-                reachable = battle.reachable() if battle else {}
-                deployment_cells = ({tuple(c) for z in mission.deployment for c in z['cells']}
-                                    if layer_vars['Déploiement'].get() else set())
-                danger_cells = ({tuple(c) for o in mission.objects if o['kind'] == 'defense'
-                                 and not o.get('disabled') and o.get('charges', 2) > 0
-                                 for c in o['cells']} if layer_vars['Objets'].get() else set())
-                for c in board.cells():
-                    t = board.tile(c)
-                    color = '#dddddd'
-                    if layer_vars['Terrain'].get():
-                        color = SURFACE_COLORS[t.surface]
-                        if t.cost > 1: color = '#b29f78'
-                        if t.cover: color = '#b0c9a8'
-                        if t.hazard: color = '#eead93'
-                        if t.blocked and t.surface != 'water': color = '#555555'
-                    if layer_vars['Relief'].get() and t.height: color = '#c3c3df'
-                    if c in deployment_cells and (not battle or battle.deploying): color = '#a8dce8'
-                    if c in mission.goal and layer_vars['Objectifs'].get(): color = '#d7c469'
-                    if c in danger_cells: color = '#f0a181'
-                    x, y = c[0] * tile_size, c[1] * tile_size
-                    canvas.create_rectangle(x, y, x+tile_size, y+tile_size, fill=color,
-                                            outline='#288949' if c in reachable else '#999999', width=3 if c in reachable else 1)
-                    if t.height and layer_vars['Relief'].get():
-                        canvas.create_text(x+8, y+8, text=str(t.height), anchor='nw')
-                    if t.hazard and layer_vars['Terrain'].get():
-                        canvas.create_text(x+tile_size-3, y+tile_size-3, text=f'!{t.hazard}', anchor='se')
-                    if t.feature and layer_vars['Décors'].get():
-                        canvas.create_text(x+tile_size//2, y+tile_size//2,
-                                           text=t.feature[:5], fill='#293e30',
-                                           font=('TkDefaultFont', 8, 'bold'))
-                for obj in mission.objects if layer_vars['Objets'].get() else ():
-                    x,y = obj['pos']
-                    if obj['kind'] == 'passage':
-                        dx,dy = obj['destination']
-                        canvas.create_line((x+.5)*tile_size,(y+.5)*tile_size,
-                                           (dx+.5)*tile_size,(dy+.5)*tile_size,
-                                           fill='#6e42a1', width=2, arrow='last',
-                                           dash=() if obj.get('enabled', True) else (4, 3))
-                    canvas.create_text(x*tile_size+tile_size//2,y*tile_size+8,text=obj['kind'][:2], fill='#5b3294')
-                relic = battle.relic_pos if battle else mission.relic
-                if relic is not None and layer_vars['Objectifs'].get():
-                    canvas.create_text(relic[0]*tile_size+tile_size//2,relic[1]*tile_size+tile_size//2,text='R',fill='#a06c00',font=('TkDefaultFont',16))
-                for u in units if layer_vars['Unités'].get() else ():
-                    x,y = (v*tile_size for v in u.pos)
-                    color = '#cce2ff' if u.team == 'player' else '#ffc8bc'
-                    if not u.alive: color = '#aaaaaa'
-                    canvas.create_oval(x+6,y+10,x+tile_size-6,y+tile_size-4,fill=color,outline='#111111',width=3 if battle and u.id==battle.active_id else 1)
-                    canvas.create_text(x+tile_size//2,y+tile_size//2,text=u.name[:3])
-                    canvas.create_text(x+tile_size//2,y+tile_size-10,text=str(u.hp),font=('TkDefaultFont',8))
-                for sx, sy in sorted(selected_tiles):
-                    canvas.create_rectangle(sx*tile_size+4, sy*tile_size+4,
-                                            (sx+1)*tile_size-4, (sy+1)*tile_size-4,
-                                            outline='#1f6e9a', width=3, tags='selection')
-                x,y = (v*tile_size for v in selected_cell)
-                canvas.create_rectangle(x+2,y+2,x+tile_size-2,y+tile_size-2,outline='#002fcc',width=2)
+                from .visual_layers import from_extensions
+                visual_stack = (
+                    from_extensions(studio.project.extensions)["missions"].get(
+                        mission_var.get(), ()) if studio is not None and
+                    studio.project is not None else ())
+                draw_topdown(
+                    canvas, board, mission, units, cell_size=tile_size,
+                    layers={name: var.get() for name, var in layer_vars.items()},
+                    selected_cell=selected_cell, selected_tiles=selected_tiles,
+                    atlas=topdown_atlas, props=iso_props, actors=actor_atlas,
+                    objects_atlas=object_atlas, buildings=building_atlas,
+                    fortifications=fortification_atlas,
+                    visual_layers=visual_stack,
+                    reachable=battle.reachable() if battle else (),
+                    deploying=battle is None or battle.deploying,
+                    active_id=battle.active_id if battle else None,
+                    relic=battle.relic_pos if battle else mission.relic,
+                    grid=topdown_grid_var.get())
         if views is None or RENDERER in views:
             # Stable overlay on the exact rendered piece. The selection is
             # decorative and never intercepts or changes tactical picking.
@@ -4042,6 +4008,8 @@ def launch(path):
             value=projection,
             command=lambda selected=projection: switch_projection(selected),
         ).pack(side='left', padx=(0, 10))
+    ttk.Checkbutton(viewport_bar, text='Grille', variable=topdown_grid_var,
+                    command=refresh).pack(side='left', padx=(0, 7))
     zoom_label_var = tk.StringVar(value=f'{round(tile_size / 54 * 100)}%')
     zoom_tools = ttk.Frame(viewport_bar)
     zoom_tools.pack(side='right')
@@ -4060,6 +4028,7 @@ def launch(path):
     ambient_animator = TerrainAmbientAnimator()
     ambient_job = None
     iso_atlas = IsoTerrainAtlas(canvas)
+    topdown_atlas = TopdownTkAtlas(canvas)
     iso_props = IsoPropAtlas(canvas)
     environment_atlas = IsoEnvironmentAtlas(canvas)
     building_atlas = IsoBuildingAtlas(canvas)
@@ -4142,7 +4111,8 @@ def launch(path):
             return existing
         try:
             if entry.kind == 'surface':
-                photo = iso_atlas.tile(entry.value, 32)
+                photo = (iso_atlas.tile(entry.value, 24) if iso_var.get()
+                         else topdown_atlas.base(entry.value, 0, 40))
             elif entry.kind == 'feature':
                 photo = iso_props.sprite(entry.value, 32)
             else:
@@ -4161,6 +4131,13 @@ def launch(path):
             photo.put(color, to=(0, 0, 32, 32))
         scenery_images[entry.id] = photo  # retain Tk image references
         return photo
+
+    def update_scenery_thumbnails():
+        """Switch native 2D/ISO swatches without changing the selected brush."""
+        scenery_images.clear()
+        for entry in scenery_entries.values():
+            if scenery_tree.exists(entry.id):
+                scenery_tree.item(entry.id, image=scenery_thumbnail(entry))
 
     def populate_scenery(*_args):
         previous = scenery_tree.selection()
@@ -5418,5 +5395,39 @@ def launch(path):
     # Defer until the tool notebook and restored dock widths have settled.
     root.after_idle(lambda: root.after_idle(fit_map))
     ambient_job = root.after(TICK_MS, ambient_tick)
+
+    # Screenshot mode is opt-in from CI only; normal Studio startup is
+    # unchanged. Do not hide callback exceptions behind Tkinter's default
+    # "Exception in Tkinter callback" logging (which exits with code 0).
+    import os
+    visual_dir = os.environ.get('DRAWTEMP_STUDIO_VISUAL_DIR')
+    visual_capture_result = []
+    if visual_dir:
+        def capture_for_ci():
+            try:
+                from .studio_ci_visual import capture_studio_review
+                result = capture_studio_review(
+                    root=root, canvas=canvas, notebook=notebook, work=work,
+                    sidebar_tabs=sidebar_tabs, scenery_page=scenery_page,
+                    studio_docks=studio_docks, mission_var=mission_var,
+                    mission_id=os.environ.get('DRAWTEMP_STUDIO_VISUAL_MISSION',
+                                              mission_var.get()),
+                    projection=switch_projection, fit_map=fit_map,
+                    refresh=refresh, grid_var=topdown_grid_var,
+                    start=start, stop=stop,
+                    battle_active=lambda: battle is not None,
+                    playtest_button=playtest_button, output=visual_dir)
+                visual_capture_result.append(result)
+            except Exception as exc:
+                visual_capture_result.append(exc)
+            finally:
+                root.quit()
+        root.after(1200, capture_for_ci)
     root.mainloop()
+    if visual_dir:
+        root.destroy()
+        if not visual_capture_result:
+            raise RuntimeError('Studio CI capture never ran')
+        if isinstance(visual_capture_result[0], Exception):
+            raise visual_capture_result[0]
 

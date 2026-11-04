@@ -1,0 +1,186 @@
+name: Studio PR visual review
+
+on:
+  pull_request:
+    paths:
+      - "sporebound/editor.py"
+      - "sporebound/studio_ci_visual.py"
+      - "sporebound/topdown_tk*.py"
+      - "sporebound/iso_*.py"
+      - "sporebound/content/art/**"
+      - "drawtemp/assets/topdown_tileset.py"
+      - "drawtemp/render/autotile2d.py"
+      - "scripts/capture_studio_pr.py"
+      - "scripts/studio_visual_goldens.py"
+      - "tests_standalone/test_studio_visual_goldens.py"
+      - "tests_standalone/goldens/studio-tk/**"
+      - ".github/workflows/studio-pr-visual.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: Capture real Studio windows (2D, ISO, Playtest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    permissions:
+      contents: read
+    outputs:
+      artifact_url: ${{ steps.upload.outputs.artifact-url }}
+      review_status: ${{ steps.review-status.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real Tk/X11 screenshot environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+          python -m pip install . Pillow==12.0.0
+      - name: Validate visual golden approval, hashes and diff-report behavior
+        run: python -m unittest tests_standalone.test_studio_visual_goldens -v
+      - name: Real Tk Studio — capture native menus, palette, canvas and inspectors
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            python -m scripts.capture_studio_pr \
+              --output "${{ runner.temp }}/studio-visual-review"
+      - name: Check screenshot integrity, dimensions and scenario coverage
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          root = Path("${{ runner.temp }}/studio-visual-review")
+          report = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          frames = report["frames"]
+          assert len(frames) == 4
+          assert {f["projection"] for f in frames} == {"2d", "iso"}
+          assert any(f["playtest"] for f in frames)
+          assert all(f["canvas_items"] >= 50 for f in frames)
+          assert all(f["map_luma_stddev"] > 8 for f in frames)
+          for frame in frames:
+              png = root / frame["file"]
+              assert png.is_file() and png.stat().st_size > 10_000
+              assert hashlib.sha256(png.read_bytes()).hexdigest() == frame["image_sha256"]
+          assert (root / "index.html").is_file()
+          print("Screenshots verified:", len(frames))
+          PY
+      - name: Compare against explicitly reviewed visual golden references
+        id: compare
+        run: |
+          python -m scripts.studio_visual_goldens compare \
+            --capture "${{ runner.temp }}/studio-visual-review" \
+            --goldens tests_standalone/goldens/studio-tk
+      - name: Export visual review outcome even on comparison failure
+        id: review-status
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = Path("${{ runner.temp }}/studio-visual-review/visual-review.json")
+          status = (json.loads(report.read_text(encoding="utf-8"))["result"]
+                    if report.exists() else "capture_failed")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"status={status}\n")
+          print("Visual outcome:", status)
+          PY
+      - name: Upload actual GUI screenshots, approved references, differences and HTML gallery
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-ui-visuals-${{ github.event.pull_request.number || github.run_number }}
+          path: ${{ runner.temp }}/studio-visual-review/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Attach visual review link to the Actions job summary
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          VISUAL_STATUS: ${{ steps.review-status.outputs.status }}
+        run: |
+          {
+            echo '## 📸 DrawTemp Studio — captures de la vraie interface'
+            echo ''
+            echo '4 scénarios : **2D texturée**, **2D + grille**, **ISO 2.5D**, **Playtest**.'
+            echo ''
+            echo "Artefact : [captures + références approuvées + avant/après + diff + HTML](${ARTIFACT_URL})"
+            echo ''
+            echo "Statut référence: **${VISUAL_STATUS}** (review_required = première validation humaine manquante)"
+            echo ''
+            echo 'Les captures sont produites sous **Linux/Xvfb**, pas sous Windows.'
+            echo 'Elles facilitent la revue humaine ; elles ne prouvent pas à elles seules la qualité esthétique.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pr-visual-comment:
+    name: Link captures in PR
+    if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: [capture]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create/update the PR visual review comment (no PR checkout)
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_URL: ${{ needs.capture.outputs.artifact_url }}
+          CAPTURE_RESULT: ${{ needs.capture.result }}
+          VISUAL_STATUS: ${{ needs.capture.outputs.review_status }}
+        with:
+          script: |
+            const url = process.env.ARTIFACT_URL;
+            if (!url) {
+              core.warning('No screenshots were uploaded; see the capture job.');
+              return;
+            }
+            const marker = '<!-- drawtemp-studio-visual-review -->';
+            const visual = process.env.VISUAL_STATUS || 'capture_failed';
+            const status = process.env.CAPTURE_RESULT !== 'success'
+              ? '⚠️ La capture ou une comparaison a échoué ; consulter les logs.'
+              : visual === 'review_required'
+              ? '🟡 Captures produites, **aucune référence humaine approuvée à ce jour**.'
+              : visual === 'pass'
+              ? '✅ Captures conformes aux références approuvées.'
+              : '❌ Différences visuelles détectées ; inspecter le rapport.';
+            const body = [
+              marker,
+              '### 📸 Captures automatiques et comparaison visuelle DrawTemp',
+              '',
+              status,
+              '',
+              '| Scénario | Capture |',
+              '| --- | --- |',
+              '| Éditeur 2D | Textures et raccords AutoTiles |',
+              '| Éditeur 2D + grille | Vérification de l’alignement des cases |',
+              '| Éditeur ISO 2.5D | Régression visuelle de la projection |',
+              '| Mode Playtest | Couleur du bouton et état de l’interface |',
+              '',
+              `**[Ouvrir les captures et le rapport AVANT / APRÈS / DIFF](${url})**`,
+              '',
+              'Les fichiers sont conservés 30 jours dans GitHub Actions.',
+              'Références jamais approuvées automatiquement. Linux/Xvfb uniquement : la validation Windows reste manuelle.'
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 });
+            const previous = comments.find(c => c.user?.type === 'Bot'
+              && c.body?.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body });
+            }

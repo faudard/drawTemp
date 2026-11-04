@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .title_menu import BACKGROUND, GOLD, IVORY, MUTED, PANEL, TitleMenu
-from .title_screen_settings import settings_for
+from .title_screen_settings import settings_for, display_text, extra_box
 from .title_screen_layout import CARD_KEYS, resolve_boxes
 
 
@@ -120,6 +120,7 @@ class CinematicTitleMenu(TitleMenu):
         self._thumb_photo = None
         self._selection_index = 0
         self._hitboxes = {}
+        self._overlay_photos = []
         super().__init__(app)
         self.canvas.bind("<Up>", lambda _: self._move_selection(-1))
         self.canvas.bind("<Down>", lambda _: self._move_selection(1))
@@ -155,9 +156,20 @@ class CinematicTitleMenu(TitleMenu):
             "help": self.open_help,
         }
 
+    def _tr(self, group, key, fallback):
+        language = self.app.project.options.get("language", "fr")
+        return display_text(self._appearance, language, group, key, fallback)
+
+    def _available_actions(self):
+        hidden = self._appearance["hidden"]
+        return [i for i, row in enumerate(self.ACTIONS)
+                if ("campaign_action" if row[0] == "campaign" else row[0]) not in hidden
+                and (row[0] != "continue" or self._saved())]
+
     def _focus_default(self):
         if self.canvas.winfo_exists() and self.overlay is None:
-            self._selection_index = 0 if self._saved() else 1
+            available = self._available_actions()
+            self._selection_index = available[0] if available else -1
             self.canvas.focus_set()
             self._repaint()
 
@@ -166,24 +178,33 @@ class CinematicTitleMenu(TitleMenu):
             self.paint(self.canvas.winfo_width(), self.canvas.winfo_height())
 
     def _move_selection(self, amount):
-        self._selection_index = (self._selection_index + amount) % len(self.ACTIONS)
-        if not self._saved() and self._selection_index == 0:
-            self._selection_index = 1 if amount > 0 else len(self.ACTIONS) - 1
+        available = self._available_actions()
+        if available:
+            try:
+                index = available.index(self._selection_index)
+                self._selection_index = available[(index + amount) % len(available)]
+            except ValueError:
+                self._selection_index = available[0 if amount >= 0 else -1]
+        else:
+            self._selection_index = -1
         self._repaint()
         return "break"
 
     def _select_first(self):
-        self._selection_index = 0 if self._saved() else 1
+        available = self._available_actions()
+        self._selection_index = available[0] if available else -1
         self._repaint()
         return "break"
 
     def _select_last(self):
-        self._selection_index = len(self.ACTIONS) - 1
+        available = self._available_actions()
+        self._selection_index = available[-1] if available else -1
         self._repaint()
         return "break"
 
     def _activate_selected(self):
-        self._execute(self.ACTIONS[self._selection_index][0])
+        if self._selection_index in self._available_actions():
+            self._execute(self.ACTIONS[self._selection_index][0])
         return "break"
 
     def _execute(self, key):
@@ -300,26 +321,35 @@ class CinematicTitleMenu(TitleMenu):
         tx0, ty0, tx1, _ = boxes["title"]
         sx0, sy0, sx1, _ = boxes["subtitle"]
         header_width = tx1 - tx0
-        name, sep, sub = self.app.project.title.partition(" — ")
+        display_title = self._tr("title", "", self.app.project.title)
+        name, sep, sub = display_title.partition(" — ")
         if not sep:
-            name, sep, sub = self.app.project.title.partition(" - ")
+            name, sep, sub = display_title.partition(" - ")
         if not sep:
-            name, sub = self.app.project.title, ""
+            name, sub = display_title, ""
         title_size = min(56, max(23, round(layout["menu_width"] * .095)))
         if layout["compact"]:
             title_size = min(title_size, 31)
-        c.create_text((lx0+lx1)/2, ly0, anchor="n", text="⚜",
-                      fill=self._accent, font=self._font("Georgia", 24 if not layout["compact"] else 15),
-                      tags="art")
-        c.create_text((tx0+tx1)/2, ty0,
-                      text=name, anchor="n", width=header_width,
-                      fill=self._text_color if not self.contrast else "white",
-                      font=("Georgia", title_size, "bold"), tags="art")
-        c.create_text((sx0+sx1)/2, sy0,
-                      text=sub.upper() if sub else self.app.project.subtitle.upper(),
-                      anchor="n", width=sx1-sx0, fill=self._accent,
-                      font=self._font("Georgia", 12 if not layout["compact"] else 9),
-                      tags="art")
+        hidden = self._appearance["hidden"]
+        if "logo" not in hidden:
+            c.create_text((lx0+lx1)/2, ly0, anchor="n",
+                          text=self._tr("strings", "logo", "⚜"),
+                          fill=self._accent, font=self._font("Georgia", 24 if not layout["compact"] else 15),
+                          tags="art")
+        if "title" not in hidden:
+            c.create_text((tx0+tx1)/2, ty0,
+                          text=name, anchor="n", width=header_width,
+                          fill=self._text_color if not self.contrast else "white",
+                          font=("Georgia", title_size, "bold"), tags="art")
+        if "subtitle" not in hidden:
+            subtitle = self._tr(
+                "subtitle", "",
+                self.app.project.subtitle if self._appearance["source_language"]
+                else (sub or self.app.project.subtitle))
+            c.create_text((sx0+sx1)/2, sy0,
+                          text=subtitle.upper(), anchor="n", width=sx1-sx0, fill=self._accent,
+                          font=self._font("Georgia", 12 if not layout["compact"] else 9),
+                          tags="art")
 
     def _icon(self, kind, cx, cy, size, tag):
         """Vector pictograms—no fonts, images or external icon dependencies."""
@@ -365,7 +395,11 @@ class CinematicTitleMenu(TitleMenu):
         has_save = self._saved()
         self._hitboxes = {}
         for index, ((key,label,subtitle,icon), rect) in enumerate(zip(self.ACTIONS,layout["cards"])):
-            label = self._appearance["labels"].get(key) or self.app._t("tk.title." + key)
+            if ("campaign_action" if key == "campaign" else key) in self._appearance["hidden"]:
+                continue
+            label = self._tr("labels", key, self._appearance["labels"].get(key) or
+                             self.app._t("tk.title." + key))
+            subtitle = self._tr("captions", key, self.app._t("tk.title." + key + ".detail"))
             x0,y0,x1,y1=rect
             h = y1-y0
             tag="title_card_"+key
@@ -399,7 +433,7 @@ class CinematicTitleMenu(TitleMenu):
                     c.itemconfigure(title_item,text=short.rstrip()+"…")
             sub = (self.app._t("tk.title.no_save") if disabled else
                    self._resume_caption() if key=="continue"
-                   else self.app._t("tk.title." + key + ".detail"))
+                   else subtitle)
             c.create_text(tx,y0+h*.71,text=sub,anchor="w",
                           fill=MUTED if not disabled else "#7f8894",
                           width=max(80,x1-tx-32),
@@ -428,7 +462,7 @@ class CinematicTitleMenu(TitleMenu):
         x0,y0,x1,y1=layout["campaign"]
         w,h=x1-x0,y1-y0
         c.create_rectangle(x0,y0,x1,y1,fill="#101b2a",outline="#af884f",width=1,tags="art")
-        c.create_text(x0+15,y0+14,anchor="nw",text="Campagne actuelle",fill="#f0d3a0",
+        c.create_text(x0+15,y0+14,anchor="nw",text=self._tr("strings", "campaign_heading", "Campagne actuelle"),fill="#f0d3a0",
                       font=self._font("Georgia",11 if layout["compact"] else 13),tags="art")
         thumb_size=max(58,min(116,round(h*.48)))
         thumb_x, thumb_y = x0+15,y0+41
@@ -467,7 +501,7 @@ class CinematicTitleMenu(TitleMenu):
         tag="title_campaign_change"
         c.create_rectangle(bx0,by0,bx1,by1,fill="#132236",outline=self._accent,
                            width=1,tags=("art",tag))
-        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  " + self.app._t("tk.title.change_campaign"),
+        c.create_text((bx0+bx1)/2,(by0+by1)/2,text="⇆  " + self._tr("strings", "campaign_change", self.app._t("tk.title.change_campaign")),
                       fill=self._text_color,font=self._font("Georgia",10),tags=("art",tag))
         self._region(tag,(bx0,by0,bx1,by1),key="choose")
 
@@ -480,8 +514,10 @@ class CinematicTitleMenu(TitleMenu):
         gap=6 if layout["compact"] else 9
         available_width = max(0, w - 2*gap)
         widths=(available_width*.48,available_width*.245,available_width*.275)
-        labels=(("advanced","⚒  " + self.app._t("tk.title.advanced" if not layout["compact"] else "tk.title.advanced_compact")),
-                ("credits","♙  " + self.app._t("tk.title.credits")),("help","?  " + self.app._t("tk.title.help")))
+        labels=(("advanced","⚒  " + self._tr("strings", "advanced",
+                         self.app._t("tk.title.advanced" if not layout["compact"] else "tk.title.advanced_compact"))),
+                ("credits","♙  " + self._tr("strings", "credits", self.app._t("tk.title.credits"))),
+                ("help","?  " + self._tr("strings", "help", self.app._t("tk.title.help"))))
         for i,((key,label),cw) in enumerate(zip(labels,widths)):
             xx=x+sum(widths[:i])+gap*i
             xx1=xx+cw
@@ -492,8 +528,56 @@ class CinematicTitleMenu(TitleMenu):
                           tags=("art",tag))
             self._region(tag,(xx,y,xx1,y+h),key=key)
         c.create_rectangle(0,height-31,152,height,fill="#101b2a",outline="",tags="art")
-        c.create_text(25,height-22,anchor="nw",text="DrawTemp · Player",fill="#b8becc",
+        c.create_text(25,height-22,anchor="nw",text=self._tr("strings", "footer_brand", "DrawTemp · Player"),fill="#b8becc",
                       font=self._font("Segoe UI",9),tags="art")
+
+    def _through_extra(self, event):
+        """Allow decorative overlays to pass pointer input to real buttons."""
+        for action, rect in self._hitboxes.items():
+            x0, y0, x1, y1 = rect
+            if x0 <= event.x <= x1 and y0 <= event.y <= y1:
+                self._execute(action)
+                return "break"
+        return None
+
+    def _draw_extras(self, width, height):
+        """Decorative text and imported images; never execute game actions."""
+        self._overlay_photos.clear()
+        root = self.app.asset_root.resolve()
+        for item in self._appearance["extras"]:
+            x0, y0, x1, y1 = extra_box(item, width, height)
+            if item["kind"] == "text":
+                value = self._tr("extras", item["id"], item["text"])
+                self.canvas.create_text(x0, y0, text=value, anchor="nw",
+                    width=x1-x0, fill="white" if self.contrast else item["color"],
+                    font=("Georgia", max(8, round(item["size"] * self.scale)), "bold"),
+                    tags=("art", "title_extra"))
+                continue
+            path = (root / item["image"]).resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                continue
+            try:
+                from PIL import Image, ImageTk
+                with Image.open(path) as handle:
+                    resampling = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                    photo = ImageTk.PhotoImage(handle.convert("RGBA").resize(
+                        (max(1, round(x1-x0)), max(1, round(y1-y0))),
+                        resampling), master=self.app.root)
+            except (ImportError, OSError, ValueError):
+                if path.suffix.lower() != ".png":
+                    continue
+                try:
+                    source = self.app.tk.PhotoImage(file=str(path), master=self.app.root)
+                    factor = max(1, round(max(
+                        source.width() / max(1, x1-x0),
+                        source.height() / max(1, y1-y0))))
+                    photo = source.subsample(factor)
+                except self.app.tk.TclError:
+                    continue
+            self._overlay_photos.append(photo)
+            self.canvas.create_image(x0, y0, anchor="nw", image=photo,
+                                     tags=("art", "title_extra"))
+        self.canvas.tag_bind("title_extra", "<Button-1>", self._through_extra)
 
     def paint(self,width,height):
         if width < 2 or height < 2 or not self.canvas.winfo_exists():
@@ -512,9 +596,11 @@ class CinematicTitleMenu(TitleMenu):
         self._paint_stage(width,height,layout)
         self._draw_header(layout,height,boxes)
         self._draw_cards(custom)
-        if self._appearance["show_campaign"]:
+        if self._appearance["show_campaign"] and "campaign" not in self._appearance["hidden"]:
             self._draw_campaign(custom)
-        self._draw_footer(custom,width,height)
+        if "footer" not in self._appearance["hidden"]:
+            self._draw_footer(custom,width,height)
+        self._draw_extras(width,height)
         if self.overlay_shade is not None:
             c.coords(self.overlay_shade,0,0,width,height)
             c.tag_raise(self.overlay_shade)
